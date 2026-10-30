@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ramanujan Sphere × Harmony Engine — Spatial Synth Playground</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%2336d6c8' stroke-width='2'/><circle cx='8' cy='8' r='3' fill='%23ff6b7a'/></svg>" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ===== COMPACT STUDIO TOPBAR ===== -->
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">◍</span>
+    <div class="brand-copy">
+      <div class="brand-title-row">
+        <h1>Ramanujan Sphere <span class="brand-x">&times;</span> Harmony Engine</h1>
+        <span class="badge-f32">IEEE-754 FLOAT32</span>
+        <button id="btnThesis" class="pill-btn subtle" type="button" title="Read the Harmony Engine & Hollow Sphere thesis">? Concept</button>
+      </div>
+      <p class="premise">Constant hollow sphere carrier <em>V = 4/3&middot;&pi;(R&sup3; &minus; r&sup3;)</em> &middot; internal 2D <em>f(x)/x</em> slice &middot; conjugate phasor twins <em>P + P&#772; = 2&middot;Re(P)</em></p>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <div class="legend" aria-label="Sphere zone legend">
+      <span class="chip"><i class="dot on"></i>Surface |P|&asymp;R</span>
+      <span class="chip"><i class="dot shell"></i>Shell r..R</span>
+      <span class="chip"><i class="dot inside"></i>Cavity &lt;r</span>
+      <span class="chip"><i class="dot outside"></i>Outside &gt;R</span>
+    </div>
+
+    <div class="segmented" role="group" aria-label="Syzygy Twin Mode">
+      <span class="seg-label">Twin:</span>
+      <button type="button" class="seg-btn" data-twin="off">Off</button>
+      <button type="button" class="seg-btn" data-twin="antipodal" title="Antipodal Polarity Flip −P = (−x, −y, −z) — nulls to 0">&minus;P Null</button>
+      <button type="button" class="seg-btn" data-twin="conjugate" title="Conjugate Twin P̄ = (x, −y, z) — negative-frequency branch summing to real 2·Re(P)">P&#772; Conj</button>
+      <button type="button" class="seg-btn active" data-twin="both" title="Show both Antipodal (−P) and Conjugate (P̄) twins">Both</button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== COLLAPSIBLE CONCEPT BANNER ===== -->
+<section id="thesisBanner" class="thesis-banner" hidden>
+  <div class="thesis-inner">
+    <div>
+      <strong>The Carrier Vessel:</strong> The outer sphere <code>R</code> and inner cavity <code>r</code> form an invariant 3D wavetable frame (<code>V = 4/3&middot;&pi;(R&sup3;&minus;r&sup3;)</code>). Slice it at <code>z = 0</code> and its cross-section becomes an inscribed 2D <code>f(x)/x</code> oscilloscope dial where sine waves, Weierstrass fractals, and Morlet wavelets live inside the sphere.
+    </div>
+    <div>
+      <strong>Two Twins (&sect;7):</strong> <em>Antipodal</em> <code>&minus;P = (&minus;x,&minus;y,&minus;z)</code> is an audio 180&deg; polarity flip (null test <code>P+(&minus;P)=0</code>). <em>Conjugate</em> <code>P&#772; = (x,&minus;y,z)</code> is the negative-frequency mirror whose sum <code>P+P&#772; = 2&middot;Re(P)</code> cancels the imaginary axis &mdash; unifying cosines, Morlet spectra, and Frobenius point counts.
+    </div>
+    <div>
+      <strong>Ramanujan &amp; Float32:</strong> In 32-bit audio float, <code>&pi; = 0x40490FDB</code> (~144.5 dB precision). Ramanujan's 1914 <code>1/&pi;</code> series drops ~208 dB per harmonic &mdash; locking all 32 bits on the <code>k=0</code> fundamental alone!
+    </div>
+    <button id="closeThesis" class="mini-btn" type="button">Close</button>
+  </div>
+</section>
+
+<!-- ===== MAIN ZERO-SCROLL WORKSPACE ===== -->
+<main class="layout">
+
+  <!-- ===== LEFT SYNTH RACK ===== -->
+  <aside class="panel">
+
+    <!-- 1. Preset Selector -->
+    <section class="group">
+      <div class="group-head">
+        <label class="kicker" for="presetSelect">Patch Preset</label>
+        <button id="btnShare" class="mini-btn" type="button" title="Copy shareable URL hash for current patch">Share Link</button>
+      </div>
+      <select id="presetSelect"></select>
+      <div id="patchNote" class="note"></div>
+    </section>
+
+    <!-- 2. Hollow Sphere Constant Carrier -->
+    <section class="group">
+      <div class="group-head">
+        <span class="kicker">Hollow Sphere Vessel</span>
+        <span class="kicker-sub mono" id="shellFormulaBadge">4/3&pi;(R&sup3;&minus;r&sup3;)</span>
+      </div>
+
+      <div class="field-row">
+        <div class="field small">
+          <label for="radius">Outer R <output id="radiusOut">1.00</output></label>
+          <input type="range" id="radius" min="0.3" max="2.6" step="0.05" value="1" data-default="1" />
+        </div>
+        <div class="field small">
+          <label for="innerRadius">Cavity r <output id="innerRadiusOut">0.45</output></label>
+          <input type="range" id="innerRadius" min="0" max="2.4" step="0.05" value="0.45" data-default="0.45" />
+        </div>
+      </div>
+
+      <div class="shell-meter">
+        <span>Shell Vol <b id="shellVolOut" class="mono">3.81</b></span>
+        <span>Wall &Delta;r <b id="shellWallOut" class="mono">0.55</b></span>
+      </div>
+
+      <div class="field strobe-field" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
+        <label for="orderN">Order N (Strobe) <output id="orderNOut">19</output></label>
+        <input type="range" id="orderN" min="5" max="64" step="1" value="19" data-default="19" />
+        <div class="strobe-sub mono" id="orderNBadge">19/19 &middot; prime order (full cycle)</div>
+      </div>
+    </section>
+
+    <!-- 3. Oscillator & Harmonic Controls -->
+    <section class="group">
+      <span class="kicker">Oscillator &amp; Harmonics <span class="hint">dbl-click resets</span></span>
+
+      <div class="field-row">
+        <div class="field small">
+          <label for="amp">Gain amp <output id="ampOut">1.00</output></label>
+          <input type="range" id="amp" min="0.1" max="2.5" step="0.05" value="1" data-default="1" />
+        </div>
+        <div class="field small">
+          <label for="freq">Freq f <output id="freqOut">1.0</output></label>
+          <input type="range" id="freq" min="0.5" max="8" step="0.5" value="1" data-default="1" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="phaseSlider">Phase &phi; <output id="phaseOut">0&deg;</output></label>
+        <input type="range" id="phaseSlider" min="-180" max="180" step="1" value="0" data-default="0" />
+        <div class="sub-field">
+          <input type="number" id="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
+          <span>deg</span>
+          <span id="phaseRad" class="mono">0.0000 rad</span>
+        </div>
+      </div>
+
+      <div class="field highlight-field">
+        <label for="harmonicsK">Harmonics / Partials K <output id="harmonicsKOut">6</output></label>
+        <input type="range" id="harmonicsK" min="0" max="14" step="1" value="6" data-default="6" />
+      </div>
+
+      <div class="field-row">
+        <div class="field small">
+          <label for="fractalA" title="Weierstrass amplitude decay a^k">Decay a <output id="fractalAOut">0.50</output></label>
+          <input type="range" id="fractalA" min="0.15" max="0.85" step="0.05" value="0.5" data-default="0.5" />
+        </div>
+        <div class="field small">
+          <label for="fractalB" title="Weierstrass frequency multiplier b^k">Lacunarity b <output id="fractalBOut">3</output></label>
+          <input type="range" id="fractalB" min="2" max="9" step="1" value="3" data-default="3" />
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field small">
+          <label for="ratioN">n <output id="ratioNOut">3</output></label>
+          <input type="range" id="ratioN" min="1" max="8" step="1" value="3" data-default="3" />
+        </div>
+        <div class="field small">
+          <label for="ratioM">m <output id="ratioMOut">2</output></label>
+          <input type="range" id="ratioM" min="1" max="8" step="1" value="2" data-default="2" />
+        </div>
+        <div class="field small">
+          <label for="ratioK">k <output id="ratioKOut">1</output></label>
+          <input type="range" id="ratioK" min="1" max="8" step="1" value="1" data-default="1" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Collapsible Modular Formula Patch Bay -->
+    <section class="group">
+      <details id="formulaDrawer" class="patch-drawer">
+        <summary class="kicker summary-kicker">Patch Bay Equations <span>t=0..1, u=&minus;1..1</span></summary>
+        <div class="drawer-body">
+          <div class="formula-row">
+            <label class="axis" for="formulaX">x(t)</label>
+            <input id="formulaX" class="formula" data-axis="x" spellcheck="false" />
+          </div>
+          <div class="err" id="errX"></div>
+
+          <div class="formula-row">
+            <label class="axis" for="formulaY">y(t)</label>
+            <input id="formulaY" class="formula" data-axis="y" spellcheck="false" />
+          </div>
+          <div class="err" id="errY"></div>
+
+          <div class="formula-row">
+            <label class="axis" for="formulaZ">z(t)</label>
+            <input id="formulaZ" class="formula" data-axis="z" spellcheck="false" />
+          </div>
+          <div class="err" id="errZ"></div>
+
+          <div class="funcs-body">
+            <code>t</code> <code>u</code> <code>r</code> <code>rIn</code> <code>N</code> <code>f</code> <code>K</code> <code>a</code> <code>b</code> <code>n</code> <code>m</code> <code>k</code> <code>phase</code><br>
+            <code>weierstrass(x,a,b,K)</code> <code>morlet(x,w,ph,s)</code> <code>cbrt</code><br>
+            <code>fourierSquare(x,K)</code> <code>sin</code> <code>cos</code> <code>tan</code> <code>saw</code> <code>lerp</code>
+          </div>
+        </div>
+      </details>
+    </section>
+
+  </aside>
+
+  <!-- ===== HERO STAGE + TABBED DOCK ===== -->
+  <section class="stage">
+
+    <!-- HERO 3D VIEWPORT -->
+    <div id="viewport3d" class="viewport">
+
+      <!-- Top-Left Floating Scene HUD -->
+      <div class="hud hud-left">
+        <div class="hud-row">
+          <button type="button" class="hud-pill" data-toggle="cutaway" title="Cutaway Hollow Sphere showing V = 4/3·π(R³ − r³)">Cutaway Shell</button>
+          <button type="button" class="hud-pill active" data-toggle="sliceGrid" title="Internal 2D f(x)/x Cartesian slice grid at z = 0">2D f(x) Grid</button>
+          <button type="button" class="hud-pill active" data-toggle="surface">Surface</button>
+          <button type="button" class="hud-pill active" data-toggle="wireframe">Wire</button>
+          <button type="button" class="hud-pill active" data-toggle="grid">Floor</button>
+          <button type="button" class="hud-pill active" data-toggle="axes">Axes</button>
+          <button type="button" class="hud-pill active" data-toggle="radiusVec">Vector</button>
+          <button type="button" class="hud-pill active" data-toggle="realTrace" title="Show Real Trace (P + P̄)/2 when Conjugate twin is active">Re Trace</button>
+        </div>
+        <div class="hud-row">
+          <span class="hud-label">Cam:</span>
+          <button type="button" class="hud-pill cam-btn" data-cam="iso">3D Iso</button>
+          <button type="button" class="hud-pill cam-btn" data-cam="front" title="Snap straight onto the internal 2D f(x)/x slice plane">Front f(x)</button>
+          <button type="button" class="hud-pill cam-btn" data-cam="top">Top XZ</button>
+          <button type="button" class="hud-pill active" data-toggle="autoRotate">Orbit</button>
+        </div>
+      </div>
+
+      <!-- Top-Right Transport, Order N Strobe & Zoom Lens Toggle HUD -->
+      <div class="hud hud-right">
+        <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
+        <button type="button" class="hud-pill active" data-toggle="trace">Trail</button>
+        <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
+        <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
+      </div>
+
+      <!-- Floating Circular Zoom-Magnifier Lens (Weierstrass / Harmonic Micro-Scope) -->
+      <div id="magWidget" class="mag-widget" hidden>
+        <canvas id="magnifierCanvas" class="mag-canvas"></canvas>
+        <div class="mag-controls">
+          <div class="mag-btn-row" role="group" aria-label="Magnifier zoom factor">
+            <button type="button" class="mag-chip" data-zoom="4">4&times;</button>
+            <button type="button" class="mag-chip active" data-zoom="16">16&times;</button>
+            <button type="button" class="mag-chip" data-zoom="64">64&times;</button>
+            <button type="button" class="mag-chip" data-zoom="256">256&times;</button>
+          </div>
+          <div class="mag-btn-row" role="group" aria-label="Magnifier focus target">
+            <button type="button" class="mag-chip" data-focus="playhead">Playhead</button>
+            <button type="button" class="mag-chip" data-focus="origin">x=0</button>
+            <button type="button" class="mag-chip active" data-focus="trough" title="Weierstrass x = +1 trough">Trough</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== TABBED BOTTOM INSPECTOR DOCK ===== -->
+    <div class="dock">
+
+      <!-- Dock Tab Bar + Persistent Live Telemetry -->
+      <div class="dock-bar">
+        <div class="dock-tabs" role="tablist">
+          <button type="button" class="dock-tab active" role="tab" data-tab="scopes">1 &middot; Scopes &amp; Slice</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="harmonics">2 &middot; Harmonics &amp; Ramanujan</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="frobenius">3 &middot; Frobenius &amp; Hasse</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="bits">4 &middot; Float32 Bit Lab</button>
+        </div>
+
+        <div class="telemetry-strip mono">
+          <span class="tele-item"><em id="statusReadout" class="zone-badge">ON SPHERE</em></span>
+          <span class="tele-item"><span>|P|</span> <b id="distReadout">—</b></span>
+          <span class="tele-item hide-narrow"><span>&ang;</span> <b id="angleReadout">—</b></span>
+          <span class="tele-item hide-narrow"><span>y<sub>f32</sub></span> <b id="quickHexReadout">—</b></span>
+        </div>
+      </div>
+
+      <!-- TAB 1: 2D Slice / Lissajous + Dual Oscilloscope -->
+      <div id="tab-scopes" class="dock-pane active">
+        <div class="panel2d">
+          <div class="panel2d-head">
+            <span class="kicker">2D Slice &amp; Quadrature &mdash; x(t) &times; y(t)</span>
+            <button id="clearTrace" class="mini-btn" type="button">clear trail</button>
+          </div>
+          <canvas id="lissajous" class="mini-canvas"></canvas>
+        </div>
+
+        <div class="panel2d">
+          <div class="panel2d-head">
+            <span class="kicker">Dual Oscilloscope &mdash; y(t) [f(x)] &amp; x(t)</span>
+            <button id="btnRefWaves" class="mini-btn" type="button" title="Overlay reference saw & tan waveforms">ref saw/tan</button>
+          </div>
+          <canvas id="timeseries" class="mini-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- TAB 2: Harmonics Spectrum + Ramanujan 1/π Convergence -->
+      <div id="tab-harmonics" class="dock-pane">
+        <div class="panel2d">
+          <div class="panel2d-head">
+            <span class="kicker">Harmonic Partials &amp; Conjugate Spectrum (&plusmn;&omega;<sub>0</sub>)</span>
+            <span class="mini-tag mono">K = <b id="harmTabKOut">6</b></span>
+          </div>
+          <canvas id="harmonicSpecCanvas" class="mini-canvas"></canvas>
+        </div>
+
+        <div class="panel2d">
+          <div class="panel2d-head">
+            <span class="kicker">Ramanujan 1/&pi; (&minus;208 dB/step) vs. Fourier Odd Harmonics</span>
+            <span class="mini-tag mono accent-tag">π<sub>f32</sub> = 0x40490FDB</span>
+          </div>
+          <canvas id="ramanujanCanvas" class="mini-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- TAB 3: Frobenius & Hasse Circle -->
+      <div id="tab-frobenius" class="dock-pane frob-pane">
+        <div class="panel2d frob-controls-card">
+          <div class="panel2d-head">
+            <span class="kicker">Frobenius Curve</span>
+            <b id="frobCurveOut" class="mono mini-tag">secp256k1</b>
+          </div>
+
+          <div class="frob-form">
+            <select id="frobCurve" aria-label="Elliptic curve mode">
+              <option value="secp" selected>secp256k1 (256-bit real curve)</option>
+              <option value="generic">Generic family (q = p&#8319;)</option>
+            </select>
+
+            <div id="frobGeneric" class="frob-generic-row" style="display:none">
+              <label>p
+                <select id="frobP">
+                  <option value="2" selected>2</option>
+                  <option value="3">3</option>
+                  <option value="5">5</option>
+                  <option value="7">7</option>
+                  <option value="11">11</option>
+                </select>
+              </label>
+              <label class="flex-1">n=<b id="frobNOut">1</b>
+                <input type="range" id="frobN" min="1" max="6" step="1" value="1" />
+              </label>
+            </div>
+
+            <div class="frob-k-row">
+              <label for="frobK">Harmonic k: <b id="frobKOut" class="mono">4</b></label>
+              <input type="range" id="frobK" min="1" max="16" step="1" value="4" />
+            </div>
+
+            <div class="frob-readouts mono">
+              <div><span>S<sub>k</sub>=&lambda;<sup>k</sup>+&lambda;&#772;<sup>k</sup></span> <b id="frobTrace">—</b></div>
+              <div><span>#E(F<sub>q<sup>k</sup></sub>)</span> <b id="frobCount">—</b></div>
+              <div id="secpSqrtRow"><span>&radic;p = |&lambda;|</span> <b id="secpSqrt">—</b></div>
+              <div><span>&phi; &middot; k&phi;</span> <b id="frobPhi">—</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel2d">
+          <div class="panel2d-head">
+            <span class="kicker" id="frobPhasorTitle">Phasors &mdash; &lambda;<sup>k</sup> (main) &amp; &lambda;&#772;<sup>k</sup> (conjugate)</span>
+          </div>
+          <canvas id="frobPhasor" class="mini-canvas"></canvas>
+        </div>
+
+        <div class="panel2d">
+          <div class="panel2d-head">
+            <span class="kicker" id="frobCountTitle">Hasse Trace &mdash; 2&middot;cos(k&phi;) over k</span>
+          </div>
+          <canvas id="frobCountCanvas" class="mini-canvas"></canvas>
+        </div>
+      </div>
+
+      <!-- TAB 4: IEEE-754 Float32 Bit Lab -->
+      <div id="tab-bits" class="dock-pane bits-pane">
+        <div class="bits-header">
+          <span class="kicker">IEEE-754 32-Bit Synth Precision &mdash; 1 Sign &middot; 8 Exponent &middot; 23 Mantissa (~144.5 dB)</span>
+          <div class="segmented compact-seg" role="group" aria-label="Bit inspector target">
+            <button type="button" class="bit-src-btn active" data-bitsrc="auto">Active (P / Twin)</button>
+            <button type="button" class="bit-src-btn" data-bitsrc="main">Main P</button>
+            <button type="button" class="bit-src-btn" data-bitsrc="ramanujan" title="Compare Ramanujan k=0 term vs exact Math.PI in Float32">Ramanujan k=0 vs &pi;</button>
+          </div>
+        </div>
+
+        <div class="bits-grid">
+          <div class="bit-card">
+            <div class="bit-card-top">
+              <span class="bit-axis-lbl" id="bitLblX">x</span>
+              <b id="bitxval" class="mono bit-val">—</b>
+              <span id="bitxexp" class="mono bit-exp">—</span>
+              <em id="bitxkind" class="bit-chip">—</em>
+            </div>
+            <div id="bitxhex" class="bit-hex mono">—</div>
+            <div id="bitxbin" class="bit-bin mono">—</div>
+          </div>
+
+          <div class="bit-card">
+            <div class="bit-card-top">
+              <span class="bit-axis-lbl" id="bitLblY">y</span>
+              <b id="bityval" class="mono bit-val">—</b>
+              <span id="bityexp" class="mono bit-exp">—</span>
+              <em id="bitykind" class="bit-chip">—</em>
+            </div>
+            <div id="bityhex" class="bit-hex mono">—</div>
+            <div id="bitybin" class="bit-bin mono">—</div>
+          </div>
+
+          <div class="bit-card">
+            <div class="bit-card-top">
+              <span class="bit-axis-lbl" id="bitLblZ">z</span>
+              <b id="bitzval" class="mono bit-val">—</b>
+              <span id="bitzexp" class="mono bit-exp">—</span>
+              <em id="bitzkind" class="bit-chip">—</em>
+            </div>
+            <div id="bitzhex" class="bit-hex mono">—</div>
+            <div id="bitzbin" class="bit-bin mono">—</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<!-- Third-party (vendored, 100% offline, works via file:// and http://) -->
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+
+<!-- Modular Harmony Engine & Views -->
+<script src="js/engine.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/scene3d.js"></script>
+<script src="js/magnifier2d.js"></script>
+<script src="js/lissajous2d.js"></script>
+<script src="js/timeseries.js"></script>
+<script src="js/harmonics2d.js"></script>
+<script src="js/frobenius.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
