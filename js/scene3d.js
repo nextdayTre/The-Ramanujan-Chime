@@ -13,7 +13,7 @@
 
   var renderer, scene, camera, controls, container, resizeObs;
   var sphereGroup, sliceGroup, strobeGroup, gridHelper, axesHelper;
-  var curveLine, antipodalLine, conjugateLine, realTraceLine;
+  var curveLine, antipodalLine, conjugateLine, realTraceLine, ghostLine;
   var marker, antipodalMarker, conjugateMarker, realTraceMarker, magTargetRing;
   var vectorLine, conjugateChordLine;
   var strobeNodeGeo, strobeMatIdent, strobeMatActive, strobeMatCoset;
@@ -138,6 +138,14 @@
       new THREE.LineBasicMaterial({ color: 0x6ee7a0, transparent: true, opacity: 0.55 })
     );
     scene.add(realTraceLine);
+
+    // VST A/B/C Reference Ghost Trajectory in soft violet
+    ghostLine = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x9d8cff, transparent: true, opacity: 0.38 })
+    );
+    ghostLine.visible = false;
+    scene.add(ghostLine);
 
     // Playhead markers
     marker = new THREE.Mesh(
@@ -418,6 +426,22 @@
     }
   }
 
+  function updateGhost(state) {
+    if (!ghostLine) return;
+    var gp = state.ghostPoints;
+    var on = !!(state.toggles && state.toggles.ghostRef && gp && gp.length > 1);
+    ghostLine.visible = on;
+    if (!on) return;
+    var pos = [];
+    for (var i = 0; i < gp.length - 1; i++) {
+      var a = gp[i], b = gp[i + 1];
+      if (!a.valid || !b.valid) continue;
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+    }
+    ghostLine.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    ghostLine.geometry.computeBoundingSphere();
+  }
+
   // Render Discrete Order N Cyclic Group Strobe (nodes P_0..P_{N-1} + generator chords)
   function updateStrobe(points, state) {
     if (!strobeGroup) return;
@@ -584,6 +608,7 @@
       }
       updateCurve(points, state);
       updateTwins(points, state);
+      updateGhost(state);
       updateStrobe(points, state);
       lastRendered = dirty;
     }

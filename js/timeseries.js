@@ -106,6 +106,16 @@
       drawLine(g, refTan, w, h, 'rgba(224,113,255,0.45)', 1.1);
     }
 
+    if (state.toggles && state.toggles.ghostRef && state.ghostPoints && state.ghostPoints.length > 1) {
+      var gStep = Math.max(1, Math.floor(state.ghostPoints.length / 900));
+      var gYs = [];
+      for (var gi = 0; gi < state.ghostPoints.length; gi += gStep) {
+        var gp = state.ghostPoints[gi];
+        gYs.push(gp.valid ? gp.y : NaN);
+      }
+      drawLine(g, gYs, w, h, 'rgba(157,140,255,0.52)', 1.25, [4, 3]);
+    }
+
     if (points && points.length > 1) {
       var step = Math.max(1, Math.floor(points.length / 900));
       var xs = [], ys = [], negYs = [];
@@ -135,6 +145,9 @@
     if (state.twinMode && state.twinMode !== 'off') {
       items.push([state.twinMode === 'antipodal' ? '#ff5ca8' : '#ffb04d', 'twin (−y)']);
     }
+    if (state.toggles && state.toggles.ghostRef) {
+      items.push(['#9d8cff', 'ghost ' + (state.ghostSlot || 'ref')]);
+    }
     if (state.toggles.refWaves) {
       items.push(['#6ee7a0', 'saw']);
       items.push(['#e071ff', 'tan']);
@@ -158,7 +171,7 @@
     if (!sz) return;
     var w = sz[0], h = sz[1], dpr = sz[2];
 
-    var sig = [dirty, w, h, dpr, state.twinMode, !!state.toggles.refWaves, (state.rIn || 0).toFixed(3)].join('|');
+    var sig = [dirty, w, h, dpr, state.twinMode, !!state.toggles.refWaves, !!state.toggles.ghostRef, state.ghostRev || 0, (state.rIn || 0).toFixed(3)].join('|');
     if (sig !== lastSig) {
       lastSig = sig;
       renderStatic(state, points, w, h, dpr);

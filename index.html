@@ -63,11 +63,22 @@
   <!-- ===== LEFT SYNTH RACK ===== -->
   <aside class="panel">
 
-    <!-- 1. Preset Selector -->
+    <!-- 1. Preset Selector + VST A/B/C Sphere Slots -->
     <section class="group">
       <div class="group-head">
         <label class="kicker" for="presetSelect">Patch Preset</label>
         <button id="btnShare" class="mini-btn" type="button" title="Copy shareable URL hash for current patch">Share Link</button>
+      </div>
+      <div id="abcBar" class="abc-bar" role="group" aria-label="Sphere A/B/C State Slots">
+        <div class="abc-slots">
+          <button type="button" class="abc-btn active" data-slot="A" title="Sphere Slot A (Alt+1 or [ / ])">A</button>
+          <button type="button" class="abc-btn" data-slot="B" title="Sphere Slot B (Alt+2 or [ / ])">B</button>
+          <button type="button" class="abc-btn" data-slot="C" title="Sphere Slot C (Alt+3 or [ / ])">C</button>
+        </div>
+        <div class="abc-tools">
+          <button type="button" id="btnSlotCopy" class="abc-tool" title="Clone active sphere state into another slot (click Copy, then A, B, or C)">Copy &rarr;</button>
+          <button type="button" id="btnSlotGhost" class="abc-tool" title="Overlay previous slot's trajectory as a reference ghost curve (G key)">Ghost</button>
+        </div>
       </div>
       <select id="presetSelect"></select>
       <div id="patchNote" class="note"></div>

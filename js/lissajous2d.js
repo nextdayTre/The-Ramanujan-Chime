@@ -100,6 +100,30 @@
     var showAnti = (mode === 'antipodal' || mode === 'both');
     var showConj = (mode === 'conjugate' || mode === 'both');
 
+    // VST A/B/C Reference Ghost Trajectory
+    if (state.toggles && state.toggles.ghostRef && state.ghostPoints && state.ghostPoints.length > 1) {
+      var gp = state.ghostPoints;
+      frameCtx.strokeStyle = 'rgba(157,140,255,0.44)';
+      frameCtx.lineWidth = 1.25;
+      frameCtx.setLineDash([3, 3]);
+      frameCtx.beginPath();
+      var stG = false;
+      for (var ig = 0; ig < gp.length; ig++) {
+        var pg = gp[ig];
+        if (pg.valid) {
+          var gx2 = cx + pg.x * scale, gy2 = cy - pg.y * scale;
+          if (stG) frameCtx.lineTo(gx2, gy2); else { frameCtx.moveTo(gx2, gy2); stG = true; }
+        } else stG = false;
+      }
+      frameCtx.stroke();
+      frameCtx.setLineDash([]);
+      if (state.ghostSlot) {
+        frameCtx.font = '10px "Cascadia Code", Consolas, monospace';
+        frameCtx.fillStyle = 'rgba(187,175,255,0.75)';
+        frameCtx.fillText('ghost: Slot ' + state.ghostSlot, 8, 13);
+      }
+    }
+
     if (points && points.length) {
       // Antipodal twin (−x, −y)
       if (showAnti) {
@@ -183,7 +207,7 @@
     if (!sz) return;
     var w = sz[0], h = sz[1], dpr = sz[2];
 
-    var sig = [dirty, w, h, dpr, state.twinMode, !!state.toggles.strobeN, state.orderN, (state.rIn || 0).toFixed(3)].join('|');
+    var sig = [dirty, w, h, dpr, state.twinMode, !!state.toggles.strobeN, !!state.toggles.ghostRef, state.ghostRev || 0, state.orderN, (state.rIn || 0).toFixed(3)].join('|');
     if (sig !== lastSig) {
       trail = [];
       lastSig = sig;

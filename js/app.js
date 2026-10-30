@@ -44,6 +44,10 @@
     twinMode: 'both',      // 'off' | 'antipodal' | 'conjugate' | 'both'
     bitSource: 'auto',     // 'auto' | 'main' | 'ramanujan'
     activeTab: 'scopes',   // 'scopes' | 'harmonics' | 'frobenius' | 'bits'
+    activeSlot: 'A',       // 'A' | 'B' | 'C' VST sphere slot
+    ghostSlot: '',
+    ghostPoints: [],
+    ghostRev: 0,
     magZoom: 16,
     magFocus: 'trough',    // 'playhead' | 'origin' | 'trough'
     formulas: {
@@ -65,6 +69,7 @@
       trace: true,
       strobeN: false,
       magnifier: false,
+      ghostRef: false,
       refWaves: false,
       syzygy: true
     },
@@ -83,7 +88,17 @@
 
   var dirty = 0;
   var lastRendered = -1;
-  function bump() { dirty++; }
+  var slots = null;
+  var isRestoringSlot = false;
+  var copyArmed = false;
+
+  function bump() {
+    dirty++;
+    if (slots && !isRestoringSlot && slots[state.activeSlot]) {
+      slots[state.activeSlot] = captureSnapshot();
+      syncSlotTooltips();
+    }
+  }
   function $(id) { return document.getElementById(id); }
 
   // ---- Declarative Parameter Schema ----
@@ -405,10 +420,12 @@
 
   presetSelect.addEventListener('change', function () { applyPreset(presetSelect.value); });
 
-  // ---- Shareable URL Hash Patch State ----
-  function encodePatchHash() {
-    var payload = {
-      p: parseInt(presetSelect.value, 10),
+  // ---- Canonical Sphere Snapshot + VST A/B/C Slots & URL Hash Sharing ----
+  var SLOT_ORDER = ['A', 'B', 'C'];
+
+  function captureSnapshot() {
+    return {
+      p: parseInt(presetSelect.value, 10) || 0,
       fx: state.formulas.x,
       fy: state.formulas.y,
       fz: state.formulas.z,
@@ -423,29 +440,106 @@
       n: state.n,
       m: state.m,
       k: state.k,
-      ph: Math.round(state.phaseRad * 180 / Math.PI),
+      ph: Math.round(state.phaseRad * 180 / Math.PI * 100) / 100,
       tw: state.twinMode,
       cut: state.toggles.cutaway ? 1 : 0,
       sg: state.toggles.sliceGrid ? 1 : 0,
       mag: state.toggles.magnifier ? 1 : 0,
-      str: state.toggles.strobeN ? 1 : 0
+      str: state.toggles.strobeN ? 1 : 0,
+      mf: state.magFocus,
+      mz: state.magZoom
     };
-    return '#patch=' + encodeURIComponent(JSON.stringify(payload));
   }
 
-  function restoreFromHash() {
-    if (!location.hash || location.hash.indexOf('#patch=') !== 0) return false;
+  function snapshotFromPreset(idx, extra) {
+    var p = Presets.list[idx] || Presets.list[0];
+    var pr = p.params || {};
+    var hi = p.hints || {};
+    var snap = {
+      p: idx,
+      fx: p.formulas ? p.formulas.x : state.formulas.x,
+      fy: p.formulas ? p.formulas.y : state.formulas.y,
+      fz: p.formulas ? p.formulas.z : state.formulas.z,
+      r: pr.r != null ? pr.r : 1.0,
+      rIn: pr.rIn != null ? pr.rIn : 0.45,
+      amp: pr.amp != null ? pr.amp : 1.0,
+      f: pr.f != null ? pr.f : 1.0,
+      K: pr.K != null ? pr.K : 6,
+      orderN: pr.orderN != null ? pr.orderN : 19,
+      a: pr.a != null ? pr.a : 0.5,
+      b: pr.b != null ? pr.b : 3,
+      n: pr.n != null ? pr.n : 3,
+      m: pr.m != null ? pr.m : 2,
+      k: pr.k != null ? pr.k : 1,
+      ph: pr.phaseDeg != null ? pr.phaseDeg : 0,
+      tw: hi.twinMode || 'both',
+      cut: hi.cutaway ? 1 : 0,
+      sg: hi.sliceGrid !== false ? 1 : 0,
+      mag: hi.magnifier ? 1 : 0,
+      str: hi.strobeN ? 1 : 0,
+      mf: hi.magFocus || 'trough',
+      mz: 16
+    };
+    if (extra) {
+      for (var ek in extra) {
+        if (Object.prototype.hasOwnProperty.call(extra, ek)) snap[ek] = extra[ek];
+      }
+    }
+    return snap;
+  }
+
+  function sampleSnapshotPoints(snap) {
+    if (!snap) return [];
+    var tempState = {
+      r: snap.r,
+      rIn: snap.rIn,
+      amp: snap.amp,
+      f: snap.f,
+      K: snap.K,
+      orderN: snap.orderN,
+      a: snap.a,
+      b: snap.b,
+      n: snap.n,
+      m: snap.m,
+      k: snap.k,
+      phaseRad: (snap.ph || 0) * Math.PI / 180,
+      formulas: { x: snap.fx, y: snap.fy, z: snap.fz }
+    };
+    return Engine.sample(tempState, SAMPLES).points;
+  }
+
+  function applySnapshot(d) {
+    if (!d) return false;
+    isRestoringSlot = true;
     try {
-      var raw = decodeURIComponent(location.hash.slice(7));
-      var d = JSON.parse(raw);
       if (d.p != null && Presets.list[d.p]) {
         presetSelect.value = String(d.p);
-        state.note = Presets.list[d.p].note || '';
+        var prObj = Presets.list[d.p];
+        state.note = prObj.note || '';
         $('patchNote').textContent = state.note;
+        var prDefaults = prObj.params || {};
+        PARAM_DEFS.forEach(function (def) {
+          if (prDefaults[def.key] != null && $(def.id)) {
+            $(def.id).setAttribute('data-default', String(prDefaults[def.key]));
+          }
+        });
+        if (prDefaults.phaseDeg != null && $('phaseSlider')) {
+          $('phaseSlider').setAttribute('data-default', String(prDefaults.phaseDeg));
+        }
       }
-      if (d.fx) { state.formulas.x = d.fx; $('formulaX').value = d.fx; }
-      if (d.fy) { state.formulas.y = d.fy; $('formulaY').value = d.fy; }
-      if (d.fz) { state.formulas.z = d.fz; $('formulaZ').value = d.fz; }
+      ['x', 'y', 'z'].forEach(function (axis) {
+        var key = 'f' + axis;
+        if (d[key] != null) {
+          state.formulas[axis] = d[key];
+          var inp = $('formula' + axis.toUpperCase());
+          if (inp) {
+            inp.value = d[key];
+            inp.classList.remove('invalid');
+          }
+          var err = $('err' + axis.toUpperCase());
+          if (err) err.textContent = '';
+        }
+      });
       ['r', 'rIn', 'amp', 'f', 'K', 'orderN', 'a', 'b', 'n', 'm', 'k'].forEach(function (k) {
         if (typeof d[k] === 'number') state[k] = d[k];
       });
@@ -455,11 +549,148 @@
       if (d.sg != null) state.toggles.sliceGrid = !!d.sg;
       if (d.mag != null) state.toggles.magnifier = !!d.mag;
       if (d.str != null) state.toggles.strobeN = !!d.str;
+      if (d.mf) state.magFocus = d.mf;
+      if (typeof d.mz === 'number') state.magZoom = d.mz;
       syncParamUI();
       syncHudToggles();
       syncMagChips();
+    } finally {
+      isRestoringSlot = false;
+    }
+    bump();
+    return true;
+  }
+
+  function syncSlotTooltips() {
+    if (!slots) return;
+    document.querySelectorAll('.abc-btn[data-slot]').forEach(function (btn) {
+      var s = btn.getAttribute('data-slot');
+      var snap = slots[s];
+      var pName = (snap && Presets.list[snap.p]) ? Presets.list[snap.p].name : 'Custom Patch';
+      var idx = SLOT_ORDER.indexOf(s) + 1;
+      btn.title = 'Slot ' + s + ' — ' + pName + ' (R=' + (snap ? snap.r.toFixed(2) : '1.00') +
+        ', r=' + (snap ? snap.rIn.toFixed(2) : '0.45') + ') [Alt+' + idx + ']';
+    });
+  }
+
+  function syncSlotUI() {
+    document.querySelectorAll('.abc-btn[data-slot]').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-slot') === state.activeSlot);
+    });
+    var bar = $('abcBar');
+    if (bar) bar.classList.toggle('copy-armed', copyArmed);
+    var copyBtn = $('btnSlotCopy');
+    if (copyBtn) {
+      copyBtn.classList.toggle('armed', copyArmed);
+      if (copyArmed) copyBtn.textContent = 'Paste \u2192 ?';
+      else if (copyBtn.textContent === 'Paste \u2192 ?') copyBtn.textContent = 'Copy \u2192';
+    }
+    var ghostBtn = $('btnSlotGhost');
+    if (ghostBtn) {
+      ghostBtn.classList.toggle('active', !!state.toggles.ghostRef);
+    }
+    syncSlotTooltips();
+  }
+
+  function initSlots() {
+    slots = {
+      A: captureSnapshot(),
+      B: snapshotFromPreset(5),                 // Analytic Morlet ψ(t) — 3D Conjugate Helix
+      C: snapshotFromPreset(9, { orderN: 41 })  // Finite Field Torus Knot — Order N=41 Cavity
+    };
+    syncSlotUI();
+  }
+
+  function selectSlot(targetSlot) {
+    if (!slots || !slots[targetSlot]) return;
+
+    if (copyArmed) {
+      copyArmed = false;
+      if (targetSlot !== state.activeSlot) {
+        var srcSlot = state.activeSlot;
+        var cloned = JSON.parse(JSON.stringify(captureSnapshot()));
+        slots[srcSlot] = captureSnapshot();
+        state.ghostSlot = srcSlot;
+        state.ghostPoints = (dirty === lastRendered && state.points && state.points.length)
+          ? state.points.slice()
+          : sampleSnapshotPoints(slots[srcSlot]);
+        state.ghostRev = (state.ghostRev || 0) + 1;
+        slots[targetSlot] = cloned;
+        state.activeSlot = targetSlot;
+        var copyBtn = $('btnSlotCopy');
+        if (copyBtn) {
+          copyBtn.textContent = 'Copied \u2192 ' + targetSlot;
+          setTimeout(function () {
+            if (!copyArmed && copyBtn) copyBtn.textContent = 'Copy \u2192';
+          }, 1000);
+        }
+      }
+      syncSlotUI();
       bump();
-      return true;
+      return;
+    }
+
+    if (targetSlot === state.activeSlot) return;
+
+    var prevSlot = state.activeSlot;
+    slots[prevSlot] = captureSnapshot();
+    state.ghostSlot = prevSlot;
+    state.ghostPoints = (dirty === lastRendered && state.points && state.points.length)
+      ? state.points.slice()
+      : sampleSnapshotPoints(slots[prevSlot]);
+    state.ghostRev = (state.ghostRev || 0) + 1;
+
+    state.activeSlot = targetSlot;
+    Lissajous2D.clearTrail();
+    applySnapshot(slots[targetSlot]);
+    syncSlotUI();
+  }
+
+  function cycleSlot(dir) {
+    var idx = SLOT_ORDER.indexOf(state.activeSlot);
+    var next = SLOT_ORDER[(idx + dir + SLOT_ORDER.length) % SLOT_ORDER.length];
+    selectSlot(next);
+  }
+
+  function toggleCopyArmed() {
+    copyArmed = !copyArmed;
+    syncSlotUI();
+  }
+
+  function toggleGhostRef() {
+    state.toggles.ghostRef = !state.toggles.ghostRef;
+    if (state.toggles.ghostRef && (!state.ghostPoints || !state.ghostPoints.length) && slots) {
+      var refKey = state.activeSlot === 'A' ? 'B' : 'A';
+      state.ghostSlot = refKey;
+      state.ghostPoints = sampleSnapshotPoints(slots[refKey]);
+      state.ghostRev = (state.ghostRev || 0) + 1;
+    }
+    syncSlotUI();
+    bump();
+  }
+
+  document.querySelectorAll('.abc-btn[data-slot]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      selectSlot(btn.getAttribute('data-slot'));
+    });
+  });
+  if ($('btnSlotCopy')) {
+    $('btnSlotCopy').addEventListener('click', toggleCopyArmed);
+  }
+  if ($('btnSlotGhost')) {
+    $('btnSlotGhost').addEventListener('click', toggleGhostRef);
+  }
+
+  function encodePatchHash() {
+    return '#patch=' + encodeURIComponent(JSON.stringify(captureSnapshot()));
+  }
+
+  function restoreFromHash() {
+    if (!location.hash || location.hash.indexOf('#patch=') !== 0) return false;
+    try {
+      var raw = decodeURIComponent(location.hash.slice(7));
+      var d = JSON.parse(raw);
+      return applySnapshot(d);
     } catch (e) {
       return false;
     }
@@ -607,7 +838,13 @@
       state.toggles.animate = !state.toggles.animate;
       syncHudToggles();
       bump();
-    } else if (ev.key === '1') setActiveTab('scopes');
+    } else if (ev.altKey && ev.key === '1') { ev.preventDefault(); selectSlot('A'); }
+    else if (ev.altKey && ev.key === '2') { ev.preventDefault(); selectSlot('B'); }
+    else if (ev.altKey && ev.key === '3') { ev.preventDefault(); selectSlot('C'); }
+    else if (ev.key === '[') cycleSlot(-1);
+    else if (ev.key === ']') cycleSlot(1);
+    else if (ev.key === 'g' || ev.key === 'G') toggleGhostRef();
+    else if (ev.key === '1') setActiveTab('scopes');
     else if (ev.key === '2') setActiveTab('harmonics');
     else if (ev.key === '3') setActiveTab('frobenius');
     else if (ev.key === '4') setActiveTab('bits');
@@ -645,6 +882,7 @@
       presetSelect.value = '0';
       applyPreset('0');
     }
+    initSlots();
     requestAnimationFrame(frame);
   }
 
@@ -698,6 +936,15 @@
 
     requestAnimationFrame(frame);
   }
+
+  window.Harmony.App = {
+    getState: function () { return state; },
+    getSlots: function () { return slots; },
+    selectSlot: selectSlot,
+    cycleSlot: cycleSlot,
+    toggleCopyArmed: toggleCopyArmed,
+    toggleGhostRef: toggleGhostRef
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
