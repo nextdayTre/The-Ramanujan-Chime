@@ -594,6 +594,71 @@
     };
   }
 
+  // ---- Four-Bit Orbit (1000 ↔ 0001 Palindrome, 1111/F Pole, 0000 Pole & Quadray Tetrahedron) ----
+  // Connects the binary palindrome duality of 8 (1000₂) and 1 (0001₂), the maximum
+  // 4-bit nibble 15 (1111₂ / 0xF) at the North Pole (+Y), the origin/zero nibble
+  // 0 (0000₂ / 0x0) at the South Pole (−Y), and the 4 Quadray tetrahedral basis
+  // vectors (1,0,0,0), (0,1,0,0), (0,0,1,0), (0,0,0,1) radiating from (0,0,0,0).
+  function fourBitOrbit(state, playT) {
+    var R = Math.fround(Math.max(0.1, state.r || 1));
+    var f = (state.f != null) ? state.f : 1;
+    var ph = state.phaseRad || 0;
+    var theta = TAU * f * (playT || 0) + ph;
+    var c = Math.cos(theta);
+    var s = Math.sin(theta);
+
+    // Meridian (Front f(x) XY slice at z = 0) harmonic pair: 1000 (8) and 0001 (1)
+    var m8 = { x: Math.fround(-R * c), y: Math.fround(-R * s), z: 0 };
+    var m1 = { x: Math.fround( R * c), y: Math.fround( R * s), z: 0 };
+
+    // Equatorial (Top XZ plane at y = 0) harmonic pair: 1000 (8) and 0001 (1)
+    // Shares the exact same X-coordinate (±R·cos θ) as the Meridian orbit,
+    // coalescing at (−R, 0, 0) [1000] and (+R, 0, 0) [0001] while orbiting around 1111/F!
+    var e8 = { x: Math.fround(-R * c), y: 0, z: Math.fround(-R * s) };
+    var e1 = { x: Math.fround( R * c), y: 0, z: Math.fround( R * s) };
+
+    // Shared X-axis real projection (intersection of Front XY and Top XZ planes)
+    var x8 = { x: Math.fround(-R * c), y: 0, z: 0 };
+    var x1 = { x: Math.fround( R * c), y: 0, z: 0 };
+
+    // Inscribed Regular Quadray Tetrahedron vertices on sphere of radius R:
+    // D = (0,0,0,1) [0001] at top apex (+Y), and A=(1,0,0,0) [1000], B=(0,1,0,0) [0100], C=(0,0,1,0) [0010]
+    var kFront = (2 * Math.SQRT2) / 3;
+    var kBackZ = -Math.SQRT2 / 3;
+    var kBackX = Math.sqrt(2 / 3);
+    var yBase  = -1 / 3;
+
+    var quadray = {
+      D_0001: { x: 0, y: R, z: 0, label: '(0,0,0,1)', bits: '0001', dec: 1 },
+      A_1000: { x: 0, y: Math.fround(R * yBase), z: Math.fround(R * kFront), label: '(1,0,0,0)', bits: '1000', dec: 8 },
+      B_0100: { x: Math.fround(-R * kBackX), y: Math.fround(R * yBase), z: Math.fround(R * kBackZ), label: '(0,1,0,0)', bits: '0100', dec: 4 },
+      C_0010: { x: Math.fround( R * kBackX), y: Math.fround(R * yBase), z: Math.fround(R * kBackZ), label: '(0,0,1,0)', bits: '0010', dec: 2 }
+    };
+
+    // Map vertical elevation y in [-R, +R] of the 0001 (1) orbiter to the 16 states of a 4-bit nibble (0000..1111/F)
+    var elevNorm = clamp(0.5 * (s + 1), 0, 1); // 0 at bottom pole (-R -> 0000), 1 at top pole (+R -> 1111/F)
+    var nibbleVal = clamp(Math.round(elevNorm * 15), 0, 15);
+    var nibbleBin = nibbleVal.toString(2).padStart(4, '0');
+    var nibbleHex = '0x' + nibbleVal.toString(16).toUpperCase();
+    var deg = ((theta * 180 / PI) % 360 + 360) % 360;
+
+    return {
+      R: R,
+      theta: theta,
+      deg: deg,
+      meridian8: m8,
+      meridian1: m1,
+      equator8: e8,
+      equator1: e1,
+      real8: x8,
+      real1: x1,
+      quadray: quadray,
+      nibbleVal: nibbleVal,
+      nibbleBin: nibbleBin,
+      nibbleHex: nibbleHex
+    };
+  }
+
   window.Harmony = {
     PRECISION: 'float32',
     engine: {
@@ -607,6 +672,7 @@
       shellMetrics: shellMetrics, zoneOf: zoneOf,
       gcd: gcd, isPrimeInt: isPrimeInt, discreteGroup: discreteGroup,
       playhead: playhead, readout: readout,
+      fourBitOrbit: fourBitOrbit,
       fmtNum: fmtNum, bitInspect: bitInspect,
       ramanujanSeries: ramanujanSeries,
       initSecp: initSecp, secpSeq: secpSeq,

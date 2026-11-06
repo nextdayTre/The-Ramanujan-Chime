@@ -9,3 +9,6 @@ Desktop.ini
 node_modules/
 dist/
 *.log
+
+# External reference archives
+SchoolOfTomorrow/

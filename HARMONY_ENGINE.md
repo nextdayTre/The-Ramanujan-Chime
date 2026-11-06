@@ -363,5 +363,34 @@ numbers summing to integers.
 
 ---
 
+## 10. The Four-Bit Orbit (`1000 ↔ 0001` Binary Palindrome & Quadray Sphere)
+
+In 4-bit binary (a nibble $b_3 b_2 b_1 b_0 \in \{0000_2 \dots 1111_2\}$) and Quadray tetrahedral coordinates $(a, b, c, d)$, the four single-bit basis states are:
+
+$$
+A = (1,0,0,0) \equiv 1000_2\ (8), \quad
+B = (0,1,0,0) \equiv 0100_2\ (4), \quad
+C = (0,0,1,0) \equiv 0010_2\ (2), \quad
+D = (0,0,0,1) \equiv 0001_2\ (1).
+$$
+
+### 10.1 The X-Axis Palindrome Hinge (`1000` $\leftrightarrow$ `0001`)
+The outer bit pair $1000_2\ (8)$ and $0001_2\ (1)$ are bit-reversal palindromes of each other (as are the inner bits $0100_2\ (4)$ and $0010_2\ (2)$). On the Ramanujan Sphere of radius $R$, the **Front $f(x)$ ($XY$) plane** ($z = 0$) and the **Top $XZ$ plane** ($y = 0$) intersect along the real **X-axis**, meeting the sphere at the two antipodal palindrome anchors:
+
+$$
+(-R, 0, 0) = \mathbf{1000_2\ (8)}, \qquad (+R, 0, 0) = \mathbf{0001_2\ (1)}.
+$$
+
+### 10.2 Coupled Meridian ($XY$) and Equatorial ($XZ$) Orbits
+At oscillator phase $\theta = 2\pi f t + \phi$:
+- **Meridian Orbit (Front $f(x)$ view, $z = 0$):**
+  $$M_8(\theta) = (-R\cos\theta,\, -R\sin\theta,\, 0), \qquad M_1(\theta) = (+R\cos\theta,\, +R\sin\theta,\, 0)$$
+  sweeps between the **North Pole $(0, +R, 0) = \mathbf{1111_2 / \text{F}}\ (15)$** (maximum 4-bit nibble) and the **South Pole $(0, -R, 0) = \mathbf{0000_2 / 0}$** (minimum 4-bit nibble).
+- **Equatorial Orbit (Top $XZ$ view, $y = 0$):**
+  $$E_8(\theta) = (-R\cos\theta,\, 0,\, -R\sin\theta), \qquad E_1(\theta) = (+R\cos\theta,\, 0,\, +R\sin\theta)$$
+  continues the circular $8 \leftrightarrow 1$ orbit in the horizontal $XZ$ plane around the central **`1111 / F`** apex while sharing the exact same real-axis projection $x = \pm R\cos\theta$.
+
+---
+
 *Companion to the interactive `index.html` (Sphere × Synth). This file is the analytical statement of
-what the 3D phasor, the point-count readout, and the syzygy-twin toggle visualize.*
+what the 3D phasor, the point-count readout, the Four-Bit Orbit, and the syzygy-twin toggle visualize.*

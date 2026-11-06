@@ -68,6 +68,8 @@
       animate: true,
       trace: true,
       strobeN: false,
+      fourBitOrbit: true,
+      quadrayTetra: true,
       magnifier: false,
       ghostRef: false,
       refWaves: false,
@@ -251,6 +253,14 @@
     if (magWidget) {
       magWidget.hidden = !state.toggles.magnifier;
     }
+    var fbWidget = $('fourBitWidget');
+    if (fbWidget) {
+      fbWidget.hidden = !state.toggles.fourBitOrbit;
+    }
+    var qBtn = $('btnQuadrayTetra');
+    if (qBtn) {
+      qBtn.classList.toggle('active', state.toggles.quadrayTetra !== false);
+    }
     var refBtn = $('btnRefWaves');
     if (refBtn) {
       refBtn.classList.toggle('active', !!state.toggles.refWaves);
@@ -274,6 +284,14 @@
       bump();
     });
   });
+
+  if ($('btnQuadrayTetra')) {
+    $('btnQuadrayTetra').addEventListener('click', function () {
+      state.toggles.quadrayTetra = state.toggles.quadrayTetra === false;
+      syncHudToggles();
+      bump();
+    });
+  }
 
   function setTwinMode(mode) {
     state.twinMode = mode;
@@ -407,6 +425,7 @@
       if (p.hints.sliceGrid != null) state.toggles.sliceGrid = p.hints.sliceGrid;
       if (p.hints.cutaway != null) state.toggles.cutaway = p.hints.cutaway;
       if (p.hints.magnifier != null) state.toggles.magnifier = p.hints.magnifier;
+      if (p.hints.fourBitOrbit != null) state.toggles.fourBitOrbit = p.hints.fourBitOrbit;
       state.toggles.strobeN = !!p.hints.strobeN;
       if (p.hints.magFocus) state.magFocus = p.hints.magFocus;
       if (p.hints.twinMode) setTwinMode(p.hints.twinMode);
@@ -446,6 +465,8 @@
       sg: state.toggles.sliceGrid ? 1 : 0,
       mag: state.toggles.magnifier ? 1 : 0,
       str: state.toggles.strobeN ? 1 : 0,
+      fb: state.toggles.fourBitOrbit ? 1 : 0,
+      qt: state.toggles.quadrayTetra !== false ? 1 : 0,
       mf: state.magFocus,
       mz: state.magZoom
     };
@@ -477,6 +498,8 @@
       sg: hi.sliceGrid !== false ? 1 : 0,
       mag: hi.magnifier ? 1 : 0,
       str: hi.strobeN ? 1 : 0,
+      fb: hi.fourBitOrbit ? 1 : 0,
+      qt: 1,
       mf: hi.magFocus || 'trough',
       mz: 16
     };
@@ -549,6 +572,8 @@
       if (d.sg != null) state.toggles.sliceGrid = !!d.sg;
       if (d.mag != null) state.toggles.magnifier = !!d.mag;
       if (d.str != null) state.toggles.strobeN = !!d.str;
+      if (d.fb != null) state.toggles.fourBitOrbit = !!d.fb;
+      if (d.qt != null) state.toggles.quadrayTetra = !!d.qt;
       if (d.mf) state.magFocus = d.mf;
       if (typeof d.mz === 'number') state.magZoom = d.mz;
       syncParamUI();
@@ -762,6 +787,15 @@
 
     var yInf = Engine.bitInspect(ph.point ? ph.point.y : NaN);
     $('quickHexReadout').textContent = yInf.hex;
+
+    if (state.toggles.fourBitOrbit && $('fbNibbleBadge') && $('fbLiveCoord')) {
+      var fb = Engine.fourBitOrbit(state, state.playT);
+      $('fbNibbleBadge').textContent = fb.nibbleBin + ' (' + fb.nibbleHex + '·' + fb.nibbleVal + ')';
+      $('fbLiveCoord').innerHTML =
+        '8(1000) x=' + fb.real8.x.toFixed(2) +
+        ' &harr; 1(0001) x=' + fb.real1.x.toFixed(2) +
+        ' &middot; &theta;=' + fb.deg.toFixed(0) + '&deg;';
+    }
   }
 
   var _bitCache = { x: '', y: '', z: '' };
@@ -864,6 +898,10 @@
       Scene3D.setCameraView('front', state);
       syncHudToggles();
       bump();
+    } else if (ev.key === 'b' || ev.key === 'B') {
+      state.toggles.fourBitOrbit = !state.toggles.fourBitOrbit;
+      syncHudToggles();
+      bump();
     }
   });
 
@@ -879,8 +917,8 @@
 
     applyFrobMode();
     if (!restoreFromHash()) {
-      presetSelect.value = '0';
-      applyPreset('0');
+      presetSelect.value = '12';
+      applyPreset('12');
     }
     initSlots();
     requestAnimationFrame(frame);

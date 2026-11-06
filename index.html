@@ -232,12 +232,48 @@
         </div>
       </div>
 
-      <!-- Top-Right Transport, Order N Strobe & Zoom Lens Toggle HUD -->
+      <!-- Top-Right Transport, 4-Bit Orbit, Order N Strobe & Zoom Lens Toggle HUD -->
       <div class="hud hud-right">
         <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
         <button type="button" class="hud-pill active" data-toggle="trace">Trail</button>
+        <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
         <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
         <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
+      </div>
+
+      <!-- Floating Four-Bit Orbit & Quadray Palindrome HUD Card -->
+      <div id="fourBitWidget" class="fourbit-widget">
+        <div class="fb-head">
+          <span class="fb-title">&#11041; Four-Bit Orbit &amp; Quadray</span>
+          <span class="fb-nibble mono" id="fbNibbleBadge">1111 (0xF)</span>
+        </div>
+        <div class="fb-grid mono">
+          <div class="fb-item fb-cyan" title="MSB 8 (1000₂) — Left (-R) & harmonic orbiter">
+            <span>MSB 8</span>
+            <b>1000<sub>2</sub></b>
+          </div>
+          <div class="fb-item fb-gold" title="LSB 1 (0001₂) — Right (+R) & binary palindrome of 1000₂">
+            <span>LSB 1</span>
+            <b>0001<sub>2</sub></b>
+          </div>
+          <div class="fb-item fb-top" title="Top XZ Apex (+Y Pole): Max 4-bit nibble 1111₂ = 15 (0xF)">
+            <span>Top +Y</span>
+            <b>1111/F</b>
+          </div>
+          <div class="fb-item fb-bot" title="Bottom Nadir (−Y Pole): Zero 4-bit nibble 0000₂ = 0 (0x0)">
+            <span>Bot &minus;Y</span>
+            <b>0000/0</b>
+          </div>
+        </div>
+        <div class="fb-live mono" id="fbLiveCoord">
+          x<sub>8,1</sub> = &plusmn;1.00 &middot; &theta; = 0&deg;
+        </div>
+        <div class="fb-btn-row" role="group" aria-label="Four-Bit Orbit Camera & Quadray Controls">
+          <button type="button" class="mag-chip cam-btn" data-cam="front" title="Front f(x) view: 1000 (8) and 0001 (1) orbit in harmony across the sphere">Front f(x) [8&harr;1]</button>
+          <button type="button" class="mag-chip cam-btn" data-cam="top" title="Top XZ view: 1111/F crowns the center while 8 and 1 continue their orbit">Top XZ [1111/F]</button>
+          <button type="button" class="mag-chip cam-btn" data-cam="iso" title="3D Isometric view showing both Meridian & Equatorial orbits">3D Iso</button>
+          <button type="button" class="mag-chip active" id="btnQuadrayTetra" title="Toggle inscribed Quadray Tetrahedron (1,0,0,0), (0,1,0,0), (0,0,1,0), (0,0,0,1) & blue origin vectors">Quadray</button>
+        </div>
       </div>
 
       <!-- Floating Circular Zoom-Magnifier Lens (Weierstrass / Harmonic Micro-Scope) -->

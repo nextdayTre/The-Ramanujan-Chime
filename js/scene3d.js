@@ -12,11 +12,15 @@
   'use strict';
 
   var renderer, scene, camera, controls, container, resizeObs;
-  var sphereGroup, sliceGroup, strobeGroup, gridHelper, axesHelper;
+  var sphereGroup, sliceGroup, strobeGroup, fourBitGroup, quadrayGroup, gridHelper, axesHelper;
   var curveLine, antipodalLine, conjugateLine, realTraceLine, ghostLine;
   var marker, antipodalMarker, conjugateMarker, realTraceMarker, magTargetRing;
   var vectorLine, conjugateChordLine;
   var strobeNodeGeo, strobeMatIdent, strobeMatActive, strobeMatCoset;
+  var fbLblTop1111, fbLblBot0000, fbLblBack0100, fbLblFront0010;
+  var fbMerNode8, fbMerNode1, fbEqNode8, fbEqNode1;
+  var fbMerBadge8, fbMerBadge1, fbEqBadge8, fbEqBadge1;
+  var fbMerChord, fbEqChord, fbBridgeLines;
 
   var lastRendered = -1;
   var lastSphereSig = '';
@@ -47,6 +51,52 @@
     var sp = new THREE.Sprite(mat);
     var s = scaleSize || 0.28;
     sp.scale.set(s * (128 / 48), s, 1);
+    return sp;
+  }
+
+  // High-contrast 4-Bit & Quadray badge sprite (with optional subtitle & subtle glass pill)
+  function makeBitSprite(mainText, subText, fgHex, borderHex, scaleSize, plainTextOnly) {
+    var c = document.createElement('canvas');
+    c.width = 256; c.height = 96;
+    var g = c.getContext('2d');
+    if (!plainTextOnly) {
+      g.fillStyle = 'rgba(9, 14, 22, 0.84)';
+      g.strokeStyle = borderHex || fgHex || '#4df3dd';
+      g.lineWidth = 3;
+      var rx = 18, ry = 10, rw = 220, rh = 76, rad = 16;
+      g.beginPath();
+      g.moveTo(rx + rad, ry);
+      g.lineTo(rx + rw - rad, ry);
+      g.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rad);
+      g.lineTo(rx + rw, ry + rh - rad);
+      g.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rad, ry + rh);
+      g.lineTo(rx + rad, ry + rh);
+      g.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rad);
+      g.lineTo(rx, ry + rad);
+      g.quadraticCurveTo(rx, ry, rx + rad, ry);
+      g.closePath();
+      g.fill();
+      g.stroke();
+    }
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = fgHex || '#ffffff';
+    if (subText) {
+      g.font = '700 32px Georgia, "Times New Roman", "Cascadia Code", serif';
+      g.fillText(mainText, 128, 36);
+      g.font = '600 18px "Cascadia Code", Consolas, monospace';
+      g.fillStyle = borderHex || '#9de8c0';
+      g.fillText(subText, 128, 66);
+    } else {
+      g.font = '700 38px Georgia, "Times New Roman", "Cascadia Code", serif';
+      g.fillText(mainText, 128, 48);
+    }
+    var tex = new THREE.CanvasTexture(c);
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    var sp = new THREE.Sprite(mat);
+    var s = scaleSize || 0.30;
+    sp.scale.set(s * (256 / 96), s, 1);
+    sp.renderOrder = 12;
     return sp;
   }
 
@@ -98,13 +148,15 @@
     scene.add(gridHelper);
     scene.add(axesHelper);
 
-    // Vessel, internal 2D slice, and Discrete Order N Strobe groups
+    // Vessel, internal 2D slice, Discrete Order N Strobe, and Four-Bit Orbit groups
     sphereGroup = new THREE.Group();
     sliceGroup = new THREE.Group();
     strobeGroup = new THREE.Group();
+    fourBitGroup = new THREE.Group();
     scene.add(sphereGroup);
     scene.add(sliceGroup);
     scene.add(strobeGroup);
+    scene.add(fourBitGroup);
 
     strobeNodeGeo = new THREE.SphereGeometry(0.024, 12, 12);
     strobeMatIdent = new THREE.MeshBasicMaterial({ color: 0x6ee7a0 });
@@ -362,6 +414,230 @@
     sliceGroup.add(lblFx);
 
     sliceGroup.visible = state.toggles.sliceGrid !== false;
+    rebuildFourBit(state);
+  }
+
+  // Build Four-Bit Orbit (1000 ↔ 0001 Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron)
+  function rebuildFourBit(state) {
+    if (!fourBitGroup) return;
+    clearGroup(fourBitGroup);
+
+    var R = Math.max(0.1, state.r);
+    var fb = Harmony.engine.fourBitOrbit(state, 0);
+    var badgeScale = Math.max(0.22, R * 0.25);
+    var smallScale = Math.max(0.18, R * 0.20);
+
+    // 1. Equatorial XZ Ring (y = 0) & Meridian XY Ring (z = 0)
+    fourBitGroup.add(makeCircleLoop(R, 96, 0xffb04d, 0.65, 'xz'));
+    fourBitGroup.add(makeCircleLoop(R, 96, 0x4df3dd, 0.65, 'xy'));
+
+    // 2. X-Axis Palindrome Diameter (1000 at -R <-> 0001 at +R) & Y-Axis Nibble Pole Axis (0000 <-> 1111/F)
+    var axisLineGeo = new THREE.BufferGeometry();
+    axisLineGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+      -R, 0, 0,  R, 0, 0,
+       0, -R, 0, 0, R, 0
+    ], 3));
+    fourBitGroup.add(new THREE.LineSegments(axisLineGeo, new THREE.LineBasicMaterial({
+      color: 0x6ee7a0, transparent: true, opacity: 0.52
+    })));
+
+    // 3. Cardinal X-Axis Labels: 1000 (8) on Left (-R) & 0001 (1) on Right (+R)
+    // Matches the white 1000 / 0001 labels in both Front f(x) and Top XZ screenshots!
+    var lbl1000 = makeBitSprite('1000', '8 · MSB (−R)', '#ffffff', '#4df3dd', badgeScale);
+    lbl1000.position.set(-R * 1.20, 0, 0);
+    fourBitGroup.add(lbl1000);
+
+    var lbl0001 = makeBitSprite('0001', '1 · LSB (+R)', '#ffffff', '#ffb04d', badgeScale);
+    lbl0001.position.set(R * 1.20, 0, 0);
+    fourBitGroup.add(lbl0001);
+
+    // 4. North Pole (+Y): 1111 / F (Max 4-bit Nibble = 15) & South Pole (-Y): 0000 / 0 (Min Nibble = 0)
+    fbLblTop1111 = makeBitSprite('1111', '0xF · 15 TOP', '#ffffff', '#ffd166', badgeScale * 1.04);
+    fbLblTop1111.position.set(0, R * 1.12, 0);
+    fourBitGroup.add(fbLblTop1111);
+
+    fbLblBot0000 = makeBitSprite('0000', '0x0 · 0 BOT', '#dce3ec', '#5aa9ff', badgeScale * 0.96);
+    fbLblBot0000.position.set(0, -R * 1.12, 0);
+    fourBitGroup.add(fbLblBot0000);
+
+    // Companion inner nibble bit positions on XZ Equator: 0100 (4) and 0010 (2)
+    fbLblBack0100 = makeBitSprite('0100', '4 · (−Z)', '#dce3ec', '#6ee7a0', smallScale);
+    fbLblBack0100.position.set(0, 0, -R * 1.18);
+    fourBitGroup.add(fbLblBack0100);
+
+    fbLblFront0010 = makeBitSprite('0010', '2 · (+Z)', '#dce3ec', '#6ee7a0', smallScale);
+    fbLblFront0010.position.set(0, 0, R * 1.18);
+    fourBitGroup.add(fbLblFront0010);
+
+    // 5. Inscribed Quadray Tetrahedron & Blue Basis Vectors from Origin (0,0,0,0)
+    // Directly brings the QuadraysResearch.ipynb diagram inside the Ramanujan Sphere!
+    quadrayGroup = new THREE.Group();
+    var q = fb.quadray;
+    var qVerts = [q.D_0001, q.A_1000, q.B_0100, q.C_0010];
+
+    // Blue basis vectors from origin (0,0,0,0) -> (0,0,0,1), (1,0,0,0), (0,1,0,0), (0,0,1,0)
+    var blueRayPos = [];
+    for (var qi = 0; qi < qVerts.length; qi++) {
+      var qv = qVerts[qi];
+      blueRayPos.push(0, 0, 0, qv.x, qv.y, qv.z);
+    }
+    var blueRayGeo = new THREE.BufferGeometry();
+    blueRayGeo.setAttribute('position', new THREE.Float32BufferAttribute(blueRayPos, 3));
+    quadrayGroup.add(new THREE.LineSegments(blueRayGeo, new THREE.LineBasicMaterial({
+      color: 0x3b82f6, transparent: true, opacity: 0.92
+    })));
+
+    // 6 Tetrahedral Edges connecting all 4 Quadray basis vertices
+    var edgePairs = [
+      [q.D_0001, q.A_1000], [q.D_0001, q.B_0100], [q.D_0001, q.C_0010],
+      [q.A_1000, q.B_0100], [q.B_0100, q.C_0010], [q.C_0010, q.A_1000]
+    ];
+    var tetEdgePos = [];
+    for (var ei = 0; ei < edgePairs.length; ei++) {
+      var ea = edgePairs[ei][0], eb = edgePairs[ei][1];
+      tetEdgePos.push(ea.x, ea.y, ea.z, eb.x, eb.y, eb.z);
+    }
+    var tetEdgeGeo = new THREE.BufferGeometry();
+    tetEdgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(tetEdgePos, 3));
+    quadrayGroup.add(new THREE.LineSegments(tetEdgeGeo, new THREE.LineBasicMaterial({
+      color: 0xe2e8f0, transparent: true, opacity: 0.68
+    })));
+
+    // Quadray Vertex Spheres & Tuple Labels: (0,0,0,1), (1,0,0,0), (0,1,0,0), (0,0,1,0)
+    var qNodeGeo = new THREE.SphereGeometry(Math.max(0.02, R * 0.028), 14, 14);
+    var qNodeMat = new THREE.MeshBasicMaterial({ color: 0x5aa9ff });
+    for (var vi = 0; vi < qVerts.length; vi++) {
+      var v = qVerts[vi];
+      var qMesh = new THREE.Mesh(qNodeGeo, qNodeMat);
+      qMesh.position.set(v.x, v.y, v.z);
+      quadrayGroup.add(qMesh);
+
+      var qSp = makeLabelSprite(v.label, '#8ec5ff', Math.max(0.15, R * 0.17));
+      qSp.position.set(v.x * 1.08, v.y * 1.08 - R * 0.06, v.z * 1.08);
+      quadrayGroup.add(qSp);
+    }
+    fourBitGroup.add(quadrayGroup);
+
+    // 6. Dynamic Orbiting Nodes for 1000 (8) and 0001 (1) on both Meridian (XY) and Equator (XZ)
+    var orbGeo = new THREE.SphereGeometry(Math.max(0.028, R * 0.038), 18, 18);
+    var mat8 = new THREE.MeshBasicMaterial({ color: 0x4df3dd });
+    var mat1 = new THREE.MeshBasicMaterial({ color: 0xffb04d });
+
+    fbMerNode8 = new THREE.Mesh(orbGeo, mat8);
+    fbMerNode1 = new THREE.Mesh(orbGeo, mat1);
+    fbEqNode8  = new THREE.Mesh(orbGeo, mat8);
+    fbEqNode1  = new THREE.Mesh(orbGeo, mat1);
+    fourBitGroup.add(fbMerNode8, fbMerNode1, fbEqNode8, fbEqNode1);
+
+    var orbBadgeScale = Math.max(0.18, R * 0.20);
+    fbMerBadge8 = makeBitSprite('1000 (8)', 'f(x) Orbit', '#4df3dd', '#4df3dd', orbBadgeScale);
+    fbMerBadge1 = makeBitSprite('0001 (1)', 'f(x) Orbit', '#ffd166', '#ffb04d', orbBadgeScale);
+    fbEqBadge8  = makeBitSprite('1000 (8)', 'XZ Orbit', '#4df3dd', '#4df3dd', orbBadgeScale);
+    fbEqBadge1  = makeBitSprite('0001 (1)', 'XZ Orbit', '#ffd166', '#ffb04d', orbBadgeScale);
+    fourBitGroup.add(fbMerBadge8, fbMerBadge1, fbEqBadge8, fbEqBadge1);
+
+    fbMerChord = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x4df3dd, transparent: true, opacity: 0.65 })
+    );
+    fbEqChord = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xffb04d, transparent: true, opacity: 0.65 })
+    );
+    fbBridgeLines = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x9de8c0, transparent: true, opacity: 0.52 })
+    );
+    fourBitGroup.add(fbMerChord, fbEqChord, fbBridgeLines);
+  }
+
+  function updateFourBit(playT, state) {
+    if (!fourBitGroup) return;
+    var on = !!(state.toggles && state.toggles.fourBitOrbit);
+    fourBitGroup.visible = on;
+    if (!on) return;
+
+    if (quadrayGroup) {
+      quadrayGroup.visible = state.toggles.quadrayTetra !== false;
+    }
+
+    var fb = Harmony.engine.fourBitOrbit(state, playT);
+    var R = fb.R;
+    var m8 = fb.meridian8, m1 = fb.meridian1;
+    var e8 = fb.equator8,  e1 = fb.equator1;
+    var x8 = fb.real8,     x1 = fb.real1;
+
+    // Camera-aware pole & badge placement so both Front f(x) and Top XZ views look crystal clear
+    var camLen = Math.max(1e-4, camera.position.length());
+    var camY = camera.position.y / camLen;
+    var camZ = camera.position.z / camLen;
+    var isTopView   = camY > 0.78;
+    var isBotView   = camY < -0.78;
+    var isFrontView = Math.abs(camZ) > 0.78 && Math.abs(camY) < 0.35;
+
+    if (fbLblTop1111 && fbLblBot0000) {
+      if (isTopView) {
+        // In Top XZ view, center 1111/F right inside the sphere cavity (matching 4bitOrbitTop.png!)
+        fbLblTop1111.position.set(0, R, 0);
+        fbLblTop1111.visible = true;
+        fbLblBot0000.visible = false;
+      } else if (isBotView) {
+        fbLblBot0000.position.set(0, -R, 0);
+        fbLblBot0000.visible = true;
+        fbLblTop1111.visible = false;
+      } else {
+        fbLblTop1111.position.set(0, R * 1.13, 0);
+        fbLblBot0000.position.set(0, -R * 1.13, 0);
+        fbLblTop1111.visible = true;
+        fbLblBot0000.visible = true;
+      }
+    }
+
+    if (fbLblBack0100 && fbLblFront0010) {
+      var showEqBits = !isFrontView;
+      fbLblBack0100.visible = showEqBits;
+      fbLblFront0010.visible = showEqBits;
+    }
+
+    // Update Meridian (XY) and Equatorial (XZ) 8 <-> 1 harmonic orbiters
+    if (fbMerNode8 && fbMerNode1 && fbEqNode8 && fbEqNode1) {
+      fbMerNode8.position.set(m8.x, m8.y, m8.z);
+      fbMerNode1.position.set(m1.x, m1.y, m1.z);
+      fbEqNode8.position.set(e8.x, e8.y, e8.z);
+      fbEqNode1.position.set(e1.x, e1.y, e1.z);
+
+      var bOff = R * 0.14;
+      fbMerBadge8.position.set(m8.x * 1.06, m8.y * 1.06 + (m8.y >= 0 ? bOff : -bOff), m8.z);
+      fbMerBadge1.position.set(m1.x * 1.06, m1.y * 1.06 + (m1.y >= 0 ? bOff : -bOff), m1.z);
+      fbEqBadge8.position.set(e8.x * 1.06, bOff * 0.65, e8.z * 1.08);
+      fbEqBadge1.position.set(e1.x * 1.06, bOff * 0.65, e1.z * 1.08);
+
+      // In Top XZ view, highlight the XZ equatorial orbit badges; in Front f(x) view, highlight the XY meridian badges
+      fbMerBadge8.visible = !isTopView && !isBotView;
+      fbMerBadge1.visible = !isTopView && !isBotView;
+      fbEqBadge8.visible  = !isFrontView;
+      fbEqBadge1.visible  = !isFrontView;
+
+      fbMerChord.geometry.setFromPoints([
+        new THREE.Vector3(m8.x, m8.y, m8.z),
+        new THREE.Vector3(m1.x, m1.y, m1.z)
+      ]);
+      fbEqChord.geometry.setFromPoints([
+        new THREE.Vector3(e8.x, e8.y, e8.z),
+        new THREE.Vector3(e1.x, e1.y, e1.z)
+      ]);
+
+      // Harmonic phase bridges connecting Meridian (m8, m1) <-> Real X-Axis (x8, x1) <-> Equator (e8, e1)
+      var brPos = [
+        m8.x, m8.y, m8.z,  x8.x, x8.y, x8.z,
+        x8.x, x8.y, x8.z,  e8.x, e8.y, e8.z,
+        m8.x, m8.y, m8.z,  e8.x, e8.y, e8.z,
+        m1.x, m1.y, m1.z,  x1.x, x1.y, x1.z,
+        x1.x, x1.y, x1.z,  e1.x, e1.y, e1.z,
+        m1.x, m1.y, m1.z,  e1.x, e1.y, e1.z
+      ];
+      fbBridgeLines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(brPos, 3));
+    }
   }
 
   function updateCurve(points, state) {
@@ -619,6 +895,7 @@
     controls.autoRotate = !!state.toggles.autoRotate;
 
     updatePlayhead(points, playT, state);
+    updateFourBit(playT, state);
     controls.update();
 
     if (state.toggles.autoRotate || state.toggles.animate || dirtyDidChange || cameraMoved) {

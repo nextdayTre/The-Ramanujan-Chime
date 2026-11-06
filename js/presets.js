@@ -151,6 +151,18 @@
       note: 'tan() explodes past the sphere toward ±∞ at vertical asymptotes, whereas pure quadrature sphere geometry stays bounded forever.'
     },
     {
+      name: 'Four-Bit Orbit — 1000 (8) ↔ 0001 (1) Palindrome & Quadray',
+      group: 'Sphere & Carrier',
+      formulas: {
+        x: 'r*cos(TAU*f*t+phase)',
+        y: 'r*sin(TAU*f*t+phase)',
+        z: '0'
+      },
+      params: { r: 1, rIn: 0.45, amp: 1, f: 1, n: 3, m: 2, k: 1, K: 6, orderN: 16, a: 0.5, b: 3, phaseDeg: 0 },
+      hints: { sliceGrid: true, cutaway: false, magnifier: false, twinMode: 'both', fourBitOrbit: true },
+      note: 'Four-Bit Orbit: 1000 (8) and 0001 (1) binary palindrome duality! In Front f(x) view, 8 and 1 orbit in harmony across the sphere; in Top XZ view, 1111/F (max nibble 15) crowns the center (0000 at bottom) while the 8 ↔ 1 equatorial orbit continues around the inscribed Quadray Tetrahedron.'
+    },
+    {
       name: 'Custom Formula Patch',
       group: 'Custom',
       formulas: null,
