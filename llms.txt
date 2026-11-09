@@ -1,0 +1,32 @@
+# Ramanujan Sphere × Harmony Engine
+
+> A zero-build 3D spatial-synth visualizer and IEEE-754 float32 mathematics laboratory, drivable by LLM agents through deeplinks, an in-page bridge, a JSON CLI and an MCP stdio server.
+
+Identity: tool id `ramanujan-sphere` · toolset `1.0.0` · `schemaVersion` 1.
+App: `http://127.0.0.1:8080/` (serve from the repo root with `python -m http.server 8080 --bind 127.0.0.1`).
+One source of truth: `js/engine.js` (float32 maths) and `js/agent-core.js` (tool registry, state projection, deeplinks).
+
+## Start here
+
+- [AGENTS.md](AGENTS.md): onboarding for a fresh LLM — quick start, mental model, copy-paste examples for all three surfaces, invariants, acceptance commands, troubleshooting.
+- [docs/AGENT-INTERFACE.md](docs/AGENT-INTERFACE.md): the normative contract — envelope, error codes, deeplink grammar, UI state schema, bridge API, CLI, MCP, acceptance checks.
+
+## Machine-readable
+
+- [agent/manifest.json](agent/manifest.json): identity, deeplink defaults, UI selectors, tool catalogue, preset catalogue, related tools.
+- [agent/examples/](agent/examples/): one default success envelope per tool plus a generated `README.md` index.
+- Hidden page state: `<pre id="ramanujan-sphere-state" hidden>` and `window.ramanujanSphere.getState()` (same object).
+
+## Try it
+
+- Deeplink (screenshot contract): http://127.0.0.1:8080/?tab=bits&static=1
+- Bridge (browser console): `window.ramanujanSphere.getState()`
+- CLI: `node agent/cli.mjs manifest --json`
+- MCP stdio: `node agent/mcp-server.mjs` (client config in [AGENTS.md](AGENTS.md))
+
+## Related
+
+- [docs/ECOSYSTEM-MAP.md](docs/ECOSYSTEM-MAP.md): sibling quadray/IVM tools in the local reference archive, exact handoff data, and the phased cross-tool plan.
+- [README.md](README.md): the instrument's maths, presets and keyboard shortcuts.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): module boundaries and the float32 contract.
+- [HARMONY_ENGINE.md](HARMONY_ENGINE.md): derivations.

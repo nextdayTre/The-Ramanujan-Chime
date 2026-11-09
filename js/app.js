@@ -17,7 +17,8 @@
       Lissajous2D = Harmony.Lissajous2D,
       TimeSeries = Harmony.TimeSeries,
       Harmonics2D = Harmony.Harmonics2D,
-      Frobenius = Harmony.Frobenius;
+      Frobenius = Harmony.Frobenius,
+      AgentCore = Harmony.AgentCore;   // js/agent-core.js — the ONE shared agent layer
 
   var SAMPLES = 3200;
   var PLAY_SPEED = 0.11;
@@ -43,7 +44,8 @@
     secp: null,
     twinMode: 'both',      // 'off' | 'antipodal' | 'conjugate' | 'both'
     bitSource: 'auto',     // 'auto' | 'main' | 'ramanujan'
-    activeTab: 'scopes',   // 'scopes' | 'harmonics' | 'frobenius' | 'bits'
+    activeTab: 'scopes',   // 'scopes' | 'harmonics' | 'frobenius' | 'bits' | 'agent'
+    presetIndex: 12,       // current patch preset index (contract §5 preset.index)
     activeSlot: 'A',       // 'A' | 'B' | 'C' VST sphere slot
     ghostSlot: '',
     ghostPoints: [],
@@ -82,11 +84,12 @@
     note: ''
   };
 
-  var STATIC_MODE = /[?&]static/.test(location.search);
+  var STATIC_MODE = /[?&]static(?:=1)?(?:&|$)/.test(location.search);
   if (STATIC_MODE) {
     state.toggles.animate = false;
     state.toggles.autoRotate = false;
   }
+  state.staticMode = STATIC_MODE;
 
   var dirty = 0;
   var lastRendered = -1;
@@ -100,8 +103,385 @@
       slots[state.activeSlot] = captureSnapshot();
       syncSlotTooltips();
     }
+    if (!suppressAgentPublish) publishAgent();
   }
   function $(id) { return document.getElementById(id); }
+
+  // =====================================================================
+  // AGENT LAYER (additive) — contract §4/§5/§6
+  // The page parses the deeplink on mount, projects its state into the hidden
+  // `<pre id="ramanujan-sphere-state">` node, publishes to bridge listeners on
+  // structural changes, and keeps the URL in sync (debounced replaceState).
+  // Animation ticks only refresh the hidden node + body[data-agent-clock].
+  // =====================================================================
+  var agentListeners = [];
+  var appReady = false;
+  var readyQueue = [];
+  var suppressAgentPublish = false;
+  var agentUrlTimer = null;
+  var agentFrameSig = '';
+  var agentFrameJson = '';
+  var AGENT_VERSION = '1.0.0';
+
+  function hasOwn(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+
+  function pageBase() {
+    try {
+      if (location.origin && location.origin !== 'null') {
+        return location.origin + location.pathname;
+      }
+    } catch (e) { /* ignore */ }
+    return String(location.href).split('#')[0].split('?')[0];
+  }
+
+  function presetIndexNow() {
+    var n = (typeof state.presetIndex === 'number') ? state.presetIndex
+      : parseInt(presetSelect && presetSelect.value, 10);
+    return (n == null || isNaN(n)) ? 12 : n;
+  }
+
+  function presetNameNow() {
+    var p = Presets.list[presetIndexNow()];
+    return p ? p.name : '';
+  }
+
+  function agentStaticMode() { return !!(STATIC_MODE || state.staticMode); }
+
+  function agentOpts() {
+    var o = {
+      presetIndex: presetIndexNow(),
+      presetName: presetNameNow(),
+      base: pageBase(),
+      ready: true,
+      staticMode: agentStaticMode(),
+      slot: state.activeSlot,
+      version: (AgentCore && AgentCore.TOOLSET_VERSION) || AGENT_VERSION
+    };
+    // Hand the page's own float32 sample buffer to the projection so `derived`
+    // matches the visible panels exactly; fall back to the core's deterministic
+    // resample when the frame loop has not caught up with a just-applied patch.
+    if (dirty === lastRendered && state.points && state.points.length) o.points = state.points;
+    return o;
+  }
+
+  function buildUiState() {
+    if (!AgentCore || typeof AgentCore.projectUiState !== 'function') return null;
+    try { return AgentCore.projectUiState(state, agentOpts()); } catch (e) { return null; }
+  }
+
+  function deeplinkNow() {
+    if (AgentCore && typeof AgentCore.deeplinkForState === 'function') {
+      try {
+        var d = AgentCore.deeplinkForState(state, agentOpts());
+        if (d && typeof d.url === 'string') return d.url;
+      } catch (e) { /* ignore — fall through to plain base */ }
+    }
+    return pageBase();
+  }
+
+  function notifyAgentListeners(ui) {
+    var list = agentListeners.slice();
+    for (var i = 0; i < list.length; i++) {
+      try { list[i](ui); } catch (e) { /* isolate throwing subscribers */ }
+    }
+  }
+
+  function publishAgent() {
+    if (!AgentCore || typeof AgentCore.projectUiState !== 'function') return;
+    var ui = buildUiState();
+    if (!ui) return;
+    var json = JSON.stringify(ui);
+    var el = $('ramanujan-sphere-state');
+    if (el) el.textContent = json;
+    scheduleAgentUrlSync();
+    notifyAgentListeners(ui);
+  }
+
+  function scheduleAgentUrlSync() {
+    // Legacy Share-Link mode keeps its #patch= hash and disables URL sync.
+    if (location.hash && location.hash.indexOf('#patch=') === 0) return;
+    if (agentUrlTimer) clearTimeout(agentUrlTimer);
+    agentUrlTimer = setTimeout(function () {
+      agentUrlTimer = null;
+      if (location.hash && location.hash.indexOf('#patch=') === 0) return;
+      var url = deeplinkNow();
+      if (!url) return;
+      try {
+        if (location.href !== url) history.replaceState(null, '', url);
+      } catch (e) { /* file:// / sandboxed history — best effort only */ }
+    }, 300);
+  }
+
+  // Per-frame refresh: clock attribute every frame; hidden JSON only when the
+  // projected signature changes (static mode ⇒ no churn, animate ⇒ playT moves).
+  function refreshAgentFrame() {
+    if (!AgentCore || typeof AgentCore.projectUiState !== 'function') return;
+    var clock = (state.playT || 0).toFixed(4);
+    if (document.body && document.body.getAttribute('data-agent-clock') !== clock) {
+      document.body.setAttribute('data-agent-clock', clock);
+    }
+    var el = $('ramanujan-sphere-state');
+    var sig = dirty + '|' + lastRendered + '|' + clock + '|' + state.activeTab + '|' +
+      state.activeSlot + '|' + (agentStaticMode() ? 1 : 0);
+    if (sig !== agentFrameSig) {
+      agentFrameSig = sig;
+      var ui = buildUiState();
+      agentFrameJson = ui ? JSON.stringify(ui) : '';
+    }
+    // Always touch the node so it is "refreshed on render frames" even when stable.
+    if (el && el.textContent !== agentFrameJson) el.textContent = agentFrameJson;
+  }
+
+  function agentSubscribe(fn) {
+    if (typeof fn !== 'function') return function () {};
+    agentListeners.push(fn);
+    var off = false;
+    return function () {
+      if (off) return;
+      off = true;
+      var i = agentListeners.indexOf(fn);
+      if (i >= 0) agentListeners.splice(i, 1);
+    };
+  }
+
+  function agentFailure(code, message, hint) {
+    var err = { code: code, message: message };
+    if (hint) err.hint = hint;
+    return { ok: false, error: err, state: buildUiState() };
+  }
+
+  function setBitSourceUI(src) {
+    state.bitSource = src;
+    document.querySelectorAll('.bit-src-btn[data-bitsrc]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-bitsrc') === src);
+    });
+    _bitCache = { x: '', y: '', z: '' };
+    updateBitInspector();
+  }
+
+  // Re-base the live state onto a preset exactly like a deeplink mount does:
+  // preset first (its formulas/params/hints/toggles), then any explicit overrides.
+  // Transport (animate/autoRotate) is preserved unless a patch sets it explicitly.
+  function applyPresetRebase(idx) {
+    var n = Number(idx);
+    state.presetIndex = n;
+    presetSelect.value = String(n);
+    applyPreset(n); // legacy DOM + data-default + note + formula drawer behaviour
+    var d = (AgentCore && typeof AgentCore.resolveState === 'function') ? AgentCore.resolveState({ preset: n }) : null;
+    if (!d) return;
+    if (d.formulas) {
+      ['x', 'y', 'z'].forEach(function (axis) {
+        if (d.formulas[axis] == null) return;
+        state.formulas[axis] = String(d.formulas[axis]);
+        var inp = $('formula' + axis.toUpperCase());
+        if (inp) { inp.value = state.formulas[axis]; inp.classList.remove('invalid'); }
+        var err = $('err' + axis.toUpperCase());
+        if (err) err.textContent = '';
+      });
+    }
+    ['r', 'rIn', 'amp', 'f', 'K', 'orderN', 'a', 'b', 'n', 'm', 'k'].forEach(function (k) {
+      if (typeof d[k] === 'number') state[k] = d[k];
+    });
+    if (typeof d.phaseDeg === 'number') setPhaseFromDeg(d.phaseDeg);
+    if (d.toggles) {
+      for (var tk in d.toggles) {
+        if (!hasOwn(d.toggles, tk)) continue;
+        if (tk === 'animate' || tk === 'autoRotate') continue; // transport is explicit-only
+        state.toggles[tk] = !!d.toggles[tk];
+      }
+    }
+    if (d.twinMode) {
+      state.twinMode = d.twinMode;
+      state.toggles.syzygy = d.twinMode !== 'off';
+    }
+    if (d.bitSource) state.bitSource = d.bitSource;
+    if (typeof d.magZoom === 'number') state.magZoom = d.magZoom;
+    if (d.magFocus) state.magFocus = d.magFocus;
+    syncParamUI();
+    syncHudToggles();
+    syncMagChips();
+    bump();
+  }
+
+  // Apply an AgentCore.validatePatch()-normalized patch to the live UI.
+  function applyNormalizedPatch(np) {
+    if (!np || typeof np !== 'object') return;
+    var needsParamSync = false, needsHudSync = false, needsMagSync = false, phaseDeg = null;
+
+    // Precedence: preset first (re-bases formulas/params/hints/toggles), then overrides.
+    if (np.preset != null) {
+      applyPresetRebase(np.preset);
+    }
+    if (np.tab != null) setActiveTab(np.tab);
+    if (np.slot != null && np.slot !== state.activeSlot) selectSlot(np.slot);
+
+    if (np.staticMode != null) {
+      state.staticMode = !!np.staticMode;
+      state.toggles.animate = !np.staticMode;
+      state.toggles.autoRotate = !np.staticMode;
+      needsHudSync = true;
+    }
+    if (np.animate != null) { state.toggles.animate = !!np.animate; needsHudSync = true; }
+    if (np.autoRotate != null) { state.toggles.autoRotate = !!np.autoRotate; needsHudSync = true; }
+    if (np.playT != null) {
+      state.playT = Engine.clamp(Number(np.playT), 0, 1);
+      // A deeplink `pt` implies a frozen frame unless `anim` explicitly overrides.
+      if (np.animate == null) { state.toggles.animate = false; needsHudSync = true; }
+    }
+    if (np.twinMode != null) setTwinMode(np.twinMode);
+    if (np.bitSource != null) setBitSourceUI(np.bitSource);
+    if (np.magZoom != null) { state.magZoom = Number(np.magZoom); needsMagSync = true; }
+    if (np.magFocus != null) { state.magFocus = np.magFocus; needsMagSync = true; }
+
+    if (np.formulas) {
+      ['x', 'y', 'z'].forEach(function (axis) {
+        if (np.formulas[axis] == null) return;
+        var expr = String(np.formulas[axis]);
+        state.formulas[axis] = expr;
+        var inp = $('formula' + axis.toUpperCase());
+        if (inp) { inp.value = expr; inp.classList.remove('invalid'); }
+        var err = $('err' + axis.toUpperCase());
+        if (err) err.textContent = '';
+      });
+    }
+
+    if (np.inputs) {
+      for (var key in np.inputs) {
+        if (!hasOwn(np.inputs, key)) continue;
+        if (key === 'phaseDeg') { phaseDeg = Number(np.inputs[key]); continue; }
+        if (['r', 'rIn', 'amp', 'f', 'K', 'orderN', 'a', 'b', 'n', 'm', 'k'].indexOf(key) >= 0) {
+          state[key] = Number(np.inputs[key]);
+          needsParamSync = true;
+        }
+      }
+    }
+
+    if (np.toggles) {
+      for (var tk in np.toggles) {
+        if (!hasOwn(np.toggles, tk)) continue;
+        state.toggles[tk] = !!np.toggles[tk];
+      }
+      needsHudSync = true;
+    }
+
+    if (needsParamSync) syncParamUI();
+    if (phaseDeg != null) setPhaseFromDeg(phaseDeg);
+    if (needsHudSync) syncHudToggles();
+    if (needsMagSync) syncMagChips();
+    bump();
+  }
+
+  function applyAgentPatch(patch) {
+    try {
+      if (!AgentCore || typeof AgentCore.validatePatch !== 'function' ||
+          typeof AgentCore.changedKeys !== 'function') {
+        return agentFailure('E_INTERNAL', 'agent core (js/agent-core.js) is not loaded');
+      }
+      if (patch === undefined || patch === null) patch = {};
+      if (typeof patch !== 'object' || Object.prototype.toString.call(patch) === '[object Array]') {
+        return agentFailure('E_BAD_ARGS', 'patch must be a plain object',
+          'e.g. window.ramanujanSphere.setState({ tab: "harmonics" })');
+      }
+      var v = AgentCore.validatePatch(patch);
+      if (!v || v.ok !== true) {
+        return {
+          ok: false,
+          error: (v && v.error) ? v.error : { code: 'E_BAD_ARGS', message: 'invalid patch' },
+          state: buildUiState()
+        };
+      }
+      var np = v.patch || {};
+      var changed = [];
+      try { changed = AgentCore.changedKeys(state, presetIndexNow(), np) || []; }
+      catch (e) { changed = ['?']; }
+      // True no-op: apply nothing, bump nothing, publish no change event.
+      if (changed.length === 0) {
+        return { ok: true, state: buildUiState(), warnings: v.warnings || [] };
+      }
+      suppressAgentPublish = true;
+      try { applyNormalizedPatch(np); } finally { suppressAgentPublish = false; }
+      publishAgent();
+      return { ok: true, state: buildUiState(), warnings: v.warnings || [] };
+    } catch (e) {
+      return agentFailure('E_INTERNAL', 'patch application failed');
+    }
+  }
+
+  // Reset to the contract default state: preset 12, scopes tab, default toggles, playT 0.
+  function resetAgentState() {
+    suppressAgentPublish = true;
+    try {
+      var d = (AgentCore && typeof AgentCore.defaultState === 'function') ? AgentCore.defaultState() : null;
+      var targetPreset = (d && d.presetIndex != null) ? d.presetIndex : 12;
+      applyPreset(targetPreset);
+      if (d) {
+        ['r', 'rIn', 'amp', 'f', 'K', 'orderN', 'a', 'b', 'n', 'm', 'k'].forEach(function (k) {
+          if (typeof d[k] === 'number') state[k] = d[k];
+        });
+        if (d.formulas) {
+          ['x', 'y', 'z'].forEach(function (axis) {
+            if (d.formulas[axis] != null) state.formulas[axis] = String(d.formulas[axis]);
+          });
+        }
+        if (d.phaseDeg != null) setPhaseFromDeg(d.phaseDeg);
+        if (d.twinMode) setTwinMode(d.twinMode);
+        if (d.bitSource) setBitSourceUI(d.bitSource);
+        if (typeof d.magZoom === 'number') state.magZoom = d.magZoom;
+        if (d.magFocus) state.magFocus = d.magFocus;
+        if (d.toggles) {
+          for (var tk in d.toggles) {
+            if (hasOwn(d.toggles, tk)) state.toggles[tk] = !!d.toggles[tk];
+          }
+        }
+      }
+      // Page-level static mode stays frozen; otherwise default is playing + orbiting.
+      state.toggles.animate = agentStaticMode() ? false : true;
+      state.toggles.autoRotate = agentStaticMode() ? false : true;
+      // contract §6 reset(): defaultState() equivalent — staticMode false.
+      state.staticMode = false;
+      state.playT = 0;
+      state.activeSlot = 'A';
+      state.ghostSlot = '';
+      state.ghostPoints = [];
+      state.ghostRev = (state.ghostRev || 0) + 1;
+      setActiveTab('scopes');
+      syncParamUI();
+      syncHudToggles();
+      syncMagChips();
+      if (window.Harmony && Harmony.Lissajous2D && Harmony.Lissajous2D.clearTrail) {
+        Harmony.Lissajous2D.clearTrail();
+      }
+      slots = null;
+      initSlots();
+      bump();
+    } finally {
+      suppressAgentPublish = false;
+    }
+    publishAgent();
+    return buildUiState();
+  }
+
+  // Mount-time deeplink parsing (contract §4). AgentCore.parseDeeplink returns
+  // { presetIndex, patch, warnings } where `patch` is ALREADY NORMALIZED
+  // (staticMode/playT/twinMode/inputs/toggles/...). It is applied directly:
+  // the parser is tolerant, so a bad link never crashes the page.
+  function parseMountDeeplink() {
+    if (!AgentCore || typeof AgentCore.parseDeeplink !== 'function') return null;
+    try {
+      var parsed = AgentCore.parseDeeplink(location.search || location.href);
+      if (!parsed || parsed.ok === false) return null;
+      return parsed;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function patchHasKeys(patch) {
+    if (!patch || typeof patch !== 'object') return false;
+    for (var k in patch) { if (hasOwn(patch, k)) return true; }
+    return false;
+  }
+
 
   // ---- Declarative Parameter Schema ----
   var PARAM_DEFS = [
@@ -332,6 +712,8 @@
   // Dock Tabs
   function setActiveTab(tabId) {
     state.activeTab = tabId;
+    // Automation/UX hook: lets CSS give the Agent dock its extra height (additive).
+    if (document.body) document.body.setAttribute('data-agent-active-tab', tabId);
     document.querySelectorAll('.dock-tab[data-tab]').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
     });
@@ -392,6 +774,8 @@
   function applyPreset(idx) {
     var p = Presets.list[Number(idx)];
     if (!p) return;
+    state.presetIndex = Number(idx);
+    if (presetSelect) presetSelect.value = String(idx);
     state.note = p.note || '';
     $('patchNote').textContent = state.note;
 
@@ -442,93 +826,21 @@
   // ---- Canonical Sphere Snapshot + VST A/B/C Slots & URL Hash Sharing ----
   var SLOT_ORDER = ['A', 'B', 'C'];
 
+  // Snapshot helpers are AgentCore delegates so the legacy #patch= bytes, the
+  // VST slots and the CLI/MCP share one implementation (contract §1).
   function captureSnapshot() {
-    return {
-      p: parseInt(presetSelect.value, 10) || 0,
-      fx: state.formulas.x,
-      fy: state.formulas.y,
-      fz: state.formulas.z,
-      r: state.r,
-      rIn: state.rIn,
-      amp: state.amp,
-      f: state.f,
-      K: state.K,
-      orderN: state.orderN,
-      a: state.a,
-      b: state.b,
-      n: state.n,
-      m: state.m,
-      k: state.k,
-      ph: Math.round(state.phaseRad * 180 / Math.PI * 100) / 100,
-      tw: state.twinMode,
-      cut: state.toggles.cutaway ? 1 : 0,
-      sg: state.toggles.sliceGrid ? 1 : 0,
-      mag: state.toggles.magnifier ? 1 : 0,
-      str: state.toggles.strobeN ? 1 : 0,
-      fb: state.toggles.fourBitOrbit ? 1 : 0,
-      qt: state.toggles.quadrayTetra !== false ? 1 : 0,
-      mf: state.magFocus,
-      mz: state.magZoom
-    };
+    if (!AgentCore || typeof AgentCore.captureSnapshot !== 'function') return null;
+    return AgentCore.captureSnapshot(state, presetIndexNow());
   }
 
   function snapshotFromPreset(idx, extra) {
-    var p = Presets.list[idx] || Presets.list[0];
-    var pr = p.params || {};
-    var hi = p.hints || {};
-    var snap = {
-      p: idx,
-      fx: p.formulas ? p.formulas.x : state.formulas.x,
-      fy: p.formulas ? p.formulas.y : state.formulas.y,
-      fz: p.formulas ? p.formulas.z : state.formulas.z,
-      r: pr.r != null ? pr.r : 1.0,
-      rIn: pr.rIn != null ? pr.rIn : 0.45,
-      amp: pr.amp != null ? pr.amp : 1.0,
-      f: pr.f != null ? pr.f : 1.0,
-      K: pr.K != null ? pr.K : 6,
-      orderN: pr.orderN != null ? pr.orderN : 19,
-      a: pr.a != null ? pr.a : 0.5,
-      b: pr.b != null ? pr.b : 3,
-      n: pr.n != null ? pr.n : 3,
-      m: pr.m != null ? pr.m : 2,
-      k: pr.k != null ? pr.k : 1,
-      ph: pr.phaseDeg != null ? pr.phaseDeg : 0,
-      tw: hi.twinMode || 'both',
-      cut: hi.cutaway ? 1 : 0,
-      sg: hi.sliceGrid !== false ? 1 : 0,
-      mag: hi.magnifier ? 1 : 0,
-      str: hi.strobeN ? 1 : 0,
-      fb: hi.fourBitOrbit ? 1 : 0,
-      qt: 1,
-      mf: hi.magFocus || 'trough',
-      mz: 16
-    };
-    if (extra) {
-      for (var ek in extra) {
-        if (Object.prototype.hasOwnProperty.call(extra, ek)) snap[ek] = extra[ek];
-      }
-    }
-    return snap;
+    if (!AgentCore || typeof AgentCore.snapshotFromPreset !== 'function') return null;
+    return AgentCore.snapshotFromPreset(idx, extra);
   }
 
   function sampleSnapshotPoints(snap) {
-    if (!snap) return [];
-    var tempState = {
-      r: snap.r,
-      rIn: snap.rIn,
-      amp: snap.amp,
-      f: snap.f,
-      K: snap.K,
-      orderN: snap.orderN,
-      a: snap.a,
-      b: snap.b,
-      n: snap.n,
-      m: snap.m,
-      k: snap.k,
-      phaseRad: (snap.ph || 0) * Math.PI / 180,
-      formulas: { x: snap.fx, y: snap.fy, z: snap.fz }
-    };
-    return Engine.sample(tempState, SAMPLES).points;
+    if (!AgentCore || typeof AgentCore.sampleSnapshotPoints !== 'function') return [];
+    return AgentCore.sampleSnapshotPoints(snap);
   }
 
   function applySnapshot(d) {
@@ -537,6 +849,7 @@
     try {
       if (d.p != null && Presets.list[d.p]) {
         presetSelect.value = String(d.p);
+        state.presetIndex = Number(d.p);
         var prObj = Presets.list[d.p];
         state.note = prObj.note || '';
         $('patchNote').textContent = state.note;
@@ -882,6 +1195,7 @@
     else if (ev.key === '2') setActiveTab('harmonics');
     else if (ev.key === '3') setActiveTab('frobenius');
     else if (ev.key === '4') setActiveTab('bits');
+    else if (ev.key === '5') setActiveTab('agent');
     else if (ev.key === 'z' || ev.key === 'Z') {
       state.toggles.magnifier = !state.toggles.magnifier;
       syncHudToggles();
@@ -907,6 +1221,7 @@
 
   // ---- Init & Main 60fps Studio Loop ----
   function initAll() {
+    document.body.setAttribute('data-agent-active-tab', state.activeTab);
     Engine.initSecp(state);
     Scene3D.init($('viewport3d'), state);
     Magnifier2D.init($('magnifierCanvas'));
@@ -917,10 +1232,28 @@
 
     applyFrobMode();
     if (!restoreFromHash()) {
-      presetSelect.value = '12';
-      applyPreset('12');
+      // Contract §4 mount flow: parse the deeplink, apply its preset first, then
+      // the pre-normalized patch (tolerant parser; never re-validate here).
+      var mount = parseMountDeeplink();
+      var mountPreset = (mount && typeof mount.presetIndex === 'number') ? mount.presetIndex : 12;
+      presetSelect.value = String(mountPreset);
+      applyPresetRebase(mountPreset);
+      if (mount && patchHasKeys(mount.patch)) {
+        suppressAgentPublish = true;
+        try { applyNormalizedPatch(mount.patch); } finally { suppressAgentPublish = false; }
+      }
+      publishAgent();
     }
     initSlots();
+    // Signal the bridge (js/agent-bridge.js) that the app is initialized and the
+    // state is stable; it installs window.ramanujanSphere and emits the single
+    // mount `ramanujan-sphere:change` event after this point.
+    appReady = true;
+    var pendingReady = readyQueue;
+    readyQueue = [];
+    for (var ri = 0; ri < pendingReady.length; ri++) {
+      try { pendingReady[ri](); } catch (e) { /* isolate */ }
+    }
     requestAnimationFrame(frame);
   }
 
@@ -972,6 +1305,10 @@
       (!l || (l.x === ph.point.x && l.y === ph.point.y && l.z === ph.point.z)) &&
       b.x === want.x && b.y === want.y && b.z === want.z;
 
+    // Agent layer frame hook: body[data-agent-clock] every frame + hidden state
+    // JSON refresh (no change events from animation ticks).
+    refreshAgentFrame();
+
     requestAnimationFrame(frame);
   }
 
@@ -981,7 +1318,29 @@
     selectSlot: selectSlot,
     cycleSlot: cycleSlot,
     toggleCopyArmed: toggleCopyArmed,
-    toggleGhostRef: toggleGhostRef
+    toggleGhostRef: toggleGhostRef,
+
+    // ---- Agent layer (additive; consumed by js/agent-bridge.js) ----
+    isReady: function () { return appReady; },
+    onReady: function (fn) {
+      if (typeof fn !== 'function') return function () {};
+      if (appReady) { fn(); return function () {}; }
+      readyQueue.push(fn);
+      return function () {
+        var i = readyQueue.indexOf(fn);
+        if (i >= 0) readyQueue.splice(i, 1);
+      };
+    },
+    getPresetIndex: presetIndexNow,
+    getPoints: function () { return state.points; },
+    getStaticMode: function () { return agentStaticMode(); },
+    getAgentState: buildUiState,
+    getDeeplink: deeplinkNow,
+    applyAgentPatch: applyAgentPatch,
+    resetAgentState: resetAgentState,
+    subscribe: agentSubscribe,
+    refreshAgentFrame: refreshAgentFrame,
+    publishAgent: publishAgent
   };
 
   if (document.readyState === 'loading') {

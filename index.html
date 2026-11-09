@@ -80,7 +80,7 @@
           <button type="button" id="btnSlotGhost" class="abc-tool" title="Overlay previous slot's trajectory as a reference ghost curve (G key)">Ghost</button>
         </div>
       </div>
-      <select id="presetSelect"></select>
+      <select id="presetSelect" data-agent-input="preset"></select>
       <div id="patchNote" class="note"></div>
     </section>
 
@@ -94,11 +94,11 @@
       <div class="field-row">
         <div class="field small">
           <label for="radius">Outer R <output id="radiusOut">1.00</output></label>
-          <input type="range" id="radius" min="0.3" max="2.6" step="0.05" value="1" data-default="1" />
+          <input type="range" id="radius" data-agent-input="r" min="0.3" max="2.6" step="0.05" value="1" data-default="1" />
         </div>
         <div class="field small">
           <label for="innerRadius">Cavity r <output id="innerRadiusOut">0.45</output></label>
-          <input type="range" id="innerRadius" min="0" max="2.4" step="0.05" value="0.45" data-default="0.45" />
+          <input type="range" id="innerRadius" data-agent-input="rIn" min="0" max="2.4" step="0.05" value="0.45" data-default="0.45" />
         </div>
       </div>
 
@@ -109,7 +109,7 @@
 
       <div class="field strobe-field" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
         <label for="orderN">Order N (Strobe) <output id="orderNOut">19</output></label>
-        <input type="range" id="orderN" min="5" max="64" step="1" value="19" data-default="19" />
+        <input type="range" id="orderN" data-agent-input="orderN" min="5" max="64" step="1" value="19" data-default="19" />
         <div class="strobe-sub mono" id="orderNBadge">19/19 &middot; prime order (full cycle)</div>
       </div>
     </section>
@@ -121,19 +121,19 @@
       <div class="field-row">
         <div class="field small">
           <label for="amp">Gain amp <output id="ampOut">1.00</output></label>
-          <input type="range" id="amp" min="0.1" max="2.5" step="0.05" value="1" data-default="1" />
+          <input type="range" id="amp" data-agent-input="amp" min="0.1" max="2.5" step="0.05" value="1" data-default="1" />
         </div>
         <div class="field small">
           <label for="freq">Freq f <output id="freqOut">1.0</output></label>
-          <input type="range" id="freq" min="0.5" max="8" step="0.5" value="1" data-default="1" />
+          <input type="range" id="freq" data-agent-input="f" min="0.5" max="8" step="0.5" value="1" data-default="1" />
         </div>
       </div>
 
       <div class="field">
         <label for="phaseSlider">Phase &phi; <output id="phaseOut">0&deg;</output></label>
-        <input type="range" id="phaseSlider" min="-180" max="180" step="1" value="0" data-default="0" />
+        <input type="range" id="phaseSlider" data-agent-input="phase" min="-180" max="180" step="1" value="0" data-default="0" />
         <div class="sub-field">
-          <input type="number" id="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
+          <input type="number" id="phaseDeg" data-agent-input="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
           <span>deg</span>
           <span id="phaseRad" class="mono">0.0000 rad</span>
         </div>
@@ -141,32 +141,32 @@
 
       <div class="field highlight-field">
         <label for="harmonicsK">Harmonics / Partials K <output id="harmonicsKOut">6</output></label>
-        <input type="range" id="harmonicsK" min="0" max="14" step="1" value="6" data-default="6" />
+        <input type="range" id="harmonicsK" data-agent-input="K" min="0" max="14" step="1" value="6" data-default="6" />
       </div>
 
       <div class="field-row">
         <div class="field small">
           <label for="fractalA" title="Weierstrass amplitude decay a^k">Decay a <output id="fractalAOut">0.50</output></label>
-          <input type="range" id="fractalA" min="0.15" max="0.85" step="0.05" value="0.5" data-default="0.5" />
+          <input type="range" id="fractalA" data-agent-input="a" min="0.15" max="0.85" step="0.05" value="0.5" data-default="0.5" />
         </div>
         <div class="field small">
           <label for="fractalB" title="Weierstrass frequency multiplier b^k">Lacunarity b <output id="fractalBOut">3</output></label>
-          <input type="range" id="fractalB" min="2" max="9" step="1" value="3" data-default="3" />
+          <input type="range" id="fractalB" data-agent-input="b" min="2" max="9" step="1" value="3" data-default="3" />
         </div>
       </div>
 
       <div class="field-row">
         <div class="field small">
           <label for="ratioN">n <output id="ratioNOut">3</output></label>
-          <input type="range" id="ratioN" min="1" max="8" step="1" value="3" data-default="3" />
+          <input type="range" id="ratioN" data-agent-input="n" min="1" max="8" step="1" value="3" data-default="3" />
         </div>
         <div class="field small">
           <label for="ratioM">m <output id="ratioMOut">2</output></label>
-          <input type="range" id="ratioM" min="1" max="8" step="1" value="2" data-default="2" />
+          <input type="range" id="ratioM" data-agent-input="m" min="1" max="8" step="1" value="2" data-default="2" />
         </div>
         <div class="field small">
           <label for="ratioK">k <output id="ratioKOut">1</output></label>
-          <input type="range" id="ratioK" min="1" max="8" step="1" value="1" data-default="1" />
+          <input type="range" id="ratioK" data-agent-input="k" min="1" max="8" step="1" value="1" data-default="1" />
         </div>
       </div>
     </section>
@@ -178,19 +178,19 @@
         <div class="drawer-body">
           <div class="formula-row">
             <label class="axis" for="formulaX">x(t)</label>
-            <input id="formulaX" class="formula" data-axis="x" spellcheck="false" />
+            <input id="formulaX" class="formula" data-axis="x" data-agent-input="fx" spellcheck="false" />
           </div>
           <div class="err" id="errX"></div>
 
           <div class="formula-row">
             <label class="axis" for="formulaY">y(t)</label>
-            <input id="formulaY" class="formula" data-axis="y" spellcheck="false" />
+            <input id="formulaY" class="formula" data-axis="y" data-agent-input="fy" spellcheck="false" />
           </div>
           <div class="err" id="errY"></div>
 
           <div class="formula-row">
             <label class="axis" for="formulaZ">z(t)</label>
-            <input id="formulaZ" class="formula" data-axis="z" spellcheck="false" />
+            <input id="formulaZ" class="formula" data-axis="z" data-agent-input="fz" spellcheck="false" />
           </div>
           <div class="err" id="errZ"></div>
 
@@ -214,31 +214,31 @@
       <!-- Top-Left Floating Scene HUD -->
       <div class="hud hud-left">
         <div class="hud-row">
-          <button type="button" class="hud-pill" data-toggle="cutaway" title="Cutaway Hollow Sphere showing V = 4/3·π(R³ − r³)">Cutaway Shell</button>
-          <button type="button" class="hud-pill active" data-toggle="sliceGrid" title="Internal 2D f(x)/x Cartesian slice grid at z = 0">2D f(x) Grid</button>
-          <button type="button" class="hud-pill active" data-toggle="surface">Surface</button>
-          <button type="button" class="hud-pill active" data-toggle="wireframe">Wire</button>
-          <button type="button" class="hud-pill active" data-toggle="grid">Floor</button>
-          <button type="button" class="hud-pill active" data-toggle="axes">Axes</button>
-          <button type="button" class="hud-pill active" data-toggle="radiusVec">Vector</button>
-          <button type="button" class="hud-pill active" data-toggle="realTrace" title="Show Real Trace (P + P̄)/2 when Conjugate twin is active">Re Trace</button>
+          <button type="button" class="hud-pill" data-toggle="cutaway" data-agent-toggle="cutaway" title="Cutaway Hollow Sphere showing V = 4/3·π(R³ − r³)">Cutaway Shell</button>
+          <button type="button" class="hud-pill active" data-toggle="sliceGrid" data-agent-toggle="sliceGrid" title="Internal 2D f(x)/x Cartesian slice grid at z = 0">2D f(x) Grid</button>
+          <button type="button" class="hud-pill active" data-toggle="surface" data-agent-toggle="surface">Surface</button>
+          <button type="button" class="hud-pill active" data-toggle="wireframe" data-agent-toggle="wireframe">Wire</button>
+          <button type="button" class="hud-pill active" data-toggle="grid" data-agent-toggle="grid">Floor</button>
+          <button type="button" class="hud-pill active" data-toggle="axes" data-agent-toggle="axes">Axes</button>
+          <button type="button" class="hud-pill active" data-toggle="radiusVec" data-agent-toggle="radiusVec">Vector</button>
+          <button type="button" class="hud-pill active" data-toggle="realTrace" data-agent-toggle="realTrace" title="Show Real Trace (P + P̄)/2 when Conjugate twin is active">Re Trace</button>
         </div>
         <div class="hud-row">
           <span class="hud-label">Cam:</span>
           <button type="button" class="hud-pill cam-btn" data-cam="iso">3D Iso</button>
           <button type="button" class="hud-pill cam-btn" data-cam="front" title="Snap straight onto the internal 2D f(x)/x slice plane">Front f(x)</button>
           <button type="button" class="hud-pill cam-btn" data-cam="top">Top XZ</button>
-          <button type="button" class="hud-pill active" data-toggle="autoRotate">Orbit</button>
+          <button type="button" class="hud-pill active" data-toggle="autoRotate" data-agent-toggle="autoRotate">Orbit</button>
         </div>
       </div>
 
       <!-- Top-Right Transport, 4-Bit Orbit, Order N Strobe & Zoom Lens Toggle HUD -->
       <div class="hud hud-right">
-        <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
-        <button type="button" class="hud-pill active" data-toggle="trace">Trail</button>
-        <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
-        <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
-        <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
+        <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" data-agent-toggle="animate" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
+        <button type="button" class="hud-pill active" data-toggle="trace" id="btnTrace" data-agent-toggle="trace">Trail</button>
+        <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" data-agent-toggle="fourBitOrbit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
+        <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" data-agent-toggle="strobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
+        <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" data-agent-toggle="magnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
       </div>
 
       <!-- Floating Four-Bit Orbit & Quadray Palindrome HUD Card -->
@@ -272,7 +272,7 @@
           <button type="button" class="mag-chip cam-btn" data-cam="front" title="Front f(x) view: 1000 (8) and 0001 (1) orbit in harmony across the sphere">Front f(x) [8&harr;1]</button>
           <button type="button" class="mag-chip cam-btn" data-cam="top" title="Top XZ view: 1111/F crowns the center while 8 and 1 continue their orbit">Top XZ [1111/F]</button>
           <button type="button" class="mag-chip cam-btn" data-cam="iso" title="3D Isometric view showing both Meridian & Equatorial orbits">3D Iso</button>
-          <button type="button" class="mag-chip active" id="btnQuadrayTetra" title="Toggle inscribed Quadray Tetrahedron (1,0,0,0), (0,1,0,0), (0,0,1,0), (0,0,0,1) & blue origin vectors">Quadray</button>
+          <button type="button" class="mag-chip active" id="btnQuadrayTetra" data-agent-toggle="quadrayTetra" title="Toggle inscribed Quadray Tetrahedron (1,0,0,0), (0,1,0,0), (0,0,1,0), (0,0,0,1) & blue origin vectors">Quadray</button>
         </div>
       </div>
 
@@ -281,15 +281,15 @@
         <canvas id="magnifierCanvas" class="mag-canvas"></canvas>
         <div class="mag-controls">
           <div class="mag-btn-row" role="group" aria-label="Magnifier zoom factor">
-            <button type="button" class="mag-chip" data-zoom="4">4&times;</button>
-            <button type="button" class="mag-chip active" data-zoom="16">16&times;</button>
-            <button type="button" class="mag-chip" data-zoom="64">64&times;</button>
-            <button type="button" class="mag-chip" data-zoom="256">256&times;</button>
+            <button type="button" class="mag-chip" data-zoom="4" data-agent-zoom="4">4&times;</button>
+            <button type="button" class="mag-chip active" data-zoom="16" data-agent-zoom="16">16&times;</button>
+            <button type="button" class="mag-chip" data-zoom="64" data-agent-zoom="64">64&times;</button>
+            <button type="button" class="mag-chip" data-zoom="256" data-agent-zoom="256">256&times;</button>
           </div>
           <div class="mag-btn-row" role="group" aria-label="Magnifier focus target">
-            <button type="button" class="mag-chip" data-focus="playhead">Playhead</button>
-            <button type="button" class="mag-chip" data-focus="origin">x=0</button>
-            <button type="button" class="mag-chip active" data-focus="trough" title="Weierstrass x = +1 trough">Trough</button>
+            <button type="button" class="mag-chip" data-focus="playhead" data-agent-focus="playhead">Playhead</button>
+            <button type="button" class="mag-chip" data-focus="origin" data-agent-focus="origin">x=0</button>
+            <button type="button" class="mag-chip active" data-focus="trough" data-agent-focus="trough" title="Weierstrass x = +1 trough">Trough</button>
           </div>
         </div>
       </div>
@@ -302,10 +302,11 @@
       <!-- Dock Tab Bar + Persistent Live Telemetry -->
       <div class="dock-bar">
         <div class="dock-tabs" role="tablist">
-          <button type="button" class="dock-tab active" role="tab" data-tab="scopes">1 &middot; Scopes &amp; Slice</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="harmonics">2 &middot; Harmonics &amp; Ramanujan</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="frobenius">3 &middot; Frobenius &amp; Hasse</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="bits">4 &middot; Float32 Bit Lab</button>
+          <button type="button" class="dock-tab active" role="tab" data-tab="scopes" data-agent-tab="scopes">1 &middot; Scopes &amp; Slice</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="harmonics" data-agent-tab="harmonics">2 &middot; Harmonics &amp; Ramanujan</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="frobenius" data-agent-tab="frobenius">3 &middot; Frobenius &amp; Hasse</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="bits" data-agent-tab="bits">4 &middot; Float32 Bit Lab</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="agent" data-agent-tab="agent">5 &middot; Agent</button>
         </div>
 
         <div class="telemetry-strip mono">
@@ -317,7 +318,7 @@
       </div>
 
       <!-- TAB 1: 2D Slice / Lissajous + Dual Oscilloscope -->
-      <div id="tab-scopes" class="dock-pane active">
+      <div id="tab-scopes" class="dock-pane active" data-agent-panel="scopes">
         <div class="panel2d">
           <div class="panel2d-head">
             <span class="kicker">2D Slice &amp; Quadrature &mdash; x(t) &times; y(t)</span>
@@ -329,14 +330,14 @@
         <div class="panel2d">
           <div class="panel2d-head">
             <span class="kicker">Dual Oscilloscope &mdash; y(t) [f(x)] &amp; x(t)</span>
-            <button id="btnRefWaves" class="mini-btn" type="button" title="Overlay reference saw & tan waveforms">ref saw/tan</button>
+            <button id="btnRefWaves" class="mini-btn" type="button" data-agent-toggle="refWaves" title="Overlay reference saw & tan waveforms">ref saw/tan</button>
           </div>
           <canvas id="timeseries" class="mini-canvas"></canvas>
         </div>
       </div>
 
       <!-- TAB 2: Harmonics Spectrum + Ramanujan 1/π Convergence -->
-      <div id="tab-harmonics" class="dock-pane">
+      <div id="tab-harmonics" class="dock-pane" data-agent-panel="harmonics">
         <div class="panel2d">
           <div class="panel2d-head">
             <span class="kicker">Harmonic Partials &amp; Conjugate Spectrum (&plusmn;&omega;<sub>0</sub>)</span>
@@ -355,7 +356,7 @@
       </div>
 
       <!-- TAB 3: Frobenius & Hasse Circle -->
-      <div id="tab-frobenius" class="dock-pane frob-pane">
+      <div id="tab-frobenius" class="dock-pane frob-pane" data-agent-panel="frobenius">
         <div class="panel2d frob-controls-card">
           <div class="panel2d-head">
             <span class="kicker">Frobenius Curve</span>
@@ -413,7 +414,7 @@
       </div>
 
       <!-- TAB 4: IEEE-754 Float32 Bit Lab -->
-      <div id="tab-bits" class="dock-pane bits-pane">
+      <div id="tab-bits" class="dock-pane bits-pane" data-agent-panel="bits">
         <div class="bits-header">
           <span class="kicker">IEEE-754 32-Bit Synth Precision &mdash; 1 Sign &middot; 8 Exponent &middot; 23 Mantissa (~144.5 dB)</span>
           <div class="segmented compact-seg" role="group" aria-label="Bit inspector target">
@@ -459,9 +460,54 @@
         </div>
       </div>
 
+      <!-- TAB 5: Agent Layer (additive — window.ramanujanSphere + machine-readable surfaces) -->
+      <div id="tab-agent" class="dock-pane agent-pane" data-agent-panel="agent">
+        <div class="agent-card agent-card-bridge">
+          <div class="panel2d-head">
+            <span class="kicker">Agent Bridge &mdash; <code>window.ramanujanSphere</code></span>
+            <span id="agentStatus" class="agent-badge" data-agent-status="bridge-loading">bridge-loading</span>
+          </div>
+          <div class="agent-actions">
+            <button type="button" class="mini-btn" data-agent-copy="deeplink">Copy deeplink</button>
+            <button type="button" class="mini-btn" data-agent-copy="handoff">Copy handoff prompt</button>
+            <button type="button" class="mini-btn" data-agent-copy="state">Copy state JSON</button>
+          </div>
+          <label class="agent-label" for="agentDeeplink">Current deeplink</label>
+          <pre id="agentDeeplink" class="agent-block mono">&mdash;</pre>
+          <label class="agent-label" for="agentHandoffPrompt">Handoff prompt (paste into any LLM)<span class="agent-mini-hint">&#8597; scroll</span></label>
+          <pre id="agentHandoffPrompt" class="agent-block agent-handoff mono">&mdash;</pre>
+        </div>
+
+        <div class="agent-card agent-card-state">
+          <div class="panel2d-head">
+            <span class="kicker">Live UI state &mdash; <code>#ramanujan-sphere-state</code></span>
+            <span class="agent-mini-hint mono">&#8597; scroll</span>
+          </div>
+          <pre id="agentStateJson" class="agent-block agent-state mono">&mdash;</pre>
+        </div>
+
+        <div class="agent-card agent-card-tools">
+          <div class="panel2d-head">
+            <span class="kicker">Tool catalogue &mdash; <span id="agentToolCount">0</span> pure tools</span>
+          </div>
+          <ul id="agentToolList" class="agent-tools">
+            <li class="agent-tool-empty">waiting for bridge&hellip;</li>
+          </ul>
+          <div class="agent-links">
+            <a href="AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>
+            <a href="docs/AGENT-INTERFACE.md" target="_blank" rel="noopener">docs/AGENT-INTERFACE.md</a>
+            <a href="agent/manifest.json" target="_blank" rel="noopener">agent/manifest.json</a>
+          </div>
+          <div class="agent-hint mono">node agent/cli.mjs manifest --json &middot; node agent/mcp-server.mjs</div>
+        </div>
+      </div>
+
     </div>
   </section>
 </main>
+
+<!-- Agent-inspectable UI state (contract §5) — always mounted, refreshed on publish + frames -->
+<pre id="ramanujan-sphere-state" data-schema-version="1" hidden></pre>
 
 <!-- Third-party (vendored, 100% offline, works via file:// and http://) -->
 <script src="vendor/three.min.js"></script>
@@ -470,6 +516,7 @@
 <!-- Modular Harmony Engine & Views -->
 <script src="js/engine.js"></script>
 <script src="js/presets.js"></script>
+<script src="js/agent-core.js"></script>
 <script src="js/scene3d.js"></script>
 <script src="js/magnifier2d.js"></script>
 <script src="js/lissajous2d.js"></script>
@@ -478,5 +525,6 @@
 <script src="js/frobenius.js"></script>
 <script src="js/views.js"></script>
 <script src="js/app.js"></script>
+<script src="js/agent-bridge.js"></script>
 </body>
 </html>

@@ -879,3 +879,174 @@ input[type=range] {
   .dock-pane.active { flex-direction: column; min-height: 360px; }
   .bits-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- Tab 5: Agent Layer (additive — does not affect the other four panes) ---- */
+.agent-pane { display: none; min-height: 0; }
+.agent-pane.active { display: flex; overflow: hidden; }
+
+/* The Agent dock gets extra vertical room so its three cards are readable. Only the
+   Agent tab is affected: the other four tabs keep the original 228px dock. */
+body[data-agent-active-tab="agent"] .dock { flex: 0 0 320px; height: 320px; }
+
+.agent-card {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.agent-card > .panel2d-head,
+.agent-card > .agent-actions,
+.agent-card > .agent-label,
+.agent-card > .agent-links,
+.agent-card > .agent-hint { flex: 0 0 auto; }
+.agent-card-bridge { flex: 1.25 1 0; }
+.agent-card-tools { flex: 0 1 250px; }
+.agent-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.agent-badge[data-agent-status="bridge-active"] {
+  color: var(--accent-2);
+  border-color: rgba(110, 231, 160, 0.45);
+  background: rgba(110, 231, 160, 0.12);
+}
+.agent-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.agent-actions .mini-btn.copy-ok {
+  color: var(--accent-2);
+  border-color: rgba(110, 231, 160, 0.55);
+  background: rgba(110, 231, 160, 0.12);
+}
+.agent-label {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.agent-block {
+  margin: 0;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 7px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text);
+  overflow: auto;
+  min-height: 0;
+  word-break: break-all;
+  white-space: pre-wrap;
+  overscroll-behavior: contain;
+}
+#agentDeeplink { flex: 0 0 auto; max-height: 38px; color: var(--accent-bright); }
+.agent-handoff {
+  flex: 1 1 auto;
+  min-height: 52px;
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.agent-state {
+  flex: 1 1 auto;
+  min-height: 0;
+  white-space: pre;
+  font-size: 9.5px;
+  line-height: 1.35;
+  overflow: auto;
+}
+.agent-tools {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 1.35;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.agent-tools li {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  line-height: 1.35;
+  min-height: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.agent-tools li code { color: var(--accent-bright); flex: 0 0 auto; }
+.agent-tools li .agent-tool-desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+.agent-tools .agent-tool-empty { color: var(--muted); font-style: italic; }
+.agent-links { display: flex; gap: 10px; font-size: 10px; flex-wrap: wrap; line-height: 1.3; }
+.agent-links a { color: var(--accent); text-decoration: none; }
+.agent-links a:hover { text-decoration: underline; }
+.agent-hint { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 1180px) {
+  .dock-tab { padding: 4px 7px; font-size: 11px; }
+  .agent-card-tools { flex: 0 1 210px; }
+  body[data-agent-active-tab="agent"] .dock { flex: 0 0 300px; height: 300px; }
+}
+
+/* Keep the dock bar readable with the fifth (Agent) tab on narrower windows. */
+@media (max-width: 1160px) {
+  .telemetry-strip { display: none; }
+}
+
+/* Short viewports: give the instrument more room and let the agent cards scroll. */
+@media (max-height: 820px) {
+  body[data-agent-active-tab="agent"] .dock { flex: 0 0 288px; height: 288px; }
+}
+
+
+/* Agent card internal scroll affordances + slight extra room (visual review fixes). */
+.agent-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.agent-mini-hint { font-size: 9px; letter-spacing: 0.02em; text-transform: none; color: var(--muted); white-space: nowrap; }
+body[data-agent-active-tab="agent"] .dock { flex: 0 0 344px; height: 344px; }
+.agent-block::-webkit-scrollbar { width: 6px; height: 6px; }
+.agent-block::-webkit-scrollbar-thumb { background: #34405233; border-radius: 5px; }
+.agent-block:hover::-webkit-scrollbar-thumb { background: #344052; }
+@media (max-width: 1180px) {
+  body[data-agent-active-tab="agent"] .dock { flex: 0 0 316px; height: 316px; }
+}
+@media (max-height: 820px) {
+  body[data-agent-active-tab="agent"] .dock { flex: 0 0 300px; height: 300px; }
+}
+
+/* Agent card headers stay on one line when the dock is narrow; scrollable text
+   fades out at the bottom so overflow is visibly scrollable (not silently clipped). */
+.agent-card .panel2d-head { min-height: 16px; align-items: center; }
+.agent-card .panel2d-head .kicker { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-card .panel2d-head .kicker code { font-size: 9.5px; }
+.agent-card .panel2d-head .agent-badge { margin-left: 6px; }
+.agent-handoff, .agent-state {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), rgba(0, 0, 0, 0) 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), rgba(0, 0, 0, 0) 100%);
+}
+
+/* The live-state <pre> holds one long compact JSON line: wrap it so the card shows
+   the state vertically (readable) instead of a single horizontally-clipped line. */
+.agent-state { white-space: pre-wrap; word-break: break-all; overflow-x: hidden; }

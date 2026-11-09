@@ -55,6 +55,10 @@ flowchart TD
 | [`js/frobenius.js`](../js/frobenius.js) | `Harmony.Frobenius` | Left: Conjugate Frobenius eigenvalues $\lambda^k, \bar{\lambda}^k$ on the normalized Hasse circle. Right: Normalized Hasse trace $2\cos(k\phi) \in [-2, +2]$ across $k = 1..16$. |
 | [`js/views.js`](../js/views.js) | `Harmony.views` | Aggregates view modules into a single inspection surface (`Harmony.views`). |
 | [`js/app.js`](../js/app.js) | `Harmony.App` | Declarative `PARAM_DEFS` slider binding, canonical `captureSnapshot` / `applySnapshot` serializer powering both **VST `A/B/C` Sphere Slots** and `#patch=` URLs, dock tab routing, keyboard shortcuts, and the 60 fps `requestAnimationFrame` orchestrator. |
+| [`js/agent-core.js`](../js/agent-core.js) | `Harmony.AgentCore` | Agent layer's single source of truth (browser **and** Node): the 9 pure tool definitions + envelopes, deterministic deeplink grammar, UI-state projection, manifest and legacy `#patch=` snapshot codec. See §5. |
+| [`js/agent-bridge.js`](../js/agent-bridge.js) | `window.ramanujanSphere` | Installs the in-page bridge exactly once (state getters/setters, events, `subscribe`, pure `call()`), publishes the hidden `#ramanujan-sphere-state` JSON, keeps the URL in sync and fills the fifth **Agent** dock tab. |
+| [`agent/cli.mjs`](../agent/cli.mjs), [`agent/mcp-server.mjs`](../agent/mcp-server.mjs), [`agent/selftest.mjs`](../agent/selftest.mjs) | — | Zero-dependency headless transports (JSON CLI, MCP stdio server, CLI+MCP self-test) that load `js/agent-core.js` through `require()`. |
+| [`scripts/gen-agent-artifacts.mjs`](../scripts/gen-agent-artifacts.mjs) | — | Deterministic generator for [`agent/manifest.json`](../agent/manifest.json) and `agent/examples/*`; `--check` is the drift gate. |
 
 ---
 
@@ -80,9 +84,10 @@ Both the dropdown, double-click slider defaults, URL `#patch` sharing, and `A/B/
 
 ### Recipe 2: Add a New Math / DSP Function to the Formula Patch Bay
 In [`js/engine.js`](../js/engine.js):
-1. Implement the `float32`-rounded function (wrapping inputs/outputs with `f32 = Math.fround`).
-2. Add its identifier string to `WHITELIST` (the security/validation allowlist for user formulas).
-3. Register its implementation in `SCOPE_KEYS` / `SCOPE_VALS` so `compileAxis` exposes it inside `x(t)`, `y(t)`, and `z(t)` expressions.
+1. Implement the `float32`-rounded function (round inputs/outputs through `Math.fround()`); keep it pure and dependency-free.
+2. Register it in the two parallel tables in `js/engine.js`: the identifier string in `PARAMS` and the implementation in `FNS`, in the **same order** (they are applied positionally by `paramsFor()`).
+3. It is then available inside every user formula `x(t)`, `y(t)`, `z(t)` in the Patch Bay, and — because the agents' `analyze_patch` / `eval_point` tools call the same `Engine.sample` / `Engine.point` — automatically inside the headless CLI/MCP too.
+4. Add a known-vector assertion to `tests/core.test.mjs` so the value cannot drift.
 
 ### Recipe 3: Add Real-Time WebAudio Synthesis (Future Roadmap)
 Because `Harmony.engine` already evaluates bounded `float32` quadrature trajectories `(x(t), y(t), z(t))`:
@@ -94,3 +99,45 @@ Because `Harmony.engine` already evaluates bounded `float32` quadrature trajecto
 If the project ever outgrows classic `<script>` tags:
 - Each IIFE in `js/*.js` already has a 1-to-1 module boundary with explicit inputs (`state`, `points`, `playT`).
 - Replace `window.Harmony.X = ...` with `export const X = ...` while keeping `engine.ts` pure and dependency-free.
+
+### Recipe 5: Add a Pure Agent Tool (all four surfaces update themselves)
+The agent layer is a **contract-first** additive wrapper ([`docs/AGENT-INTERFACE.md`](./AGENT-INTERFACE.md)); adding a tool does not touch the rendering code.
+1. In [`js/agent-core.js`](../js/agent-core.js), append one `ToolDef` to `TOOLS` (canonical registry order): `{ name, title, description, scope: 'pure', inputSchema, examples, run(args) }`. `run` may throw an `AgentToolError(code, message, hint)` for bad input; `callTool` converts it into the standard failure envelope and never throws. Put any new maths in `js/engine.js`, never in the tool.
+2. Reuse the shared helpers: `resolvePatchArgs(args)` (validated patch selector), `Engine.*`, `deeplinkForState(state)` for an envelope link, or `bitInspect`-style pure data.
+3. Add known-vector + envelope tests to `tests/registry.test.mjs` (and `tests/deeplink.test.mjs` if the tool emits a deeplink).
+4. Regenerate the machine artifacts: `node scripts/gen-agent-artifacts.mjs` (adds `agent/examples/<tool>.json`), then `node scripts/gen-agent-artifacts.mjs --check` must exit 0.
+5. Document it in `docs/AGENT-INTERFACE.md` §2, `AGENTS.md` and `llms.txt`, then run the acceptance battery (`node --test`, `node agent/selftest.mjs`, `node agent/verify-static.mjs`).
+The bridge's `tools()`/`call()`, the CLI command, the MCP `tools/list`/`tools/call`, the manifest and the examples all derive from the one `TOOLS` array — no transport edits.
+
+---
+
+## 5. Agent Layer (additive)
+
+The instrument is also an **agent-operable tool**. Nothing in the maths or rendering changed: `js/engine.js` remains the one engine, and the agent layer wraps it. Three independent surfaces share one contract and one implementation:
+
+```
+                       ┌──────────────────────────── js/agent-core.js ────────────────────────────┐
+                       │ TOOLS / callTool / getManifest / deeplink grammar / projectUiState       │
+                       └───────┬─────────────────────┬───────────────────────┬──────────────────────┘
+    browser page ◄─────────────┤                     │                       ├────────────► Node
+    js/app.js + js/agent-bridge.js                    │                       │             agent/cli.mjs
+    (deeplinks + hidden #ramanujan-sphere-state JSON, │                       │             agent/mcp-server.mjs
+     window.ramanujanSphere setters/events/subscribe) │                       │             (--json envelopes,
+                                                       │                       │              JSON-RPC 2.0 stdio)
+                                            scripts/gen-agent-artifacts.mjs ──┘
+                                            agent/manifest.json + agent/examples/*
+```
+
+- **Surface 1 — deeplinks + state:** the page parses the query on mount, applies it, publishes the compact UI-state object into the hidden `<pre id="ramanujan-sphere-state">` and keeps the URL in sync (debounced `history.replaceState`). `?static=1` freezes transport/orbit, making the link pixel-reproducible.
+- **Surface 2 — bridge:** `window.ramanujanSphere` (installed once by `js/agent-bridge.js` after the app boots) exposes `getState`, `setState`, `setTab`, `setClock`, `step`, `play`/`pause`/`reset`, pure `call`, `getDeeplink`, `subscribe`, `tools`, `getManifest`. Setters never throw; a no-op setter emits no change event.
+- **Surface 3 — headless:** `agent/cli.mjs` (`--json`, exit 0/2/3/4) and `agent/mcp-server.mjs` (newline-delimited JSON-RPC 2.0) load the same `js/agent-core.js` through `require()`; `node agent/selftest.mjs` proves CLI == MCP == registry.
+
+Rules for this layer (mirrored in `AGENTS.md` §8):
+
+1. **One implementation** — `js/engine.js` (maths) + `js/agent-core.js` (tools/state/links). Never copy a formula or a state projection into a transport.
+2. **Deterministic output** — no timestamps, randomness or locale formatting; identical input ⇒ byte-identical JSON (`--check` enforces it for the committed artifacts).
+3. **Pure tools are read-only** — only bridge setters change what the user sees.
+4. **Additive** — the only visible change to the default view is the fifth `5 · Agent` dock tab.
+5. **Generated files are generated** — edit the registry/generator, then re-run it (`agent/manifest.json`, `agent/examples/*` must never be hand-edited).
+
+Machine-readable companions: [`AGENTS.md`](../AGENTS.md) (LLM onboarding), [`llms.txt`](../llms.txt) (short index), [`agent/manifest.json`](../agent/manifest.json) (tool catalogue + deeplink defaults + UI selectors), [`docs/ECOSYSTEM-MAP.md`](./ECOSYSTEM-MAP.md) (honest cross-tool map, planned handoffs), and `docs/AGENT-SCREENSHOTS.md` (reproducible capture recipe).

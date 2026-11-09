@@ -1,0 +1,109 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "analyze_patch",
+  "data": {
+    "preset": {
+      "index": 12,
+      "name": "Four-Bit Orbit — 1000 (8) ↔ 0001 (1) Palindrome & Quadray"
+    },
+    "formulas": {
+      "x": "r*cos(TAU*f*t+phase)",
+      "y": "r*sin(TAU*f*t+phase)",
+      "z": "0"
+    },
+    "params": {
+      "r": 1,
+      "rIn": 0.45,
+      "amp": 1,
+      "f": 1,
+      "K": 6,
+      "orderN": 16,
+      "a": 0.5,
+      "b": 3,
+      "n": 3,
+      "m": 2,
+      "k": 1,
+      "phaseDeg": 0
+    },
+    "shell": {
+      "R": 1,
+      "rIn": 0.45,
+      "thickness": 0.55,
+      "volOuter": 4.1887902047863905,
+      "volCavity": 0.3817035074111599,
+      "volShell": 3.8070866973752304
+    },
+    "samples": 3200,
+    "curveValid": true,
+    "errors": {
+      "x": null,
+      "y": null,
+      "z": null
+    },
+    "stats": {
+      "validCount": 3201,
+      "invalidCount": 0,
+      "maxAbs": 1,
+      "zoneCounts": {
+        "onSphere": 3201,
+        "inShell": 0,
+        "inCavity": 0,
+        "outside": 0
+      },
+      "extents": {
+        "x": {
+          "min": -1,
+          "max": 1
+        },
+        "y": {
+          "min": -1,
+          "max": 1
+        },
+        "z": {
+          "min": 0,
+          "max": 0
+        }
+      }
+    },
+    "samplesAt": [
+      {
+        "t": 0,
+        "x": 1,
+        "y": 0,
+        "z": 0,
+        "valid": true
+      },
+      {
+        "t": 0.25,
+        "x": 6.123234262925839e-17,
+        "y": 1,
+        "z": 0,
+        "valid": true
+      },
+      {
+        "t": 0.5,
+        "x": -1,
+        "y": 1.2246468525851679e-16,
+        "z": 0,
+        "valid": true
+      },
+      {
+        "t": 0.75,
+        "x": -1.8369701465288538e-16,
+        "y": -1,
+        "z": 0,
+        "valid": true
+      },
+      {
+        "t": 1,
+        "x": 1,
+        "y": -2.4492937051703357e-16,
+        "z": 0,
+        "valid": true
+      }
+    ]
+  },
+  "deeplink": "http://127.0.0.1:8080/?static=1",
+  "warnings": []
+}

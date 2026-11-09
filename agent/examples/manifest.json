@@ -1,0 +1,848 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "manifest",
+  "data": {
+    "id": "ramanujan-sphere",
+    "title": "Ramanujan Sphere × Harmony Engine",
+    "version": "1.0.0",
+    "schemaVersion": 1,
+    "description": "Interactive 3D spatial-synth and IEEE-754 float32 mathematics laboratory built on a constant hollow sphere V = 4/3π(R³ − r³) with an internal 2D f(x)/x slice, conjugate/antipodal phasor twins, the Four-Bit Orbit (1000 ↔ 0001 palindrome + Quadray tetrahedron), Ramanujan 1914 1/π, the discrete cyclic order-N strobe, and secp256k1 Frobenius point counting. Agents can analyze patches, inspect float32 bits, build reproducible deeplinks, and drive the live UI through the page bridge or the headless CLI/MCP server.",
+    "urls": {
+      "app": "http://127.0.0.1:8080/",
+      "manifest": "/agent/manifest.json",
+      "agents": "AGENTS.md",
+      "interface": "docs/AGENT-INTERFACE.md"
+    },
+    "deeplink": {
+      "template": "{base}?preset={preset}&tab={tab}&static=1&anim={anim}&orbit={orbit}&pt={playT}&r={r}&rIn={rIn}&K={K}&orderN={orderN}&twin={twin}&fx={x}",
+      "tabs": [
+        "scopes",
+        "harmonics",
+        "frobenius",
+        "bits",
+        "agent"
+      ],
+      "defaults": {
+        "preset": 12,
+        "tab": "scopes",
+        "static": false,
+        "anim": true,
+        "orbit": true,
+        "pt": 0,
+        "r": 1,
+        "rIn": 0.45,
+        "amp": 1,
+        "f": 1,
+        "K": 6,
+        "orderN": 16,
+        "a": 0.5,
+        "b": 3,
+        "n": 3,
+        "m": 2,
+        "k": 1,
+        "phase": 0,
+        "twin": "both",
+        "bit": "auto",
+        "mz": 16,
+        "mf": "trough"
+      }
+    },
+    "ui": {
+      "bridge": "window.ramanujanSphere",
+      "ready": "body[data-agent-ready='true']",
+      "stateSelector": "#ramanujan-sphere-state",
+      "tabSelector": "[data-agent-tab]",
+      "panelSelector": "[data-agent-panel]",
+      "inputSelector": "[data-agent-input]",
+      "toggleSelector": "[data-agent-toggle]",
+      "clockSelector": "[data-agent-clock]",
+      "statusSelector": "[data-agent-status]"
+    },
+    "tools": [
+      {
+        "name": "manifest",
+        "title": "Tool manifest",
+        "description": "Return the capability manifest: tools, argument schemas, deeplink grammar, UI selectors, invariants, preset catalog and related local tools. Call this first to discover the toolset.",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "examples": [
+          {
+            "args": {},
+            "note": "Discover the full agent interface."
+          }
+        ]
+      },
+      {
+        "name": "build_deeplink",
+        "title": "Build a reproducible UI deeplink",
+        "description": "Build the canonical deeplink for a patch/view state. Params are delta-encoded against the preset base state in a fixed order; reloading the URL reproduces the view (the screenshot contract). Returns {url, query}.",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 13,
+              "description": "Base preset index (see manifest.catalog.presets). Default 12 (Four-Bit Orbit)."
+            },
+            "formulas": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "y": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "z": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              },
+              "additionalProperties": false,
+              "description": "Formula overrides x(t), y(t), z(t); whitelisted names (sin, cos, weierstrass, morlet, …)."
+            },
+            "r": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 2.6,
+              "description": "Outer carrier radius R"
+            },
+            "rIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2.4,
+              "description": "Inner cavity radius r"
+            },
+            "amp": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 2.5,
+              "description": "Gain amplitude"
+            },
+            "f": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 8,
+              "description": "Frequency f"
+            },
+            "K": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 14,
+              "description": "Harmonic partials K"
+            },
+            "orderN": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 64,
+              "description": "Discrete cyclic order N"
+            },
+            "a": {
+              "type": "number",
+              "minimum": 0.15,
+              "maximum": 0.85,
+              "description": "Weierstrass decay a"
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 9,
+              "description": "Weierstrass lacunarity b"
+            },
+            "n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "m": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "phaseDeg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Phase in degrees"
+            },
+            "tab": {
+              "type": "string",
+              "enum": [
+                "scopes",
+                "harmonics",
+                "frobenius",
+                "bits",
+                "agent"
+              ],
+              "description": "Active dock tab"
+            },
+            "static": {
+              "type": "boolean",
+              "description": "Freeze transport (static screenshot mode)"
+            },
+            "animate": {
+              "type": "boolean",
+              "description": "Oscillator transport running"
+            },
+            "autoRotate": {
+              "type": "boolean",
+              "description": "3D camera auto-orbit"
+            },
+            "playT": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Playhead position in [0,1]"
+            },
+            "base": {
+              "type": "string",
+              "description": "Absolute base URL (default http://127.0.0.1:8080/)"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args are optional; defaults reproduce the default Four-Bit Orbit view."
+        },
+        "examples": [
+          {
+            "args": {
+              "preset": 5,
+              "tab": "harmonics"
+            },
+            "note": "Analytic Morlet patch on the harmonics tab."
+          },
+          {
+            "args": {
+              "preset": 12,
+              "static": true,
+              "playT": 0.25
+            },
+            "note": "Frozen Four-Bit Orbit frame at θ = 90°."
+          }
+        ]
+      },
+      {
+        "name": "analyze_patch",
+        "title": "Analyze a patch through the float32 engine",
+        "description": "Sample a preset (optionally with formula/parameter overrides) through the one float32 Engine.sample and report what the instrument renders: validity, float32 extents, sphere-zone histogram, hollow-shell volumes V=4/3π(R³−r³), and five probe points. No pixels, deterministic.",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 13,
+              "description": "Base preset index (see manifest.catalog.presets). Default 12 (Four-Bit Orbit)."
+            },
+            "formulas": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "y": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "z": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              },
+              "additionalProperties": false,
+              "description": "Formula overrides x(t), y(t), z(t); whitelisted names (sin, cos, weierstrass, morlet, …)."
+            },
+            "r": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 2.6,
+              "description": "Outer carrier radius R"
+            },
+            "rIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2.4,
+              "description": "Inner cavity radius r"
+            },
+            "amp": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 2.5,
+              "description": "Gain amplitude"
+            },
+            "f": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 8,
+              "description": "Frequency f"
+            },
+            "K": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 14,
+              "description": "Harmonic partials K"
+            },
+            "orderN": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 64,
+              "description": "Discrete cyclic order N"
+            },
+            "a": {
+              "type": "number",
+              "minimum": 0.15,
+              "maximum": 0.85,
+              "description": "Weierstrass decay a"
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 9,
+              "description": "Weierstrass lacunarity b"
+            },
+            "n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "m": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "phaseDeg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Phase in degrees"
+            },
+            "samples": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 3200,
+              "description": "Sample count (default 3200)"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args optional; default preset 12 at 3200 samples."
+        },
+        "examples": [
+          {
+            "args": {
+              "preset": 12
+            },
+            "note": "The default Four-Bit Orbit carrier."
+          },
+          {
+            "args": {
+              "preset": 2,
+              "K": 14
+            },
+            "note": "Weierstrass fractal at maximum partials."
+          }
+        ]
+      },
+      {
+        "name": "eval_point",
+        "title": "Evaluate the curve at one parameter t",
+        "description": "Evaluate the resolved patch at t∈[0,1] at float32 precision. Returns the point, its IEEE-754 bit patterns, the antipodal/conjugate/real-trace twins, and the same telemetry strings the UI strip shows (zone, |P|, angle).",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 13,
+              "description": "Base preset index (see manifest.catalog.presets). Default 12 (Four-Bit Orbit)."
+            },
+            "formulas": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "y": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "z": {
+                  "type": "string",
+                  "maxLength": 512
+                }
+              },
+              "additionalProperties": false,
+              "description": "Formula overrides x(t), y(t), z(t); whitelisted names (sin, cos, weierstrass, morlet, …)."
+            },
+            "r": {
+              "type": "number",
+              "minimum": 0.3,
+              "maximum": 2.6,
+              "description": "Outer carrier radius R"
+            },
+            "rIn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 2.4,
+              "description": "Inner cavity radius r"
+            },
+            "amp": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 2.5,
+              "description": "Gain amplitude"
+            },
+            "f": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 8,
+              "description": "Frequency f"
+            },
+            "K": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 14,
+              "description": "Harmonic partials K"
+            },
+            "orderN": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 64,
+              "description": "Discrete cyclic order N"
+            },
+            "a": {
+              "type": "number",
+              "minimum": 0.15,
+              "maximum": 0.85,
+              "description": "Weierstrass decay a"
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 9,
+              "description": "Weierstrass lacunarity b"
+            },
+            "n": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "m": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Oscillator ratio"
+            },
+            "phaseDeg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Phase in degrees"
+            },
+            "t": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Parameter position in [0,1]; default 0.25"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args optional."
+        },
+        "examples": [
+          {
+            "args": {
+              "preset": 12,
+              "t": 0
+            },
+            "note": "t=0 is the 1000 (8) point on −X."
+          },
+          {
+            "args": {
+              "preset": 11,
+              "t": 0.25
+            },
+            "note": "TANGENT sentinel explosion, top of the chart."
+          }
+        ]
+      },
+      {
+        "name": "bit_inspect",
+        "title": "Inspect IEEE-754 float32 bits",
+        "description": "Show the exact 32-bit float32 encoding: hex, 32-char binary, sign/exponent/mantissa fields, exponent description and finite/NaN/±∞ kind. Use value for finite numbers or special for sentinels. π is 0x40490FDB.",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number",
+              "description": "Finite JSON number to inspect"
+            },
+            "special": {
+              "type": "string",
+              "enum": [
+                "nan",
+                "+inf",
+                "-inf"
+              ],
+              "description": "Sentinel instead of a numeric value"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "Provide exactly one of value or special."
+        },
+        "examples": [
+          {
+            "args": {
+              "value": 3.141592653589793
+            },
+            "note": "π rounds to float32 0x40490FDB."
+          },
+          {
+            "args": {
+              "special": "+inf"
+            },
+            "note": "TANGENT escape sentinel 0x7F800000."
+          }
+        ]
+      },
+      {
+        "name": "discrete_group",
+        "title": "Discrete cyclic order-N strobe structure",
+        "description": "Compute the cyclic subgroup walked by generator stride g modulo N: gcd, subgroup order N/gcd, primality and the visited-orbit indices. Prime N (cofactor 1) visits all N states; composite N collapses to a smaller subgroup.",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "orderN": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 64,
+              "description": "Cyclic order N (default 19)"
+            },
+            "stride": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "description": "Generator stride (default 3)"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args optional."
+        },
+        "examples": [
+          {
+            "args": {
+              "orderN": 19,
+              "stride": 3
+            },
+            "note": "Prime 19: full 19-state cycle."
+          },
+          {
+            "args": {
+              "orderN": 12,
+              "stride": 3
+            },
+            "note": "Composite 12: gcd 3, 4-state subgroup."
+          }
+        ]
+      },
+      {
+        "name": "ramanujan_pi",
+        "title": "Ramanujan 1/π series vs float32 π",
+        "description": "Run Ramanujan's 1914 1/π series and the Gregory–Leibniz Fourier series side by side against float32 π (0x40490FDB). Reports each term's float32 hex, whether it locks all 32 bits of π, and the dB error.",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "maxK": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 6,
+              "description": "Highest series index (default 4)"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args optional."
+        },
+        "examples": [
+          {
+            "args": {
+              "maxK": 0
+            },
+            "note": "k=0 term alone already locks 0x40490FDB."
+          },
+          {
+            "args": {
+              "maxK": 4
+            },
+            "note": "Full comparison table."
+          }
+        ]
+      },
+      {
+        "name": "fourbit_orbit",
+        "title": "Four-Bit Orbit / Quadray state at playhead θ",
+        "description": "Evaluate the signature Four-Bit Orbit: the meridian (XY) and equatorial (XZ) 1000(8) ↔ 0001(1) palindrome pairs, the shared ±X real projection, the inscribed Quadray tetrahedron basis and the 4-bit nibble mapped from elevation (0000 … 1111/F).",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "R": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 2.6,
+              "description": "Sphere radius (default 1)"
+            },
+            "f": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 8,
+              "description": "Frequency (default 1)"
+            },
+            "phaseDeg": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Phase in degrees (default 0)"
+            },
+            "playT": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Playhead position in [0,1] (default 0)"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args optional."
+        },
+        "examples": [
+          {
+            "args": {
+              "R": 1,
+              "playT": 0
+            },
+            "note": "θ=0: 1000 at −R on X, nibble 1000."
+          },
+          {
+            "args": {
+              "R": 1,
+              "playT": 0.25
+            },
+            "note": "θ=90°: 8 at nadir, 1 at apex (1111/F)."
+          }
+        ]
+      },
+      {
+        "name": "frobenius_secp",
+        "title": "Frobenius trace & secp256k1 point counts",
+        "description": "Exact 256-bit BigInt Lucas recurrence S_k = λ^k + λ̄^k on the real secp256k1 curve and the finite-field point count #E(F_p^k) = p^k + 1 − S_k, plus the Hasse-circle angle φ. Integers are decimal strings (JSON-safe).",
+        "scope": "pure",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "k": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16,
+              "description": "Extension/harmonic index k (default 4)"
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "description": "All args optional."
+        },
+        "examples": [
+          {
+            "args": {
+              "k": 1
+            },
+            "note": "S_1 = trace of Frobenius; #E(F_p) = p + 1 − S_1."
+          },
+          {
+            "args": {
+              "k": 4
+            },
+            "note": "Matches the UI default (Harmonic k = 4)."
+          }
+        ]
+      }
+    ],
+    "catalog": {
+      "presets": [
+        {
+          "index": 0,
+          "name": "Great Circle — 90° Quadrature Carrier",
+          "group": "Sphere & Carrier",
+          "note": "Cosine + Sine in 90° quadrature: x²+y²=R² traces the exact equatorial slice of the sphere. Compare Antipodal (−P, null flip) vs Conjugate (P̄, collapsing to real 2·cos on X)."
+        },
+        {
+          "index": 1,
+          "name": "Hollow Shell Carrier — 3D Radial Wavetable (R³ − r³)",
+          "group": "Sphere & Carrier",
+          "note": "A 3D spherical wavetable whose radius breathes sinusoidally between inner cavity r and outer carrier R — living strictly inside the hollow shell V = 4/3·π(R³ − r³)."
+        },
+        {
+          "index": 2,
+          "name": "Weierstrass Fractal — Internal 2D f(x) Slice",
+          "group": "2D f(x) Slice Inside Sphere",
+          "note": "W(x) = Σ aᵏ·cos(bᵏπx) plotted on the sphere's internal f(x)/x grid! Drag Harmonics K from 0 (pure cosine) to 14 (continuous everywhere, differentiable nowhere) and inspect the Zoom Lens."
+        },
+        {
+          "index": 3,
+          "name": "Weierstrass Curve y² = x³ + 7 — secp256k1 2D Slice",
+          "group": "2D f(x) Slice Inside Sphere",
+          "note": "Short Weierstrass cubic y² = x³ + 7 (secp256k1's real locus) on the 2D slice! Conjugate Twin P̄ = (x, −y) is literal elliptic-curve point negation P + (−P) = O along the vertical chord."
+        },
+        {
+          "index": 4,
+          "name": "Morlet Wavelet Ψ(x) — 2D Gabor Slice (§4.2)",
+          "group": "2D f(x) Slice Inside Sphere",
+          "note": "Real Morlet atom Ψ(x) = cos(ω₀x + φ)·e^(−x²/2) on the 2D f(x) grid. Sweep the Phase slider to watch the sine carrier glide through the stationary Gaussian window."
+        },
+        {
+          "index": 5,
+          "name": "Analytic Morlet ψ(t) — 3D Conjugate Helix (§4.4)",
+          "group": "3D Wavelets & Knots",
+          "note": "Complex analytic Morlet ψ(t) spiraling along Z. With Conjugate Twin (P̄) active, the counter-rotating helix cancels its imaginary Y part so (ψ + ψ̄)/2 collapses into the real Morlet wave!"
+        },
+        {
+          "index": 6,
+          "name": "Fourier Square Wave — Odd Harmonics K",
+          "group": "2D f(x) Slice Inside Sphere",
+          "note": "Additive synthesis of odd sine harmonics 1/(2k+1). Slide K from 0 (fundamental sine) up to 14 to sculpt a square wave and zoom into the Gibbs ringing ears."
+        },
+        {
+          "index": 7,
+          "name": "Ellipse — Sub-Carrier Inside Shell",
+          "group": "Sphere & Carrier",
+          "note": "Unequal quadrature amplitudes trace an ellipse oscillating between the inner cavity r and outer shell R — watch the zone readout alternate between Shell and Cavity."
+        },
+        {
+          "index": 8,
+          "name": "Lissajous 3D Harmonic Knot (n : m : k)",
+          "group": "3D Wavelets & Knots",
+          "note": "Integer musical frequency ratios n:m:k weave a closed 3D harmonic knot through the sphere, poking outside R (coral) at simultaneous peaks."
+        },
+        {
+          "index": 9,
+          "name": "Finite Field Torus Knot — Order N Cavity",
+          "group": "3D Wavelets & Knots",
+          "note": "Modulo wrapping glues a 2D finite field into a 3D Torus nested strictly inside the red N-cavity (|P| < r). Order N Strobe quantizes it into N cyclic generator steps (try prime N=19 vs composite N=12)!"
+        },
+        {
+          "index": 10,
+          "name": "Sawtooth Wrap — Finite Modulo (±1)",
+          "group": "Sentinels & Discontinuities",
+          "note": "saw() wraps cleanly at ±1 via modulo — a finite phase reset with zero division-by-zero, just like a hardware/VST wavetable accumulator."
+        },
+        {
+          "index": 11,
+          "name": "TANGENT — The #DIV/0! Sentinel Explosion",
+          "group": "Sentinels & Discontinuities",
+          "note": "tan() explodes past the sphere toward ±∞ at vertical asymptotes, whereas pure quadrature sphere geometry stays bounded forever."
+        },
+        {
+          "index": 12,
+          "name": "Four-Bit Orbit — 1000 (8) ↔ 0001 (1) Palindrome & Quadray",
+          "group": "Sphere & Carrier",
+          "note": "Four-Bit Orbit: 1000 (8) and 0001 (1) binary palindrome duality! In Front f(x) view, 8 and 1 orbit in harmony across the sphere; in Top XZ view, 1111/F (max nibble 15) crowns the center (0000 at bottom) while the 8 ↔ 1 equatorial orbit continues around the inscribed Quadray Tetrahedron."
+        },
+        {
+          "index": 13,
+          "name": "Custom Formula Patch",
+          "group": "Custom",
+          "note": "Free modular patch bay — write any x(t), y(t), z(t) expression using u, r, rIn, K, a, b, weierstrass, morlet, fourierSquare, sin, cos, etc."
+        }
+      ]
+    },
+    "invariants": [
+      "js/engine.js is the only implementation of the float32 maths",
+      "js/agent-core.js is the only implementation of tools, envelopes and deeplinks",
+      "output is deterministic: no timestamps, randomness or locale formatting",
+      "pure tools never mutate the UI; only bridge setters change what the user sees",
+      "the URL is the UI state: a deeplink reloads to the same view (static mode is pixel-stable)",
+      "the agent layer is additive: maths, rendering and default UX are unchanged"
+    ],
+    "relatedTools": [
+      {
+        "id": "quadcraft2",
+        "title": "QuadCraft 2 — Quadray 3D explorer (local reference archive)",
+        "path": "SchoolOfTomorrow/School_of_Tomorrow-master/QuadCraft2.html",
+        "relationship": "Shares the Quadray tetrahedral basis: its (1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1) vectors are fourbit_orbit.quadray D_0001/A_1000/B_0100/C_0010. Local untracked archive, not a live link.",
+        "status": "available"
+      },
+      {
+        "id": "quadraygrid4",
+        "title": "QuadrayGrid4 — quadray grid renderer (local reference archive)",
+        "path": "SchoolOfTomorrow/School_of_Tomorrow-master/QuadrayGrid4.html",
+        "relationship": "Same quadray lattice coordinates the Four-Bit Orbit inscribes; a candidate future query-param handoff receiver.",
+        "status": "available"
+      },
+      {
+        "id": "flextegrity-lattice",
+        "title": "Flextegrity Lattice — IVM/CCP lattice viewer (local reference archive)",
+        "path": "SchoolOfTomorrow/School_of_Tomorrow-master/Flextegrity_Lattice.html",
+        "relationship": "IVM/CCP sphere packing context for the hollow-sphere carrier; no data handoff implemented yet.",
+        "status": "available"
+      },
+      {
+        "id": "quadrays-research",
+        "title": "Quadrays Research notebook (local reference archive)",
+        "path": "SchoolOfTomorrow/School_of_Tomorrow-master/QuadraysResearch.ipynb",
+        "relationship": "Derivation source for quadray ↔ XYZ mapping used by fourbit_orbit; manual handoff only.",
+        "status": "available"
+      },
+      {
+        "id": "qrays-py",
+        "title": "qrays.py — quadray Python module (local reference archive)",
+        "path": "SchoolOfTomorrow/School_of_Tomorrow-master/qrays.py",
+        "relationship": "Python quadray math counterpart; CLI/MCP could eventually emit compatible vectors for it.",
+        "status": "available"
+      }
+    ]
+  },
+  "deeplink": null,
+  "warnings": []
+}

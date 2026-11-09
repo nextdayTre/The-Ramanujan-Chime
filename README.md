@@ -150,3 +150,42 @@ Ramanujan Sphere/
     ├── three.min.js        # Vendored Three.js r128 (offline-safe)
     └── OrbitControls.js    # Vendored OrbitControls
 ```
+
+---
+
+## Agent Interface (deeplinks · bridge · CLI · MCP)
+
+The instrument doubles as an **agent-operable tool**. The maths is unchanged — an additive
+agent layer wraps the same `float32` engine and exposes the instrument over four surfaces,
+all backed by one shared core (`js/engine.js` + `js/agent-core.js`):
+
+| Surface | How an agent uses it |
+| :--- | :--- |
+| **Deeplink + static state** | A URL reproduces the exact view (`?preset=5&tab=harmonics&static=1` = Analytic Morlet 3D helix on the spectrum tab), and the page always publishes its state as JSON in `<pre id="ramanujan-sphere-state" hidden>` (`?static=1` is the reproducible-screenshot contract). |
+| **In-page bridge** | `window.ramanujanSphere` exposes `getState()`, setters (`setState`, `setTab`, `setClock`, `step`), pure `call(tool, args)`, `getDeeplink()`, `subscribe()` and a readiness marker (`body[data-agent-ready="true"]`). |
+| **Node CLI** | `node agent/cli.mjs <tool> --json` prints exactly one deterministic envelope (nine pure tools: `manifest`, `build_deeplink`, `analyze_patch`, `eval_point`, `bit_inspect`, `discrete_group`, `ramanujan_pi`, `fourbit_orbit`, `frobenius_secp`), plus `state`, `artifacts [--check]` and `selftest`. Exit codes: `0` ok · `2` usage · `3` tool error · `4` internal. |
+| **MCP stdio server** | `node agent/mcp-server.mjs` speaks newline-delimited JSON-RPC 2.0 (`initialize`, `tools/list`, `tools/call`) with zero dependencies; point any MCP client at the absolute script path. |
+
+A fifth **`5 · Agent`** dock tab makes the layer legible to humans: bridge status, the current
+deeplink with a copy button, a copyable handoff prompt, live state JSON, the tool catalogue and
+links to the docs and manifest.
+
+```powershell
+python -m http.server 8080 --bind 127.0.0.1     # then http://127.0.0.1:8080/
+node agent/cli.mjs manifest --json               # discover tools, presets, deeplink defaults
+node agent/cli.mjs bit_inspect --value 3.141592653589793 --json   # -> hex 0x40490FDB
+```
+
+Start with [`AGENTS.md`](./AGENTS.md) (LLM onboarding and troubleshooting), the normative
+contract in [`docs/AGENT-INTERFACE.md`](./docs/AGENT-INTERFACE.md), and the generated
+machine-readable manifest at [`agent/manifest.json`](./agent/manifest.json). The honest
+cross-tool map (sibling quadray/IVM tools and planned handoffs) is
+[`docs/ECOSYSTEM-MAP.md`](./docs/ECOSYSTEM-MAP.md); `llms.txt` is the short index.
+
+Acceptance (see [`docs/AGENT-INTERFACE.md`](./docs/AGENT-INTERFACE.md) §12 for the full list):
+
+```powershell
+node --test
+node scripts/gen-agent-artifacts.mjs --check
+node agent/selftest.mjs
+```

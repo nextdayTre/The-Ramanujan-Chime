@@ -1,0 +1,57 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "ramanujan_pi",
+  "data": {
+    "targetPiF32": 3.1415927410125732,
+    "targetHex": "0x40490FDB",
+    "targetBits": {
+      "val": "3.14159",
+      "hex": "0x40490FDB",
+      "bin": "01000000010010010000111111011011",
+      "signBit": "0",
+      "expBits": "10000000",
+      "mantBits": "10010010000111111011011",
+      "expDesc": "2^1",
+      "kind": "finite"
+    },
+    "lockedAtK0": true,
+    "rows": [
+      {
+        "k": 0,
+        "piRamF32": 3.1415927410125732,
+        "ramHex": "0x40490FDB",
+        "ramLocked": true,
+        "ramErrDb": -142.335,
+        "piFourF32": 4,
+        "fourHex": "0x40800000",
+        "fourLocked": false,
+        "fourErrDb": -1.326
+      },
+      {
+        "k": 1,
+        "piRamF32": 3.1415927410125732,
+        "ramHex": "0x40490FDB",
+        "ramLocked": true,
+        "ramErrDb": -307.051,
+        "piFourF32": 2.6666667461395264,
+        "fourHex": "0x402AAAAB",
+        "fourLocked": false,
+        "fourErrDb": -6.467
+      },
+      {
+        "k": 2,
+        "piRamF32": 3.1415927410125732,
+        "ramHex": "0x40490FDB",
+        "ramLocked": true,
+        "ramErrDb": -340,
+        "piFourF32": 3.4666666984558105,
+        "fourHex": "0x405DDDDE",
+        "fourLocked": false,
+        "fourErrDb": -9.76
+      }
+    ]
+  },
+  "deeplink": null,
+  "warnings": []
+}

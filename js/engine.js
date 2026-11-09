@@ -339,6 +339,28 @@
     };
   }
 
+  // THE single twin truth (HARMONY_ENGINE.md §7). One implementation, shared by
+  // playhead() and by the agent layer's eval_point tool so both agree bit-for-bit:
+  // - antipodal: (−x, −y, −z) — 180° rotation / audio polarity flip
+  // - conjugate: ( x, −y,  z) — negative-frequency reflection across real axis
+  // - realTrace: ( x,  0,  z) — midpoint (P + P̄)/2 where imaginary parts cancel
+  function twinOf(pt, mode) {
+    var m = mode || 'both';
+    var antipodal = pt ? { x: Math.fround(-pt.x), y: Math.fround(-pt.y), z: Math.fround(-pt.z) } : null;
+    var conjugate = pt ? { x: pt.x, y: Math.fround(-pt.y), z: pt.z } : null;
+    var realTrace = pt ? { x: pt.x, y: 0, z: pt.z } : null;
+    var activeTwin = null;
+    if (m === 'antipodal') activeTwin = antipodal;
+    else if (m === 'conjugate' || m === 'both') activeTwin = conjugate;
+    return {
+      twin: activeTwin,
+      antipodal: antipodal,
+      conjugate: conjugate,
+      realTrace: realTrace,
+      mode: m
+    };
+  }
+
   // THE single playhead & twin truth (HARMONY_ENGINE.md §7):
   // - antipodal: (−x, −y, −z) — 180° rotation / audio polarity flip
   // - conjugate: ( x, −y,  z) — negative-frequency reflection across real axis
@@ -362,21 +384,15 @@
     var pt = (points && idx >= 0 && idx < points.length) ? points[idx] : null;
     if (pt && !pt.valid) pt = null;
 
-    var antipodal = pt ? { x: Math.fround(-pt.x), y: Math.fround(-pt.y), z: Math.fround(-pt.z) } : null;
-    var conjugate = pt ? { x: pt.x, y: Math.fround(-pt.y), z: pt.z } : null;
-    var realTrace = pt ? { x: pt.x, y: 0, z: pt.z } : null;
-
     var mode = state.twinMode || (state.toggles && state.toggles.syzygy === false ? 'off' : 'both');
-    var activeTwin = null;
-    if (mode === 'antipodal') activeTwin = antipodal;
-    else if (mode === 'conjugate' || mode === 'both') activeTwin = conjugate;
+    var tw = twinOf(pt, mode);
 
     return {
       point: pt,
-      twin: activeTwin,
-      antipodal: antipodal,
-      conjugate: conjugate,
-      realTrace: realTrace,
+      twin: tw.twin,
+      antipodal: tw.antipodal,
+      conjugate: tw.conjugate,
+      realTrace: tw.realTrace,
       mode: mode,
       idx: idx,
       effT: effT,
@@ -659,7 +675,7 @@
     };
   }
 
-  window.Harmony = {
+  var Harmony = {
     PRECISION: 'float32',
     engine: {
       TAU: TAU, PI: PI,
@@ -671,6 +687,7 @@
       sample: sample, point: point, sampleWindow: sampleWindow,
       shellMetrics: shellMetrics, zoneOf: zoneOf,
       gcd: gcd, isPrimeInt: isPrimeInt, discreteGroup: discreteGroup,
+      twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,
       fmtNum: fmtNum, bitInspect: bitInspect,
@@ -680,4 +697,13 @@
       fmtBig: fmtBig, fSci: fSci, bigSci: bigSci
     }
   };
+
+  // Dual export: the browser page keeps window.Harmony; Node's CLI, MCP server,
+  // generator and tests require() this exact file (one implementation).
+  var root = (typeof window !== 'undefined') ? window
+    : (typeof globalThis !== 'undefined' ? globalThis : null);
+  if (root) root.Harmony = Harmony;
+  if (typeof module !== 'undefined' && module && module.exports) {
+    module.exports = Harmony;
+  }
 })();

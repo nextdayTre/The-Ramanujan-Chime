@@ -1,0 +1,16 @@
+{
+  "name": "ramanujan-sphere",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ramanujan Sphere x Harmony Engine — zero-build static instrument with an agent interface (CLI + MCP) over one shared maths core.",
+  "scripts": {
+    "test": "node --test",
+    "artifacts": "node scripts/gen-agent-artifacts.mjs",
+    "artifacts:check": "node scripts/gen-agent-artifacts.mjs --check",
+    "cli": "node agent/cli.mjs",
+    "mcp": "node agent/mcp-server.mjs",
+    "selftest": "node agent/selftest.mjs",
+    "verify:browser": "node agent/verify-browser.mjs",
+    "serve": "python -m http.server 8080 --bind 127.0.0.1"
+  }
+}

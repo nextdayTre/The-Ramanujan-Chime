@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "eval_point",
+  "data": {
+    "t": 0.25,
+    "point": {
+      "x": 6.123234262925839e-17,
+      "y": 1,
+      "z": 0,
+      "valid": true
+    },
+    "bits": {
+      "x": {
+        "val": "6.1232e-17",
+        "hex": "0x248D3132",
+        "bin": "00100100100011010011000100110010",
+        "signBit": "0",
+        "expBits": "01001001",
+        "mantBits": "00011010011000100110010",
+        "expDesc": "2^-54",
+        "kind": "finite"
+      },
+      "y": {
+        "val": "1",
+        "hex": "0x3F800000",
+        "bin": "00111111100000000000000000000000",
+        "signBit": "0",
+        "expBits": "01111111",
+        "mantBits": "00000000000000000000000",
+        "expDesc": "2^0",
+        "kind": "finite"
+      },
+      "z": {
+        "val": "0",
+        "hex": "0x00000000",
+        "bin": "00000000000000000000000000000000",
+        "signBit": "0",
+        "expBits": "00000000",
+        "mantBits": "00000000000000000000000",
+        "expDesc": "subnormal",
+        "kind": "finite"
+      }
+    },
+    "twin": {
+      "mode": "both",
+      "antipodal": {
+        "x": -6.123234262925839e-17,
+        "y": -1,
+        "z": 0
+      },
+      "conjugate": {
+        "x": 6.123234262925839e-17,
+        "y": -1,
+        "z": 0
+      },
+      "realTrace": {
+        "x": 6.123234262925839e-17,
+        "y": 0,
+        "z": 0
+      }
+    },
+    "readout": {
+      "angle": "90.0° (1.5708 rad)",
+      "dist": "1.000  [r=0.45..R=1.00]",
+      "status": "ON SPHERE",
+      "distNum": 1
+    }
+  },
+  "deeplink": "http://127.0.0.1:8080/?static=1",
+  "warnings": []
+}

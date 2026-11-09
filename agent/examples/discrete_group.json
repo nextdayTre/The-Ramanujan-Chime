@@ -1,0 +1,85 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "discrete_group",
+  "data": {
+    "N": 12,
+    "stride": 3,
+    "gcd": 3,
+    "subOrder": 4,
+    "isPrime": false,
+    "orbit": [
+      0,
+      3,
+      6,
+      9,
+      0
+    ],
+    "orbitLength": 5,
+    "inSubgroupCount": 4,
+    "nodes": [
+      {
+        "idx": 0,
+        "t": 0,
+        "inSubgroup": true
+      },
+      {
+        "idx": 1,
+        "t": 0.08333333333333333,
+        "inSubgroup": false
+      },
+      {
+        "idx": 2,
+        "t": 0.16666666666666666,
+        "inSubgroup": false
+      },
+      {
+        "idx": 3,
+        "t": 0.25,
+        "inSubgroup": true
+      },
+      {
+        "idx": 4,
+        "t": 0.3333333333333333,
+        "inSubgroup": false
+      },
+      {
+        "idx": 5,
+        "t": 0.4166666666666667,
+        "inSubgroup": false
+      },
+      {
+        "idx": 6,
+        "t": 0.5,
+        "inSubgroup": true
+      },
+      {
+        "idx": 7,
+        "t": 0.5833333333333334,
+        "inSubgroup": false
+      },
+      {
+        "idx": 8,
+        "t": 0.6666666666666666,
+        "inSubgroup": false
+      },
+      {
+        "idx": 9,
+        "t": 0.75,
+        "inSubgroup": true
+      },
+      {
+        "idx": 10,
+        "t": 0.8333333333333334,
+        "inSubgroup": false
+      },
+      {
+        "idx": 11,
+        "t": 0.9166666666666666,
+        "inSubgroup": false
+      }
+    ]
+  },
+  "deeplink": null,
+  "warnings": []
+}

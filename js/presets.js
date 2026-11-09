@@ -172,5 +172,17 @@
     }
   ];
 
-  window.Harmony.Presets = { list: PRESETS };
+  var Presets = { list: PRESETS };
+
+  // Dual export: the browser page keeps window.Harmony.Presets; Node's CLI, MCP
+  // server, generator and tests require() this exact file (one implementation).
+  var root = (typeof window !== 'undefined') ? window
+    : (typeof globalThis !== 'undefined' ? globalThis : null);
+  if (root) {
+    root.Harmony = root.Harmony || {};
+    root.Harmony.Presets = Presets;
+  }
+  if (typeof module !== 'undefined' && module && module.exports) {
+    module.exports = Presets;
+  }
 })();

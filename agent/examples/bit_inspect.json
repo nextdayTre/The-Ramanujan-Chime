@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "bit_inspect",
+  "data": {
+    "input": 3.141592653589793,
+    "val": "3.14159",
+    "hex": "0x40490FDB",
+    "bin": "01000000010010010000111111011011",
+    "signBit": "0",
+    "expBits": "10000000",
+    "mantBits": "10010010000111111011011",
+    "expDesc": "2^1",
+    "kind": "finite"
+  },
+  "deeplink": null,
+  "warnings": []
+}

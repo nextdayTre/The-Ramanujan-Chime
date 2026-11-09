@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "schemaVersion": 1,
+  "tool": "build_deeplink",
+  "data": {
+    "url": "http://127.0.0.1:8080/?preset=5&tab=harmonics&static=1",
+    "query": {
+      "preset": "5",
+      "tab": "harmonics",
+      "static": "1"
+    }
+  },
+  "deeplink": "http://127.0.0.1:8080/?preset=5&tab=harmonics&static=1",
+  "warnings": []
+}
