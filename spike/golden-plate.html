@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Golden BitWave Plate — P1 visual spike</title>
+<!--
+  P1 VISUAL SPIKE — not part of the instrument, nothing imports this file.
+
+  It answers one question: does a golden-rectangle bitwave plate inscribed in the
+  hollow sphere look right? No routing, no BitWave code, no state, no agent layer.
+
+  The green line is a 64-bit register viewed as 16 nibbles:
+    data  v[j] ∈ [0,15]  (hard-coded BitWave canonical vectors below)
+    spline monotone cubic Hermite (Fritsch–Butland), same shape rule as BitWave
+    plate  golden rectangle, diagonal = 2R, corners exactly on the great circle
+
+  Reusing the real vendored Three.js r128 from ../vendor (offline, file:// safe).
+-->
+<style>
+  :root {
+    --bg0: #060a0d;
+    --bg1: #020507;
+    --panel: rgba(8, 14, 19, 0.86);
+    --line: #16323a;
+    --line-hi: #244c56;
+    --text: #cfe9ec;
+    --dim: #7f9aa2;
+    --muted: #5d757d;
+    --cyan: #4df3dd;
+    --green: #34d399;
+    --coral: #ff8c98;
+    --gold: #ffd166;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg1); }
+  body {
+    background:
+      radial-gradient(1100px 700px at 52% 44%, #0b1720 0%, #060c11 45%, var(--bg1) 100%);
+    color: var(--text);
+    font-family: var(--sans);
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+
+  /* ---- HUD ------------------------------------------------------------- */
+  #hud {
+    position: fixed; top: 18px; left: 18px; width: 336px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 15px 12px;
+    backdrop-filter: blur(9px);
+    box-shadow: 0 18px 50px -24px #000, inset 0 1px 0 #ffffff08;
+    user-select: none;
+  }
+  #hud h1 {
+    margin: 0 0 2px; font-size: 12.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--cyan); font-weight: 600;
+  }
+  #hud .sub { font-size: 10.5px; color: var(--muted); margin-bottom: 12px; line-height: 1.45; }
+  #hud .sub b { color: var(--gold); font-weight: 500; }
+
+  .reg {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em;
+    color: var(--green); background: #0a1613; border: 1px solid #14302a;
+    border-radius: 7px; padding: 7px 9px; margin-bottom: 9px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  }
+  .reg .name { color: var(--dim); font-size: 10px; letter-spacing: 0.16em; }
+  .reg .bits { color: var(--muted); font-size: 9.5px; }
+
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; margin-bottom: 11px; }
+  .kv div { display: flex; justify-content: space-between; font-size: 10.5px; border-bottom: 1px dotted #ffffff10; padding: 2px 0; }
+  .kv span:first-child { color: var(--muted); }
+  .kv span:last-child { font-family: var(--mono); color: var(--text); }
+
+  .lbl { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin: 10px 0 5px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font-family: var(--mono); font-size: 10.5px; color: var(--dim);
+    background: #0b1419; border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 9px; cursor: pointer; transition: all .12s ease;
+  }
+  button:hover { color: var(--text); border-color: var(--line-hi); background: #0e1a20; }
+  button.on { color: #07120f; background: var(--cyan); border-color: var(--cyan); font-weight: 600; }
+  button.on.green { background: var(--green); border-color: var(--green); }
+
+  .legend { display: flex; gap: 12px; margin-top: 12px; font-size: 9.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+
+  /* ---- footer ---------------------------------------------------------- */
+  #foot {
+    position: fixed; left: 18px; bottom: 16px; right: 18px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    gap: 18px; pointer-events: none; font-size: 10.5px; color: var(--muted);
+  }
+  #math {
+    font-family: var(--mono); font-size: 10.5px; color: #8fb3b9;
+    background: rgba(6, 12, 16, 0.72); border: 1px solid #10262c;
+    border-radius: 8px; padding: 7px 11px; line-height: 1.55;
+  }
+  #math b { color: var(--gold); font-weight: 500; }
+  #hint { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: right; line-height: 1.6; }
+  #hint kbd { color: var(--cyan); font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="hud">
+  <h1>Golden BitWave Plate</h1>
+  <div class="sub">P1 visual spike · <b>not wired into the instrument</b>. One 64-bit register as 16 nibbles, drawn inside a golden rectangle inscribed in the hollow sphere.</div>
+
+  <div class="reg"><span class="name" id="regName">Z1</span><span id="regHex">7521012585210125</span><span class="bits">64-bit</span></div>
+
+  <div class="kv">
+    <div><span>nibbles</span><span id="kNibbles">16</span></div>
+    <div><span>aspect</span><span id="kAspect">1.6180</span></div>
+    <div><span>width</span><span id="kW">1.7013R</span></div>
+    <div><span>height</span><span id="kH">1.0515R</span></div>
+    <div><span>diagonal</span><span>2R</span></div>
+    <div><span>cavity r</span><span>R/φ = 0.618</span></div>
+  </div>
+
+  <div class="lbl">Frame</div>
+  <div class="row" id="frameRow">
+    <button data-frame="A">A · 8ADE…</button>
+    <button data-frame="Z1" class="on green">Z1 · XOR</button>
+    <button data-frame="B">B · FFFF…</button>
+  </div>
+
+  <div class="lbl">View</div>
+  <div class="row" id="viewRow">
+    <button data-view="front" class="on">1 · Front</button>
+    <button data-view="iso">2 · Iso</button>
+    <button data-stack="1">s · A/Z/B stack</button>
+  </div>
+
+  <div class="lbl">Layers</div>
+  <div class="row" id="layerRow">
+    <button data-layer="sphere" class="on">Vessel</button>
+    <button data-layer="labels" class="on">Nibble labels</button>
+    <button data-layer="columns" class="on">Columns</button>
+    <button data-layer="orbit">Slow orbit</button>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>data ink</span>
+    <span><i style="background:var(--cyan)"></i>vessel</span>
+    <span><i style="background:var(--coral)"></i>cavity</span>
+    <span><i style="background:var(--gold)"></i>φ guide</span>
+  </div>
+</div>
+
+<div id="foot">
+  <div id="math"></div>
+  <div id="hint">drag orbit · wheel zoom · <kbd>1</kbd> front · <kbd>2</kbd> iso · <kbd>s</kbd> stack · <kbd>l</kbd> labels</div>
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/OrbitControls.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Golden constants (R = 1 world unit = outer carrier radius)
+  // ---------------------------------------------------------------------------
+  var PHI = (1 + Math.sqrt(5)) / 2;        // 1.6180339887
+  var R = 1.0;
+  var RIN = R / PHI;                       // golden vessel preview: r = R/φ
+  var GOLDEN_SECTION = R / PHI;            // z = ±R/φ planes (tangent to the cavity)
+  var SECTION_RADIUS = R / Math.sqrt(PHI); // cross-section radius at those planes
+
+  // Golden rectangle inscribed in the R circle: diagonal = 2R.
+  var SHORT = 2 * R / Math.sqrt(1 + PHI * PHI); // 1.0514622242 R
+  var LONG = SHORT * PHI;                       // 1.7013016167 R
+  var FRAME_W = LONG;                           // landscape: long side horizontal
+  var FRAME_H = SHORT;
+  var FRAME_ASPECT = FRAME_W / FRAME_H;         // φ
+  var INSET = 0.075;                            // proportional plot inset inside the frame
+  var PLOT_W = FRAME_W * (1 - 2 * INSET);
+  var PLOT_H = FRAME_H * (1 - 2 * INSET);
+
+  // ---------------------------------------------------------------------------
+  // Hard-coded BitWave canonical vectors (from BitWave AGENTS.md / tests)
+  //   A XOR B = Z1 is the documented invariant.
+  // ---------------------------------------------------------------------------
+  var FRAMES = {
+    A: { name: 'A', hex: '8ADEFEDA85210125', note: 'operand A' },
+    B: { name: 'B', hex: 'FFFFFFFF00000000', note: 'operand B' },
+    Z1: { name: 'Z1', hex: '7521012585210125', note: 'A xor B' }
+  };
+
+  function nibblesOf(hex) {
+    var out = [];
+    for (var i = 0; i < hex.length; i++) out.push(parseInt(hex.charAt(i), 16));
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Monotone cubic Hermite spline — direct JS port of BitWave src/core/spline.ts
+  // (Fritsch–Butland interior weights, zero end tangents; cannot overshoot 0..15).
+  // Spike-only copy: the real thing would live in the shared engine later.
+  // ---------------------------------------------------------------------------
+  function buildSpline(xs, ys) {
+    var n = xs.length;
+    var h = new Array(n - 1), d = new Array(n - 1), m = new Array(n);
+    for (var i = 0; i < n - 1; i++) {
+      h[i] = xs[i + 1] - xs[i];
+      d[i] = h[i] === 0 ? 0 : (ys[i + 1] - ys[i]) / h[i];
+    }
+    m[0] = 0;
+    m[n - 1] = 0;
+    for (var j = 1; j < n - 1; j++) {
+      if (d[j - 1] * d[j] <= 0) {
+        m[j] = 0;
+      } else {
+        var w1 = 2 * h[j] + h[j - 1];
+        var w2 = h[j] + 2 * h[j - 1];
+        m[j] = (w1 + w2) / (w1 / d[j - 1] + w2 / d[j]);
+      }
+    }
+    return { xs: xs, ys: ys, m: m, h: h, n: n };
+  }
+
+  function evalSpline(sp, x) {
+    var xs = sp.xs, ys = sp.ys, m = sp.m, h = sp.h, n = sp.n;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n - 1]) return ys[n - 1];
+    var i = 0;
+    while (i < n - 2 && x > xs[i + 1]) i++;
+    var t = (x - xs[i]) / h[i];
+    var t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i]
+      + (t3 - 2 * t2 + t) * h[i] * m[i]
+      + (-2 * t3 + 3 * t2) * ys[i + 1]
+      + (t3 - t2) * h[i] * m[i + 1];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Three.js stage
+  // ---------------------------------------------------------------------------
+  var stage = document.getElementById('stage');
+  var scene = new THREE.Scene();
+
+  var VIEW_H = 2.24; // orthographic world height — near-axonometric, like BitWave's 3-D field
+  var camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+  camera.position.set(0, 0, 6);
+  camera.lookAt(0, 0, 0);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  stage.appendChild(renderer.domElement);
+
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.085;
+  controls.enablePan = false;
+  controls.minZoom = 0.55;
+  controls.maxZoom = 3.2;
+  controls.autoRotateSpeed = 0.45;
+
+  function fitCamera() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var aspect = w / h;
+    var halfH = VIEW_H / 2;
+    camera.left = -halfH * aspect;
+    camera.right = halfH * aspect;
+    camera.top = halfH;
+    camera.bottom = -halfH;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  fitCamera();
+
+  // ---------------------------------------------------------------------------
+  // Palette / material helpers
+  // ---------------------------------------------------------------------------
+  function lineMat(color, opacity, depthTest) {
+    return new THREE.LineBasicMaterial({
+      color: color, transparent: true, opacity: opacity,
+      depthWrite: false, depthTest: depthTest !== false
+    });
+  }
+
+  function circlePoints(radius, segments, plane) {
+    var pts = [];
+    for (var i = 0; i <= segments; i++) {
+      var a = (i / segments) * Math.PI * 2;
+      var c = Math.cos(a) * radius, s = Math.sin(a) * radius;
+      if (plane === 'xz') pts.push(new THREE.Vector3(c, 0, s));
+      else if (plane === 'yz') pts.push(new THREE.Vector3(0, c, s));
+      else pts.push(new THREE.Vector3(c, s, 0));
+    }
+    return pts;
+  }
+
+  function addCircle(group, radius, color, opacity, plane, segments) {
+    var geo = new THREE.BufferGeometry().setFromPoints(circlePoints(radius, segments || 160, plane));
+    var line = new THREE.Line(geo, lineMat(color, opacity));
+    group.add(line);
+    return line;
+  }
+
+  // Small canvas sprite label (mono, crisp).
+  function makeTextSprite(text, color, size, opacity) {
+    var pad = 8;
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    var fontPx = 42;
+    ctx.font = '500 ' + fontPx + 'px ui-monospace, Consolas, monospace';
+    var metrics = ctx.measureText(text);
+    c.width = Math.ceil(metrics.width + pad * 2);
+    c.height = fontPx + pad * 2;
+    ctx = c.getContext('2d');
+    ctx.font = '500 ' + fontPx + 'px ui-monospace, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.globalAlpha = opacity;
+    ctx.fillText(text, c.width / 2, c.height / 2 + 1);
+    var tex = new THREE.CanvasTexture(c);
+    tex.minFilter = THREE.LinearFilter;
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    var sprite = new THREE.Sprite(mat);
+    var scale = size; // world height
+    sprite.scale.set(scale * (c.width / c.height), scale, 1);
+    return sprite;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Vessel (outer R, golden cavity R/φ, equator + meridian rings, z = 0 circles)
+  // ---------------------------------------------------------------------------
+  // Calm globe-style vessel: latitude rings + great-circle longitudes, not triangles.
+  function addGlobe(group, radius, color, opacity, latCount, lonCount) {
+    var i, a;
+    for (i = 1; i < latCount; i++) {
+      var phi = Math.PI * i / latCount;
+      var ringR = radius * Math.sin(phi);
+      var y = radius * Math.cos(phi);
+      var latPts = [];
+      for (a = 0; a <= 96; a++) {
+        var t = (a / 96) * Math.PI * 2;
+        latPts.push(new THREE.Vector3(ringR * Math.cos(t), y, ringR * Math.sin(t)));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(latPts), lineMat(color, opacity)));
+    }
+    for (i = 0; i < lonCount; i++) {
+      var th = Math.PI * i / lonCount;
+      var lonPts = [];
+      for (a = 0; a <= 96; a++) {
+        var u = (a / 96) * Math.PI * 2;
+        lonPts.push(new THREE.Vector3(
+          radius * Math.cos(u) * Math.cos(th),
+          radius * Math.sin(u),
+          radius * Math.cos(u) * Math.sin(th)
+        ));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lonPts), lineMat(color, opacity * 0.82)));
+    }
+  }
+
+  var vessel = new THREE.Group();
+  vessel.position.set(0, 0, 0);
+  scene.add(vessel);
+
+  addGlobe(vessel, R, 0x36d6c8, 0.052, 9, 14);
+  addGlobe(vessel, RIN, 0xff6b7a, 0.05, 5, 9);
+
+  addCircle(vessel, R, 0x4df3dd, 0.55, 'xy', 200);   // equator, in the plate plane
+  addCircle(vessel, R, 0x4df3dd, 0.05, 'xz', 160);  // meridian (edge-on, very faint)
+  addCircle(vessel, R, 0x4df3dd, 0.035, 'yz', 160);
+  addCircle(vessel, RIN, 0xff6b7a, 0.32, 'xy', 160); // golden cavity rim (z = 0)
+  addCircle(vessel, RIN, 0xff6b7a, 0.05, 'xz', 120);
+
+  // Golden-section planes (only meaningful with the A/Z/B stack)
+  var sectionRings = new THREE.Group();
+  [GOLDEN_SECTION, -GOLDEN_SECTION].forEach(function (z) {
+    var ring = new THREE.BufferGeometry().setFromPoints(circlePoints(SECTION_RADIUS, 160, 'xy'));
+    var line = new THREE.Line(ring, lineMat(0xffd166, 0.22));
+    line.position.z = z;
+    sectionRings.add(line);
+  });
+  vessel.add(sectionRings);
+  sectionRings.visible = false;
+
+  // ---------------------------------------------------------------------------
+  // Plate builder
+  // ---------------------------------------------------------------------------
+  var plateGroup = new THREE.Group();
+  scene.add(plateGroup);
+
+  var nibbleLabelTextures = null;
+
+  function labelSprite(value, size) {
+    if (!nibbleLabelTextures) nibbleLabelTextures = {};
+    var key = String(value.toString(16).toUpperCase());
+    if (!nibbleLabelTextures[key]) {
+      var c = document.createElement('canvas');
+      var ctx = c.getContext('2d');
+      c.width = 64; c.height = 64;
+      ctx.font = '600 40px ui-monospace, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#a9f5d8';
+      ctx.fillText(key, 32, 35);
+      var tex = new THREE.CanvasTexture(c);
+      tex.minFilter = THREE.LinearFilter;
+      nibbleLabelTextures[key] = tex;
+    }
+    var mat = new THREE.SpriteMaterial({
+      map: nibbleLabelTextures[key], transparent: true, opacity: 0.72, depthWrite: false
+    });
+    var sprite = new THREE.Sprite(mat);
+    sprite.scale.set(size, size, 1);
+    return sprite;
+  }
+
+  // One plate: golden frame + inner plot + monotone spline + nibble dots/labels.
+  function buildPlate(frameKey, opts) {
+    opts = opts || {};
+    var scale = opts.scale != null ? opts.scale : 1;
+    var alpha = opts.alpha != null ? opts.alpha : 1;
+    var z = opts.z || 0;
+    var labels = opts.labels !== false;
+    var columns = opts.columns !== false;
+    var showDots = opts.dots !== false;
+    var data = FRAMES[frameKey];
+    var values = nibblesOf(data.hex); // 16 nibbles
+    var n = values.length;
+
+    var g = new THREE.Group();
+    g.position.z = z;
+
+    var w = FRAME_W * scale;
+    var h = FRAME_H * scale;
+    var pw = PLOT_W * scale;
+    var ph = PLOT_H * scale;
+
+    // --- golden frame outline (corners exactly on the R circle when scale = 1) ---
+    var framePts = [
+      new THREE.Vector3(-w / 2, -h / 2, 0),
+      new THREE.Vector3(w / 2, -h / 2, 0),
+      new THREE.Vector3(w / 2, h / 2, 0),
+      new THREE.Vector3(-w / 2, h / 2, 0),
+      new THREE.Vector3(-w / 2, -h / 2, 0)
+    ];
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(framePts),
+      lineMat(0x8ff7ee, 0.62 * alpha, false)));
+
+    // --- inner plot rect ---
+    var ip = [
+      new THREE.Vector3(-pw / 2, -ph / 2, 0),
+      new THREE.Vector3(pw / 2, -ph / 2, 0),
+      new THREE.Vector3(pw / 2, ph / 2, 0),
+      new THREE.Vector3(-pw / 2, ph / 2, 0),
+      new THREE.Vector3(-pw / 2, -ph / 2, 0)
+    ];
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ip),
+      lineMat(0x6ee7a0, 0.16 * alpha, false)));
+
+    // --- golden diagonal guide (diagonal = 2R when scale = 1) ---
+    var diagMat = new THREE.LineDashedMaterial({
+      color: 0xffd166, transparent: true, opacity: 0.18 * alpha,
+      dashSize: 0.035, gapSize: 0.028, depthWrite: false, depthTest: false
+    });
+    var diag = new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-w / 2, -h / 2, 0), new THREE.Vector3(w / 2, h / 2, 0)
+    ]), diagMat);
+    diag.computeLineDistances();
+    g.add(diag);
+
+    // --- nibble column ticks ---
+    if (columns) {
+      var colPos = [];
+      for (var j = 0; j < n; j++) {
+        var cx = -pw / 2 + ((j + 0.5) / n) * pw;
+        colPos.push(cx, -ph / 2, 0, cx, ph / 2, 0);
+      }
+      var colGeo = new THREE.BufferGeometry();
+      colGeo.setAttribute('position', new THREE.Float32BufferAttribute(colPos, 3));
+      g.add(new THREE.LineSegments(colGeo, lineMat(0x6ee7a0, 0.06 * alpha, false)));
+    }
+
+    // --- spline through the nibble control points ---
+    var xs = [], ys = [];
+    var dots = [];
+    for (var k = 0; k < n; k++) {
+      var xk = -pw / 2 + ((k + 0.5) / n) * pw;
+      var yk = -ph / 2 + (values[k] / 15) * ph;
+      xs.push(xk); ys.push(yk);
+      dots.push([xk, yk]);
+    }
+    var sp = buildSpline(xs, ys);
+
+    var samples = [];
+    var N_SAMPLES = 320;
+    for (var s = 0; s <= N_SAMPLES; s++) {
+      var x = xs[0] + (s / N_SAMPLES) * (xs[n - 1] - xs[0]);
+      samples.push(new THREE.Vector3(x, evalSpline(sp, x), 0));
+    }
+    var curve = new THREE.CatmullRomCurve3(samples);
+
+    // glow pass (wide, faint) + core pass (thin, bright)
+    var glow = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 300, 0.0125 * scale, 6, false),
+      new THREE.MeshBasicMaterial({
+        color: 0x22c55e, transparent: true, opacity: 0.14 * alpha,
+        depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
+      })
+    );
+    g.add(glow);
+    var core = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 300, 0.0048 * scale, 6, false),
+      new THREE.MeshBasicMaterial({
+        color: 0x34d399, transparent: true, opacity: 0.95 * alpha, depthWrite: false, depthTest: false
+      })
+    );
+    g.add(core);
+
+    // --- control points (nibble handles) ---
+    if (showDots) {
+      var dotGeo = new THREE.SphereGeometry(0.0115 * scale, 10, 10);
+      var dotMat = new THREE.MeshBasicMaterial({
+        color: 0xbfffe8, transparent: true, opacity: 0.85 * alpha, depthWrite: false, depthTest: false
+      });
+      for (var d = 0; d < n; d++) {
+        var dot = new THREE.Mesh(dotGeo, dotMat);
+        dot.position.set(dots[d][0], dots[d][1], 0.004);
+        g.add(dot);
+      }
+    }
+
+    // --- nibble hex labels in the frame's bottom margin (inside the golden rectangle) ---
+    if (labels) {
+      var size = Math.min(0.055 * scale, (pw / n) * 0.52);
+      var labelY = -(FRAME_H * scale) / 2 + FRAME_H * INSET * 0.5 * scale;
+      for (var L = 0; L < n; L++) {
+        var sprite = labelSprite(values[L], size / 1.2);
+        sprite.position.set(dots[L][0], labelY, 0.005);
+        g.add(sprite);
+      }
+    }
+
+    // small corner ticks so the "corners on the great circle" reads
+    var tickGeo = new THREE.SphereGeometry(0.0105 * scale, 8, 8);
+    var tickMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.5 * alpha, depthWrite: false, depthTest: false
+    });
+    [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].forEach(function (p) {
+      var m = new THREE.Mesh(tickGeo, tickMat);
+      m.position.set(p[0], p[1], 0.002);
+      g.add(m);
+    });
+
+    g.userData.frameKey = frameKey;
+    // The plate is a lens over the vessel: draw it last, independent of depth.
+    g.traverse(function (o) {
+      if (o.isLine || o.isMesh || o.isSprite) o.renderOrder = 10;
+    });
+    return g;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scene state
+  // ---------------------------------------------------------------------------
+  var state = {
+    frame: 'Z1',
+    view: 'front',
+    stack: false,
+    layers: { sphere: true, labels: true, columns: true, orbit: false }
+  };
+
+  function rebuild() {
+    // Label textures are shared per nibble value; drop the cache before disposing
+    // materials so the next build re-creates them instead of using disposed maps.
+    nibbleLabelTextures = null;
+    while (plateGroup.children.length) {
+      var child = plateGroup.children.pop();
+      child.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (o.material.map) o.material.map.dispose();
+          o.material.dispose();
+        }
+      });
+    }
+
+    if (state.stack) {
+      plateGroup.add(buildPlate('A', {
+        scale: SECTION_RADIUS / R, // 0.786 — matches the golden-section cross-section
+        alpha: 0.30, z: -GOLDEN_SECTION,
+        labels: false, columns: false, dots: false
+      }));
+      plateGroup.add(buildPlate('B', {
+        scale: SECTION_RADIUS / R,
+        alpha: 0.46, z: GOLDEN_SECTION,
+        labels: false, columns: false, dots: false
+      }));
+    }
+    plateGroup.add(buildPlate(state.frame, {
+      scale: 1, alpha: 1, z: 0,
+      labels: state.layers.labels && !state.stack,
+      columns: state.layers.columns
+    }));
+
+    vessel.visible = state.layers.sphere;
+    sectionRings.visible = state.stack && state.layers.sphere;
+
+    // Dim the vessel behind the plates in stack mode so the three golden-section
+    // planes read first; the vessel is context, not content.
+    vessel.traverse(function (o) {
+      if (!o.material || o.material.opacity == null) return;
+      if (o.material.__baseOpacity == null) o.material.__baseOpacity = o.material.opacity;
+      o.material.opacity = o.material.__baseOpacity * (state.stack ? 0.52 : 1);
+    });
+
+    updateHUD();
+  }
+
+  function updateHUD() {
+    var data = FRAMES[state.frame];
+    var values = nibblesOf(data.hex);
+    document.getElementById('regName').textContent = data.name;
+    document.getElementById('regHex').textContent = data.hex;
+    document.getElementById('kNibbles').textContent = String(values.length);
+    document.getElementById('kAspect').textContent = FRAME_ASPECT.toFixed(4);
+    document.getElementById('kW').textContent = (FRAME_W / R).toFixed(4) + 'R';
+    document.getElementById('kH').textContent = (FRAME_H / R).toFixed(4) + 'R';
+    document.getElementById('math').innerHTML =
+      'φ = <b>1.6180339887</b> &nbsp;·&nbsp; plate <b>' + (FRAME_W / R).toFixed(4) + 'R</b> × <b>' +
+      (FRAME_H / R).toFixed(4) + 'R</b> &nbsp;·&nbsp; diagonal = <b>2R</b> &nbsp;·&nbsp; corners on the R circle<br>' +
+      'cavity r = R/φ = <b>0.6180R</b> &nbsp;·&nbsp; golden-section planes z = ±R/φ, cross-section r = R/√φ = <b>0.7862R</b>' +
+      (state.stack ? ' &nbsp;·&nbsp; <b>stack active</b>' : '');
+
+    var frameRow = document.getElementById('frameRow');
+    Array.prototype.forEach.call(frameRow.querySelectorAll('button'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-frame') === state.frame);
+      b.classList.toggle('green', b.getAttribute('data-frame') === state.frame);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Controls / HUD wiring
+  // ---------------------------------------------------------------------------
+  function setView(view) {
+    state.view = view;
+    if (view === 'front') {
+      camera.position.set(0, 0, 6);
+      camera.zoom = 1;
+    } else {
+      camera.position.set(3.6, 2.4, 5.2);
+      camera.zoom = 1;
+    }
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    controls.target.set(0, 0, 0);
+    controls.update();
+    document.querySelectorAll('[data-view]').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-view') === view);
+    });
+  }
+
+  function setStack(on) {
+    state.stack = on;
+    document.querySelector('[data-stack]').classList.toggle('on', on);
+    if (on) {
+      setView('iso');
+      // A more oblique angle separates the three golden-section planes.
+      camera.position.set(4.9, 2.7, 2.6);
+      camera.zoom = 0.98;
+      camera.lookAt(0, 0, 0);
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+    rebuild();
+  }
+
+  document.getElementById('frameRow').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-frame]');
+    if (!btn) return;
+    state.frame = btn.getAttribute('data-frame');
+    rebuild();
+  });
+  document.getElementById('viewRow').addEventListener('click', function (ev) {
+    var viewBtn = ev.target.closest('[data-view]');
+    var stackBtn = ev.target.closest('[data-stack]');
+    if (viewBtn) setView(viewBtn.getAttribute('data-view'));
+    else if (stackBtn) setStack(!state.stack);
+  });
+  document.getElementById('layerRow').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-layer]');
+    if (!btn) return;
+    var key = btn.getAttribute('data-layer');
+    state.layers[key] = !state.layers[key];
+    btn.classList.toggle('on', state.layers[key]);
+    if (key === 'orbit') controls.autoRotate = state.layers.orbit;
+    if (key === 'sphere') vessel.visible = state.layers.sphere;
+    if (key === 'labels' || key === 'columns') rebuild();
+  });
+
+  window.addEventListener('keydown', function (ev) {
+    if (ev.key === '1') setView('front');
+    else if (ev.key === '2') setView('iso');
+    else if (ev.key === 's' || ev.key === 'S') setStack(!state.stack);
+    else if (ev.key === 'l' || ev.key === 'L') {
+      state.layers.labels = !state.layers.labels;
+      var lb = document.querySelector('[data-layer="labels"]');
+      if (lb) lb.classList.toggle('on', state.layers.labels);
+      rebuild();
+    }
+  });
+
+  window.addEventListener('resize', function () {
+    fitCamera();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Render loop
+  // ---------------------------------------------------------------------------
+  function frame() {
+    requestAnimationFrame(frame);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  rebuild();
+  setView('front');
+  frame();
+
+  // URL params make the spike screenshot-reproducible:
+  //   ?frame=A|B|Z1  ?view=front|iso  ?stack=1  ?labels=0|1  ?columns=0|1  ?orbit=1
+  var q = new URLSearchParams(location.search);
+  if (q.has('frame') && FRAMES[q.get('frame')]) {
+    state.frame = q.get('frame');
+    rebuild();
+  }
+  if (q.get('stack') === '1') {
+    var stackBtn = document.querySelector('[data-stack]');
+    if (stackBtn) stackBtn.click(); // same path as the human toggle (sets iso angle)
+  }
+  if (q.get('view') === 'iso' || q.get('view') === 'front') setView(q.get('view'));
+  ['labels', 'columns'].forEach(function (key) {
+    if (q.get(key) === '0') {
+      state.layers[key] = false;
+      var b = document.querySelector('[data-layer="' + key + '"]');
+      if (b) b.classList.remove('on');
+      rebuild();
+    }
+  });
+  if (q.get('orbit') === '1') {
+    state.layers.orbit = true;
+    controls.autoRotate = true;
+    var ob = document.querySelector('[data-layer="orbit"]');
+    if (ob) ob.classList.add('on');
+  }
+  if (q.get('vessel') === '0') {
+    state.layers.sphere = false;
+    vessel.visible = false;
+    var vb = document.querySelector('[data-layer="sphere"]');
+    if (vb) vb.classList.remove('on');
+  }
+
+  // Expose a tiny read-only handle for the screenshot harness (spike-only).
+  window.GoldenPlateSpike = {
+    setFrame: function (k) { if (FRAMES[k]) { state.frame = k; rebuild(); } },
+    setView: setView,
+    setStack: setStack,
+    getState: function () { return JSON.parse(JSON.stringify(state)); }
+  };
+})();
+</script>
+</body>
+</html>

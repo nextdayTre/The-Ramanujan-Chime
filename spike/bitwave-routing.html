@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BitWave Routing Playground — interactive v1</title>
+<!--
+  INTERACTIVE SPIKE v1 — not part of the instrument, nothing imports this file.
+
+  Purpose: feel bitwave routing + animation against the sphere, not read about it.
+  One lane, three frames (A / Z1 / B) as z-depth planes (the "z-spike" north star),
+  inside a breathing hollow vessel.
+
+  Routes evaluate on clock ticks (BitWave-style): routes -> LFO -> derive Z.
+  Frame destinations (A, B) take the PREVIOUS Z1 => one-tick z^-1 delay.
+  Sphere destinations (R, cavity r, spin) read the routed frame as a wavetable at
+  the continuously-advancing playhead t, so the vessel breathes smoothly while the
+  frame data steps on the clock.
+
+  Hard-coded 64-bit data uses BitWave's canonical vectors; the spline is the same
+  monotone cubic Hermite (spike-local port). No instrument code is touched.
+-->
+<style>
+  :root {
+    --bg1: #020507;
+    --panel: rgba(8, 14, 19, 0.9);
+    --line: #16323a;
+    --line-hi: #244c56;
+    --text: #cfe9ec;
+    --dim: #8fb3b9;
+    --muted: #5d757d;
+    --cyan: #4df3dd;
+    --green: #34d399;
+    --coral: #ff8c98;
+    --gold: #ffd166;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg1); }
+  body {
+    background: radial-gradient(1200px 800px at 55% 42%, #0b1720 0%, #060c11 48%, var(--bg1) 100%);
+    color: var(--text); font-family: var(--sans);
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+
+  #hud {
+    position: fixed; top: 16px; left: 16px; width: 356px;
+    max-height: calc(100vh - 32px); overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 14px 12px; backdrop-filter: blur(10px);
+    box-shadow: 0 18px 50px -24px #000, inset 0 1px 0 #ffffff08;
+    user-select: none; scrollbar-width: thin;
+  }
+  #hud h1 { margin: 0 0 2px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan); font-weight: 600; }
+  #hud .sub { font-size: 10px; color: var(--muted); line-height: 1.45; margin-bottom: 10px; }
+  #hud .sub b { color: var(--gold); font-weight: 500; }
+  .lbl { font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin: 9px 0 4px; display: flex; justify-content: space-between; }
+  .row { display: flex; gap: 5px; flex-wrap: wrap; }
+  button {
+    font-family: var(--mono); font-size: 10px; color: var(--dim);
+    background: #0b1419; border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 8px; cursor: pointer; transition: all .1s ease; line-height: 1.2;
+  }
+  button:hover { color: var(--text); border-color: var(--line-hi); background: #0e1a20; }
+  button.on { color: #07120f; background: var(--cyan); border-color: var(--cyan); font-weight: 600; }
+  button.on.green { background: var(--green); border-color: var(--green); }
+  button.on.gold { background: var(--gold); border-color: var(--gold); }
+  button:disabled { opacity: 0.45; cursor: default; }
+
+  .clock { display: flex; gap: 5px; align-items: center; }
+  .clock button { min-width: 34px; }
+  .readout { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 5px; }
+  .readout b { color: var(--text); font-weight: 500; }
+  .readout .gold { color: var(--gold); }
+
+  .lane { border-top: 1px dotted #ffffff12; padding-top: 8px; margin-top: 8px; }
+  .lane .title { display: flex; align-items: center; gap: 6px; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .lane .title b { color: var(--cyan); font-weight: 500; letter-spacing: 0.06em; }
+  .hexrow { display: flex; gap: 5px; align-items: center; margin-top: 5px; }
+  .hexrow label { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 14px; flex: 0 0 auto; }
+  .hexrow input {
+    flex: 1; min-width: 0; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--green); background: #0a1613; border: 1px solid #14302a; border-radius: 6px;
+    padding: 4px 7px; outline: none;
+  }
+  .hexrow input:focus { border-color: #2b6b57; }
+  .hexrow input:disabled { color: #6f8f86; border-color: #12241f; background: #09100e; }
+  .zline { font-family: var(--mono); font-size: 10.5px; margin-top: 5px; display: flex; justify-content: space-between; color: var(--muted); }
+  .zline b { color: var(--gold); font-weight: 500; letter-spacing: 0.05em; }
+
+  .routes { display: grid; gap: 4px; }
+  .route { display: grid; grid-template-columns: 42px 1fr; gap: 6px; align-items: center; }
+  .route .dest { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+  .route .opts { display: flex; gap: 4px; flex-wrap: wrap; }
+  .route button { padding: 3px 6px; font-size: 9.5px; }
+
+  input[type="range"] { -webkit-appearance: none; appearance: none; height: 3px; border-radius: 3px; background: #1a2a31; outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: var(--cyan); cursor: pointer; }
+  .slider-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .slider-row span { font-family: var(--mono); font-size: 9.5px; color: var(--muted); white-space: nowrap; }
+  .slider-row input { flex: 1; }
+
+  .legend { display: flex; gap: 10px; margin-top: 10px; font-size: 9px; color: var(--muted); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; vertical-align: 1px; }
+
+  #foot {
+    position: fixed; left: 16px; right: 16px; bottom: 14px;
+    display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+    pointer-events: none; font-size: 10px; color: var(--muted);
+  }
+  #note {
+    font-family: var(--mono); font-size: 10px; color: #8fb3b9;
+    background: rgba(6, 12, 16, 0.75); border: 1px solid #10262c;
+    border-radius: 8px; padding: 6px 10px; line-height: 1.5; max-width: 660px;
+  }
+  #note b { color: var(--gold); font-weight: 500; }
+  #hint { font-family: var(--mono); font-size: 9.5px; color: var(--muted); text-align: right; line-height: 1.6; }
+  #hint kbd { color: var(--cyan); font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="hud">
+  <h1>BitWave Routing Playground</h1>
+  <div class="sub">Interactive v1 · <b>not wired into the instrument</b>. One lane, three frames as z-planes; routes step on the clock, the vessel breathes from the routed wavetable.</div>
+
+  <div class="clock">
+    <button id="btnPlay" class="on green">⏸ Pause</button>
+    <button id="btnStep">Step</button>
+    <button id="btnReset">Reset</button>
+  </div>
+  <div class="readout">tick <b id="roTick">0</b> · t <b id="roT">0%</b> · R <b id="roR" class="gold">1.50</b> · cavity <b id="roCav">0.62</b> · spin <b id="roSpin">0</b></div>
+  <div class="slider-row"><span>Tick rate</span><input type="range" id="rngRate" min="0.5" max="8" step="0.5" value="2.5" /><span id="roRate">2.5 Hz</span></div>
+  <div class="slider-row"><span>Scan rate</span><input type="range" id="rngScan" min="0.05" max="0.80" step="0.05" value="0.12" /><span id="roScan">0.12 Hz</span></div>
+
+  <div class="lane">
+    <div class="title">Lane 1 · <b><span id="roOp">XOR</span> → Z1</b></div>
+    <div class="row" id="opRow">
+      <button data-op="and">AND</button>
+      <button data-op="or">OR</button>
+      <button data-op="xor" class="on">XOR</button>
+      <button data-op="add">ADD</button>
+      <button data-op="sub">SUB</button>
+    </div>
+    <div class="hexrow"><label>A</label><input id="inpA" maxlength="16" spellcheck="false" value="8ADEFEDA85210125" /></div>
+    <div class="hexrow"><label>B</label><input id="inpB" maxlength="16" spellcheck="false" value="FFFFFFFF00000000" /></div>
+    <div class="zline"><span>Z1 = A <span id="roOp2">⊕</span> B</span><b id="roZ">7521012585210125</b></div>
+  </div>
+
+  <div class="lane">
+    <div class="title">Routes <span style="color:#6f8f86;letter-spacing:0.04em;text-transform:none">· A/B take prev Z1 (z⁻¹) · R/cavity/spin read the routed frame at t</span></div>
+    <div class="routes" id="routeRows">
+      <div class="route" data-dest="A">
+        <span class="dest">A ←</span>
+        <span class="opts">
+          <button data-src="none" class="on">—</button><button data-src="Z1">Z1</button>
+        </span>
+      </div>
+      <div class="route" data-dest="B">
+        <span class="dest">B ←</span>
+        <span class="opts">
+          <button data-src="none" class="on">—</button><button data-src="Z1">Z1</button>
+        </span>
+      </div>
+      <div class="route" data-dest="R">
+        <span class="dest">R ←</span>
+        <span class="opts">
+          <button data-src="none">—</button><button data-src="A">A</button><button data-src="B">B</button><button data-src="Z1" class="on gold">Z1</button>
+        </span>
+      </div>
+      <div class="route" data-dest="cavity">
+        <span class="dest">cav ←</span>
+        <span class="opts">
+          <button data-src="none">—</button><button data-src="A">A</button><button data-src="B" class="on gold">B</button><button data-src="Z1">Z1</button>
+        </span>
+      </div>
+      <div class="route" data-dest="spin">
+        <span class="dest">spin ←</span>
+        <span class="opts">
+          <button data-src="none" class="on">—</button><button data-src="A">A</button><button data-src="B">B</button><button data-src="Z1">Z1</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="title">LFO (each tick) &amp; view</div>
+    <div class="row">
+      <button id="btnLfoA" class="on gold">ROL A</button>
+      <button id="btnLfoB">ROL B</button>
+      <button id="btnBreath" class="on">Breath</button>
+      <button id="btnViewIso" class="on">Iso</button>
+      <button id="btnViewFront">Front</button>
+      <button id="btnVessel" class="on">Vessel</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>data ink</span>
+    <span><i style="background:var(--cyan)"></i>frame / vessel</span>
+    <span><i style="background:var(--gold)"></i>active route</span>
+    <span><i style="background:var(--coral)"></i>cavity</span>
+  </div>
+</div>
+
+<div id="foot">
+  <div id="note">
+    Routes evaluate <b>routes → LFO → derive Z</b> on each tick (never per frame). The playhead scans <b>t</b> continuously; the routed frame is read as a wavetable so the vessel breathes smoothly while the registers step.
+  </div>
+  <div id="hint">drag orbit · wheel zoom · <kbd>space</kbd> play/pause · <kbd>n</kbd> step · <kbd>r</kbd> reset</div>
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/OrbitControls.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ===========================================================================
+  // 64-bit register helpers (BitWave canonical semantics)
+  // ===========================================================================
+  var MASK = (1n << 64n) - 1n;
+  var WIDTH = 64;
+
+  function parseHex(h) {
+    var clean = String(h || '').toUpperCase().replace(/[^0-9A-F]/g, '');
+    if (!clean) return 0n;
+    return BigInt('0x' + clean) & MASK;
+  }
+  function hexOf(v) { return (v & MASK).toString(16).toUpperCase().padStart(16, '0'); }
+  function nibblesOf(v) { var h = hexOf(v); return h.split('').map(function (c) { return parseInt(c, 16); }); }
+  function applyOp(a, b, op) {
+    if (op === 'and') return a & b;
+    if (op === 'or') return a | b;
+    if (op === 'xor') return a ^ b;
+    if (op === 'add') return (a + b) & MASK;
+    if (op === 'sub') return (a - b) & MASK;
+    return a ^ b;
+  }
+  function rol64(v) { return ((v << 1n) | (v >> 63n)) & MASK; }
+  var OP_SYMBOL = { and: '&', or: '|', xor: '⊕', add: '+', sub: '−' };
+
+  // Monotone cubic Hermite — dedicated spike port of BitWave src/core/spline.ts
+  function buildSpline(xs, ys) {
+    var n = xs.length, h = new Array(n - 1), d = new Array(n - 1), m = new Array(n), i;
+    for (i = 0; i < n - 1; i++) {
+      h[i] = xs[i + 1] - xs[i];
+      d[i] = h[i] === 0 ? 0 : (ys[i + 1] - ys[i]) / h[i];
+    }
+    m[0] = 0; m[n - 1] = 0;
+    for (i = 1; i < n - 1; i++) {
+      if (d[i - 1] * d[i] <= 0) m[i] = 0;
+      else {
+        var w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1];
+        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
+      }
+    }
+    return { xs: xs, ys: ys, m: m, h: h, n: n };
+  }
+  function evalSpline(sp, x) {
+    var xs = sp.xs, ys = sp.ys, m = sp.m, h = sp.h, n = sp.n;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n - 1]) return ys[n - 1];
+    var i = 0;
+    while (i < n - 2 && x > xs[i + 1]) i++;
+    var t = (x - xs[i]) / h[i], t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i]
+      + (t3 - 2 * t2 + t) * h[i] * m[i]
+      + (-2 * t3 + 3 * t2) * ys[i + 1]
+      + (t3 - t2) * h[i] * m[i + 1];
+  }
+  // Cyclic wavetable spline: v[0..n-1] -> control points 0..n with v[n] = v[0]
+  function buildCyclicSpline(values) {
+    var n = values.length;
+    var xs = [], ys = [];
+    for (var i = 0; i <= n; i++) { xs.push(i); ys.push(values[i % n]); }
+    return buildSpline(xs, ys);
+  }
+  function sampleCyclic(sp, t) {
+    var n = sp.n - 1;
+    var x = (t % 1) * n;
+    return evalSpline(sp, x);
+  }
+
+  // ===========================================================================
+  // State
+  // ===========================================================================
+  var state = {
+    hexA: '8ADEFEDA85210125',
+    hexB: 'FFFFFFFF00000000',
+    op: 'xor',
+    routeA: 'none',
+    routeB: 'none',
+    routeR: 'Z1',
+    routeCavity: 'B',
+    routeSpin: 'none',
+    lfoA: true,
+    lfoB: false,
+    breath: true,       // quiet by default: R moves ~1.60..1.70, slow scan
+    playing: true,
+    rate: 2.5,          // clock ticks per second
+    scanRate: 0.12,     // playhead cycles per second (calm)
+    tick: 0,
+    t: 0.30,
+    view: 'iso',
+    vessel: true
+  };
+
+  var A = parseHex(state.hexA);
+  var B = parseHex(state.hexB);
+  var Z = 0n;
+  var splines = { A: null, B: null, Z1: null };
+  var lastZ = 0n;
+
+  function derive() { Z = applyOp(A, B, state.op); }
+  function refreshSplines() {
+    splines.A = buildCyclicSpline(nibblesOf(A));
+    splines.B = buildCyclicSpline(nibblesOf(B));
+    splines.Z1 = buildCyclicSpline(nibblesOf(Z));
+  }
+  function frameValue(src) {
+    if (src === 'A') return A;
+    if (src === 'B') return B;
+    if (src === 'Z1' || src === 'Z') return Z;
+    return null;
+  }
+
+  // ===========================================================================
+  // Three.js stage
+  // ===========================================================================
+  var stage = document.getElementById('stage');
+  var scene = new THREE.Scene();
+  var VIEW_H = 4.1;
+  var camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 200);
+  camera.position.set(4.6, 2.8, 4.8);
+  camera.lookAt(0, 0, 0);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  stage.appendChild(renderer.domElement);
+
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.085;
+  controls.enablePan = false;
+  controls.minZoom = 0.5;
+  controls.maxZoom = 3.0;
+  controls.target.set(0, 0, 0);
+
+  function fitCamera() {
+    var w = window.innerWidth, h = window.innerHeight, aspect = w / h, halfH = VIEW_H / 2;
+    camera.left = -halfH * aspect;
+    camera.right = halfH * aspect;
+    camera.top = halfH;
+    camera.bottom = -halfH;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  fitCamera();
+
+  function lineMat(color, opacity, depthTest) {
+    return new THREE.LineBasicMaterial({
+      color: color, transparent: true, opacity: opacity,
+      depthWrite: false, depthTest: depthTest !== false
+    });
+  }
+
+  function circlePts(radius, segments, plane) {
+    var pts = [];
+    for (var i = 0; i <= segments; i++) {
+      var a = (i / segments) * Math.PI * 2;
+      var c = Math.cos(a) * radius, s = Math.sin(a) * radius;
+      if (plane === 'xz') pts.push(new THREE.Vector3(c, 0, s));
+      else if (plane === 'yz') pts.push(new THREE.Vector3(0, c, s));
+      else pts.push(new THREE.Vector3(c, s, 0));
+    }
+    return pts;
+  }
+  function addCircle(group, radius, color, opacity, plane, segments) {
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(circlePts(radius, segments || 140, plane)),
+      lineMat(color, opacity)
+    ));
+  }
+  function addGlobe(group, radius, color, opacity, latCount, lonCount) {
+    var i, a;
+    for (i = 1; i < latCount; i++) {
+      var phi = Math.PI * i / latCount;
+      var ringR = radius * Math.sin(phi), y = radius * Math.cos(phi);
+      var lat = [];
+      for (a = 0; a <= 80; a++) {
+        var t = (a / 80) * Math.PI * 2;
+        lat.push(new THREE.Vector3(ringR * Math.cos(t), y, ringR * Math.sin(t)));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lat), lineMat(color, opacity)));
+    }
+    for (i = 0; i < lonCount; i++) {
+      var th = Math.PI * i / lonCount;
+      var lon = [];
+      for (a = 0; a <= 80; a++) {
+        var u = (a / 80) * Math.PI * 2;
+        lon.push(new THREE.Vector3(
+          radius * Math.cos(u) * Math.cos(th),
+          radius * Math.sin(u),
+          radius * Math.cos(u) * Math.sin(th)
+        ));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lon), lineMat(color, opacity * 0.8)));
+    }
+  }
+
+  function makeTextSprite(text, color, size, opacity) {
+    var pad = 6, fontPx = 40;
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    ctx.font = '600 ' + fontPx + 'px ui-monospace, Consolas, monospace';
+    var m = ctx.measureText(text);
+    c.width = Math.ceil(m.width + pad * 2);
+    c.height = fontPx + pad * 2;
+    ctx = c.getContext('2d');
+    ctx.font = '600 ' + fontPx + 'px ui-monospace, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.globalAlpha = opacity;
+    ctx.fillText(text, c.width / 2, c.height / 2 + 1);
+    var tex = new THREE.CanvasTexture(c);
+    tex.minFilter = THREE.LinearFilter;
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(size * (c.width / c.height), size, 1);
+    return sp;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Vessel: unit-scale shell + cavity, scaled per frame from the routed wavetable
+  // ---------------------------------------------------------------------------
+  var BASE_R = 1.65;            // stable, non-animated reference radius
+  var vesselGroup = new THREE.Group();
+  scene.add(vesselGroup);
+
+  var shellGroup = new THREE.Group();   // unit radius geometry; scaled to R
+  vesselGroup.add(shellGroup);
+  addGlobe(shellGroup, 1, 0x36d6c8, 0.05, 8, 12);
+  addCircle(shellGroup, 1, 0x4df3dd, 0.34, 'xy', 160);   // equator
+  addCircle(shellGroup, 1, 0x4df3dd, 0.06, 'xz', 120);
+  addCircle(shellGroup, 1, 0x4df3dd, 0.045, 'yz', 120);
+
+  var cavityGroup = new THREE.Group();  // unit radius; scaled to R * cavityRatio
+  vesselGroup.add(cavityGroup);
+  addGlobe(cavityGroup, 1, 0xff6b7a, 0.055, 5, 8);
+  addCircle(cavityGroup, 1, 0xff6b7a, 0.30, 'xy', 140);
+
+  // ---------------------------------------------------------------------------
+  // Plates: A (far), Z1 (middle), B (near) — the z-spike composition
+  // ---------------------------------------------------------------------------
+  var PLATE_W = 1.75, PLATE_H = 1.12, INSET = 0.10;
+  var PLOT_W = PLATE_W * (1 - 2 * INSET);
+  var PLOT_H = PLATE_H * (1 - 2 * INSET);
+  var DEPTH = 0.70;
+  var plateData = [
+    { key: 'A', x: -0.12, z: -DEPTH, alpha: 0.45, name: 'A', rotY: 0.26 },
+    { key: 'Z1', x: 0, z: 0, alpha: 1.0, name: 'Z1', rotY: 0 },
+    { key: 'B', x: 0.12, z: DEPTH, alpha: 0.5, name: 'B', rotY: -0.26 }
+  ];
+
+  var plateGroup = new THREE.Group();
+  scene.add(plateGroup);
+  var playheads = [];   // {line, plotW, z}
+  var plateFrames = []; // {key, group, frameLineMat}
+
+  function isSourceActive(src) {
+    if (!src || src === 'none') return false;
+    return state.routeR === src || state.routeCavity === src || state.routeSpin === src ||
+      state.routeA === src || state.routeB === src;
+  }
+
+  function buildPlate(def) {
+    var src = def.key === 'Z1' ? 'Z1' : def.key;
+    var value = frameValue(src);
+    var values = nibblesOf(value);
+    var n = values.length;
+    var g = new THREE.Group();
+    g.position.set(def.x || 0, 0, def.z);
+    g.rotation.y = def.rotY || 0;
+    var alpha = def.alpha;
+    var active = isSourceActive(def.key === 'Z1' ? 'Z1' : def.key);
+    var frameColor = active ? 0xffd166 : 0x8ff7ee;
+
+    // frame + plot rect
+    var w = PLATE_W, h = PLATE_H, pw = PLOT_W, ph = PLOT_H;
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-w / 2, -h / 2, 0), new THREE.Vector3(w / 2, -h / 2, 0),
+      new THREE.Vector3(w / 2, h / 2, 0), new THREE.Vector3(-w / 2, h / 2, 0),
+      new THREE.Vector3(-w / 2, -h / 2, 0)
+    ]), lineMat(frameColor, (active ? 0.8 : 0.45) * alpha, false)));
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-pw / 2, -ph / 2, 0), new THREE.Vector3(pw / 2, -ph / 2, 0),
+      new THREE.Vector3(pw / 2, ph / 2, 0), new THREE.Vector3(-pw / 2, ph / 2, 0),
+      new THREE.Vector3(-pw / 2, -ph / 2, 0)
+    ]), lineMat(0x6ee7a0, 0.13 * alpha, false)));
+
+    // column ticks
+    var colPos = [];
+    for (var j = 0; j < n; j++) {
+      var cx = -pw / 2 + ((j + 0.5) / n) * pw;
+      colPos.push(cx, -ph / 2, 0, cx, ph / 2, 0);
+    }
+    var colGeo = new THREE.BufferGeometry();
+    colGeo.setAttribute('position', new THREE.Float32BufferAttribute(colPos, 3));
+    g.add(new THREE.LineSegments(colGeo, lineMat(0x6ee7a0, 0.05 * alpha, false)));
+
+    // spline
+    var xs = [], ys = [];
+    for (var k = 0; k < n; k++) {
+      xs.push(-pw / 2 + ((k + 0.5) / n) * pw);
+      ys.push(-ph / 2 + (values[k] / 15) * ph);
+    }
+    var sp = buildSpline(xs, ys);
+    var pts = [];
+    for (var s = 0; s <= 240; s++) {
+      var x = xs[0] + (s / 240) * (xs[n - 1] - xs[0]);
+      pts.push(new THREE.Vector3(x, evalSpline(sp, x), 0));
+    }
+    var curve = new THREE.CatmullRomCurve3(pts);
+    g.add(new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 220, 0.010, 5, false),
+      new THREE.MeshBasicMaterial({
+        color: 0x22c55e, transparent: true, opacity: 0.12 * alpha,
+        depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
+      })
+    ));
+    g.add(new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 220, 0.0042, 5, false),
+      new THREE.MeshBasicMaterial({
+        color: 0x34d399, transparent: true, opacity: 0.95 * alpha, depthWrite: false, depthTest: false
+      })
+    ));
+
+    // nibble dots
+    var dotGeo = new THREE.SphereGeometry(0.0095, 8, 8);
+    var dotMat = new THREE.MeshBasicMaterial({
+      color: 0xbfffe8, transparent: true, opacity: 0.8 * alpha, depthWrite: false, depthTest: false
+    });
+    for (var d = 0; d < n; d++) {
+      var dot = new THREE.Mesh(dotGeo, dotMat);
+      dot.position.set(xs[d], ys[d], 0.003);
+      g.add(dot);
+    }
+
+    // frame name badge
+    var badge = makeTextSprite(def.name, active ? '#ffd166' : '#9fe9ee', 0.095, 0.9);
+    badge.position.set(-w / 2 + 0.10, h / 2 - 0.08, 0.004);
+    g.add(badge);
+
+    // playhead line (position updated per frame)
+    var phLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, -ph / 2, 0.002), new THREE.Vector3(0, ph / 2, 0.002)
+      ]),
+      lineMat(0xdffaf6, 0.4, false)
+    );
+    g.add(phLine);
+    playheads.push({ line: phLine, plotW: pw });
+
+    g.traverse(function (o) {
+      if (o.isLine || o.isMesh || o.isSprite) o.renderOrder = 10;
+    });
+    return g;
+  }
+
+  function rebuildPlates() {
+    while (plateGroup.children.length) {
+      var child = plateGroup.children.pop();
+      child.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (o.material.map) o.material.map.dispose();
+          o.material.dispose();
+        }
+      });
+    }
+    playheads.length = 0;
+    plateData.forEach(function (def) { plateGroup.add(buildPlate(def)); });
+    updatePlayheads();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Frame routes -> cables between plates (A/B <- Z1)
+  // ---------------------------------------------------------------------------
+  var routeGroup = new THREE.Group();
+  scene.add(routeGroup);
+
+  function cable(p0, p1, ctrl, color, opacity) {
+    var q = new THREE.QuadraticBezierCurve3(p0, ctrl, p1);
+    var pts = q.getPoints(48);
+    var line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat(color, opacity, false));
+    line.renderOrder = 30;
+    return line;
+  }
+
+  function cableDot(pos, color) {
+    var m = new THREE.Mesh(
+      new THREE.SphereGeometry(0.022, 8, 8),
+      new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false })
+    );
+    m.position.copy(pos);
+    m.renderOrder = 31;
+    return m;
+  }
+
+  function rebuildRoutes() {
+    while (routeGroup.children.length) {
+      var child = routeGroup.children.pop();
+      child.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) o.material.dispose();
+      });
+    }
+    var z1EdgeL = new THREE.Vector3(-PLATE_W * 0.46, 0, 0);
+    var z1EdgeR = new THREE.Vector3(PLATE_W * 0.46, 0, 0);
+    if (state.routeA === 'Z1') {
+      var aEnd = new THREE.Vector3(-PLATE_W * 0.46 - 0.12, 0, -DEPTH);
+      routeGroup.add(cable(z1EdgeL, aEnd, new THREE.Vector3(-1.55, 0.55, -DEPTH / 2), 0xffd166, 0.5));
+      routeGroup.add(cableDot(z1EdgeL, 0xffd166));
+      routeGroup.add(cableDot(aEnd, 0xffd166));
+    }
+    if (state.routeB === 'Z1') {
+      var bEnd = new THREE.Vector3(PLATE_W * 0.46 + 0.12, 0, DEPTH);
+      routeGroup.add(cable(z1EdgeR, bEnd, new THREE.Vector3(1.55, 0.55, DEPTH / 2), 0xffd166, 0.5));
+      routeGroup.add(cableDot(z1EdgeR, 0xffd166));
+      routeGroup.add(cableDot(bEnd, 0xffd166));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Clock / routing evaluation
+  // ---------------------------------------------------------------------------
+  function ensureDerived() { derive(); refreshSplines(); }
+
+  function tickFrame() {
+    lastZ = Z;
+    // routes -> LFO (BitWave order); frame destinations use z^-1
+    var nextA = state.routeA === 'Z1' ? lastZ : A;
+    var nextB = state.routeB === 'Z1' ? lastZ : B;
+    if (state.lfoA) nextA = rol64(nextA);
+    if (state.lfoB) nextB = rol64(nextB);
+    A = nextA & MASK;
+    B = nextB & MASK;
+    state.hexA = hexOf(A);
+    state.hexB = hexOf(B);
+    state.tick += 1;
+    ensureDerived();
+    refreshUI();
+    rebuildPlates();
+  }
+
+  function resetAll() {
+    A = parseHex('8ADEFEDA85210125');
+    B = parseHex('FFFFFFFF00000000');
+    state.hexA = hexOf(A);
+    state.hexB = hexOf(B);
+    state.op = 'xor';
+    state.routeA = 'none'; state.routeB = 'none';
+    state.routeR = 'Z1'; state.routeCavity = 'B'; state.routeSpin = 'none';
+    state.lfoA = true; state.lfoB = false;
+    state.tick = 0; state.t = 0.30;
+    ensureDerived();
+    syncControls();
+    rebuildPlates();
+    rebuildRoutes();
+    refreshUI();
+  }
+
+  // ---------------------------------------------------------------------------
+  // HUD
+  // ---------------------------------------------------------------------------
+  function refreshUI() {
+    document.getElementById('roTick').textContent = state.tick;
+    document.getElementById('roT').textContent = Math.round(state.t * 100) + '%';
+    document.getElementById('roOp').textContent = state.op.toUpperCase();
+    document.getElementById('roOp2').textContent = OP_SYMBOL[state.op] || '⊕';
+    document.getElementById('roZ').textContent = hexOf(Z);
+    var inpA = document.getElementById('inpA');
+    var inpB = document.getElementById('inpB');
+    // never clobber a field the human is typing in while the clock runs
+    if (document.activeElement !== inpA) inpA.value = state.hexA;
+    if (document.activeElement !== inpB) inpB.value = state.hexB;
+    inpA.disabled = state.routeA === 'Z1';
+    inpB.disabled = state.routeB === 'Z1';
+    document.getElementById('roRate').textContent = state.rate.toFixed(1) + ' Hz';
+    document.getElementById('roScan').textContent = state.scanRate.toFixed(2) + ' Hz';
+    var play = document.getElementById('btnPlay');
+    play.textContent = state.playing ? '⏸ Pause' : '▶ Play';
+    play.classList.toggle('on', state.playing);
+    document.getElementById('btnLfoA').classList.toggle('on', state.lfoA);
+    document.getElementById('btnLfoB').classList.toggle('on', state.lfoB);
+    document.getElementById('btnBreath').classList.toggle('on', state.breath);
+    document.getElementById('btnVessel').classList.toggle('on', state.vessel);
+    // route rows
+    document.querySelectorAll('#routeRows .route').forEach(function (row) {
+      var dest = row.getAttribute('data-dest');
+      var current = state['route' + dest.charAt(0).toUpperCase() + dest.slice(1)];
+      row.querySelectorAll('button').forEach(function (b) {
+        var src = b.getAttribute('data-src');
+        b.classList.remove('on', 'gold');
+        if (src === current) { b.classList.add('on'); if (src !== 'none') b.classList.add('gold'); }
+      });
+    });
+    document.querySelectorAll('#opRow button').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-op') === state.op);
+    });
+  }
+
+  function syncControls() {
+    document.getElementById('rngRate').value = state.rate;
+    document.getElementById('rngScan').value = state.scanRate;
+    document.getElementById('btnViewIso').classList.toggle('on', state.view === 'iso');
+    document.getElementById('btnViewFront').classList.toggle('on', state.view === 'front');
+  }
+
+  document.getElementById('btnPlay').addEventListener('click', function () {
+    state.playing = !state.playing;
+    refreshUI();
+  });
+  document.getElementById('btnStep').addEventListener('click', function () { tickFrame(); });
+  document.getElementById('btnReset').addEventListener('click', resetAll);
+  document.getElementById('rngRate').addEventListener('input', function (ev) {
+    state.rate = parseFloat(ev.target.value); refreshUI();
+  });
+  document.getElementById('rngScan').addEventListener('input', function (ev) {
+    state.scanRate = parseFloat(ev.target.value); refreshUI();
+  });
+  document.getElementById('opRow').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-op]');
+    if (!b) return;
+    state.op = b.getAttribute('data-op');
+    ensureDerived();
+    refreshUI();
+    rebuildPlates();
+  });
+  document.getElementById('routeRows').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-src]');
+    if (!b) return;
+    var dest = b.closest('.route').getAttribute('data-dest');
+    var src = b.getAttribute('data-src');
+    if (dest === 'A') state.routeA = src;
+    else if (dest === 'B') state.routeB = src;
+    else if (dest === 'R') state.routeR = src;
+    else if (dest === 'cavity') state.routeCavity = src;
+    else if (dest === 'spin') state.routeSpin = src;
+    refreshUI();
+    rebuildPlates();
+    rebuildRoutes();
+  });
+  ['inpA', 'inpB'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function (ev) {
+      var clean = String(ev.target.value).toUpperCase().replace(/[^0-9A-F]/g, '');
+      var v = parseHex(clean);
+      if (id === 'inpA') { A = v; state.hexA = hexOf(A); }
+      else { B = v; state.hexB = hexOf(B); }
+      ensureDerived();
+      refreshUI();
+      rebuildPlates();
+    });
+  });
+  document.getElementById('btnLfoA').addEventListener('click', function () {
+    state.lfoA = !state.lfoA; refreshUI();
+  });
+  document.getElementById('btnLfoB').addEventListener('click', function () {
+    state.lfoB = !state.lfoB; refreshUI();
+  });
+  document.getElementById('btnBreath').addEventListener('click', function () {
+    state.breath = !state.breath;
+    if (!state.breath) spinAngle = 0;
+    refreshUI();
+  });
+  document.getElementById('btnViewIso').addEventListener('click', function () { setView('iso'); });
+  document.getElementById('btnViewFront').addEventListener('click', function () { setView('front'); });
+  document.getElementById('btnVessel').addEventListener('click', function () {
+    state.vessel = !state.vessel;
+    vesselGroup.visible = state.vessel;
+    refreshUI();
+  });
+
+  function setView(view) {
+    state.view = view;
+    if (view === 'front') camera.position.set(0, 0, 8);
+    else camera.position.set(4.6, 2.8, 4.8);
+    camera.zoom = 1;
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    controls.update();
+    syncControls();
+  }
+
+  window.addEventListener('keydown', function (ev) {
+    var tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : '';
+    if (tag === 'input') return;
+    if (ev.code === 'Space') { ev.preventDefault(); state.playing = !state.playing; refreshUI(); }
+    else if (ev.key === 'n' || ev.key === 'N') tickFrame();
+    else if (ev.key === 'r' || ev.key === 'R') resetAll();
+    else if (ev.key === '1') setView('iso');
+    else if (ev.key === '2') setView('front');
+  });
+
+  window.addEventListener('resize', function () { fitCamera(); });
+
+  // ---------------------------------------------------------------------------
+  // Animation: continuous playhead scan + clocked frame ticks
+  // ---------------------------------------------------------------------------
+  var spinAngle = 0;
+  var tickAcc = 0;
+  var lastNow = performance.now();
+
+  function updatePlayheads() {
+    for (var i = 0; i < playheads.length; i++) {
+      var ph = playheads[i];
+      var x = -ph.plotW / 2 + state.t * ph.plotW;
+      var arr = ph.line.geometry.attributes.position.array;
+      arr[0] = x; arr[3] = x;
+      ph.line.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  function wavetableAt(src, t) {
+    if (!src || src === 'none') return null;
+    var sp = splines[src === 'Z1' ? 'Z1' : src];
+    if (!sp) return null;
+    return sampleCyclic(sp, t); // 0..15
+  }
+
+  function updateVessel() {
+    // Quiet default: small amplitude, slow scan. Breath off = still vessel.
+    var breath = state.breath;
+    var rVal = breath ? wavetableAt(state.routeR, state.t) : null;
+    var R = rVal == null ? BASE_R : (1.60 + (rVal / 15) * 0.10);
+    var cavVal = breath ? wavetableAt(state.routeCavity, state.t) : null;
+    var ratio = cavVal == null ? (1 / 1.618033988749895) : (0.58 + (cavVal / 15) * 0.08);
+    var spinVal = breath ? wavetableAt(state.routeSpin, state.t) : null;
+
+    shellGroup.scale.setScalar(R);
+    cavityGroup.scale.setScalar(R * ratio);
+
+    if (!state.playing || !breath) {
+      spinAngle = 0;
+    } else {
+      var speed = spinVal == null ? 0 : ((spinVal - 7.5) / 7.5) * 0.25;
+      spinAngle += speed * (1 / 60);
+    }
+    vesselGroup.rotation.y = spinAngle;
+    vesselGroup.rotation.x = Math.sin(spinAngle * 0.7) * 0.03;
+
+    document.getElementById('roR').textContent = R.toFixed(2);
+    document.getElementById('roCav').textContent = ratio.toFixed(2);
+    document.getElementById('roSpin').textContent = spinVal == null ? '0' : spinVal.toFixed(1);
+    return R;
+  }
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    var dt = Math.min(0.05, (now - lastNow) / 1000);
+    lastNow = now;
+
+    if (state.playing) {
+      state.t = (state.t + dt * state.scanRate) % 1;
+      tickAcc += dt;
+      var step = 1 / state.rate;
+      while (tickAcc >= step) {
+        tickAcc -= step;
+        tickFrame();
+      }
+    }
+    updatePlayheads();
+    updateVessel();
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  // ---------------------------------------------------------------------------
+  // URL params (reproducible screenshots + shareable tactile states)
+  // ---------------------------------------------------------------------------
+  function applyQuery() {
+    var q = new URLSearchParams(location.search);
+    if (q.get('op') && OP_SYMBOL[q.get('op')]) state.op = q.get('op');
+    if (q.get('hexA')) state.hexA = hexOf(parseHex(q.get('hexA')));
+    if (q.get('hexB')) state.hexB = hexOf(parseHex(q.get('hexB')));
+    // route params are case-insensitive: routeA / routea / routeCavity / ...
+    var routeMap = { a: 'routeA', b: 'routeB', r: 'routeR', cavity: 'routeCavity', spin: 'routeSpin' };
+    q.forEach(function (value, key) {
+      var m = /^route([A-Za-z]+)$/.exec(key);
+      if (!m) return;
+      var dest = routeMap[m[1].toLowerCase()];
+      if (dest && value) state[dest] = value;
+    });
+    if (q.get('lfoA') != null) state.lfoA = q.get('lfoA') === '1';
+    if (q.get('lfoB') != null) state.lfoB = q.get('lfoB') === '1';
+    if (q.get('breath') != null) state.breath = q.get('breath') === '1';
+    if (q.get('rate')) state.rate = Math.max(0.5, Math.min(8, parseFloat(q.get('rate')) || state.rate));
+    if (q.get('scan')) state.scanRate = Math.max(0.05, Math.min(0.8, parseFloat(q.get('scan')) || state.scanRate));
+    if (q.get('t') != null) state.t = Math.max(0, Math.min(0.999, parseFloat(q.get('t')) || 0));
+    if (q.get('playing') != null) state.playing = q.get('playing') === '1';
+    if (q.get('vessel') === '0') { state.vessel = false; vesselGroup.visible = false; }
+    if (q.get('view') === 'front' || q.get('view') === 'iso') state.view = q.get('view');
+    A = parseHex(state.hexA);
+    B = parseHex(state.hexB);
+    state.tick = 0;
+    ensureDerived();
+    syncControls();
+    rebuildPlates();
+    rebuildRoutes();
+    refreshUI();
+    setView(state.view);
+    // ?ticks=N lets a screenshot harness capture an evolved (deterministic) state.
+    var nTicks = parseInt(q.get('ticks') || '0', 10);
+    if (nTicks > 0) {
+      for (var i = 0; i < nTicks; i++) tickFrame();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------------
+  ensureDerived();
+  rebuildPlates();
+  rebuildRoutes();
+  refreshUI();
+  syncControls();
+  setView('iso');
+  applyQuery();
+  // In query mode a paused screenshot must not advance; the human page plays.
+  if (!new URLSearchParams(location.search).has('playing')) state.playing = true;
+  refreshUI();
+  requestAnimationFrame(loop);
+
+  // Small read-only handle for future automation / screenshot harnesses.
+  window.RoutingPlayground = {
+    getState: function () { return JSON.parse(JSON.stringify(state)); },
+    step: tickFrame,
+    reset: resetAll,
+    setView: setView
+  };
+})();
+</script>
+</body>
+</html>
