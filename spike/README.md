@@ -4,8 +4,43 @@ These pages are **experiments, not shipped features**. Nothing imports them, `in
 not reference them, and the instrument's maths/rendering/default UX are unchanged. The verified
 release artifact in this repo is the agent layer (commit `78386a9`, tag `agent-layer-v1.0.0`).
 
-Open either page directly (`file://` works — classic scripts, no server needed) or serve the
-repo root and browse `/spike/`.
+Open any page directly (`file://` works — classic scripts, no server needed) or serve the repo
+root and browse `/spike/`.
+
+## `bitwave-viewer.html` — read-only BitWave import viewer
+
+The first shipped slice of [`docs/BITWAVE-IMPORT.md`](../docs/BITWAVE-IMPORT.md): import a
+`.bitwave` project document (schema 1–3) or a BitWave `#bw=` share link, extract the frames with
+the shared projection [`js/bitwave-import.js`](../js/bitwave-import.js), and draw them as three
+lane z-stacks (nine plates) inside the hollow-sphere language.
+
+- **Inputs:** paste a JSON document or a share link; pick or drag-drop a `.bitwave`/`.json` file;
+  or append `#bw=<payload>` to the URL. Default load is the embedded canonical fixture;
+  `?empty=1` starts empty.
+- **Layout:** lane 1/2/3 side by side, each stack `A` (far) / `Z1` (middle) / `B` (near) — lane 2
+  `C/D/Z2`, lane 3 `E/F/Z3`. Each frame is a plate with the monotone-cubic nibble spline; the
+  project's focused frame is gold, `frameVis=false` plates are ghosted, dense 128/256-bit widths
+  drop dots/ticks. The right inspector lists all nine frames with hex, popcount and source badges.
+- **Quiet by default:** no breathing, no auto-rotate, no scanning; the **Scan** toggle adds a slow
+  scan line and a subtle vessel breath only while on. Nothing is evaluated — expressions are text.
+- **Machine contract:** `body[data-bitwave-viewer-ready="true"]`, hidden
+  `#bitwave-viewer-state` JSON, `window.bitwaveViewer` (`getState`/`importInput`/`loadCanonical`/
+  `clear`/`setScan`), `#provenance`, `#status`, and `[data-bitwave-frame="1.A"][data-hex]` hooks.
+- **Canonical vectors:** `A=8ADEFEDA85210125`, `B=FFFFFFFF00000000`,
+  `Z1=A⊕B=7521012585210125` (popcount 20, truth counts `23 11 9 21`), focus `Z1`.
+
+Fixtures in [`fixtures/`](fixtures/) are copied verbatim from the sibling BitWave checkout
+(`examples/*.bitwave.json`) plus an authored canonical-vectors document; they are read-only
+inputs and nothing in the instrument imports or serves them.
+
+Verification (zero-dependency CDP):
+
+```powershell
+node --test tests/bitwave-import.test.mjs        # projection + canonical vectors
+node spike/verify-bitwave-viewer.mjs             # file:// + served gate
+node spike/verify-bitwave-viewer.mjs --capture   # ... and write spike/shots/16–18
+# or: npm run verify:viewer
+```
 
 ## `bitwave-routing.html` — interactive v1 playground
 
@@ -43,4 +78,11 @@ A/Z/B golden-section stack preview. Kept as the visual north star reference.
 ## `shots/`
 
 Reference screenshots. `01–06` belong to the golden-plate probe; `10–15` to the routing
-playground (quiet default, feedback route, evolved ticks, still vessel, front view).
+playground (quiet default, feedback route, evolved ticks, still vessel, front view); `16–18` to
+the import viewer (canonical 64-bit, 256-bit `glv` link, schema-4 refused error state) — captured
+reproducibly by `node spike/verify-bitwave-viewer.mjs --capture`.
+
+Known limits of the import viewer: it is a **snapshot view** (no routing/LFO/expression
+simulation, no editing, no round-trip), it derives `Z` from the stored `A`/`B` only, and it is
+not integrated as an instrument dock tab or an agent tool yet. BitWave remains the authoritative
+editor.

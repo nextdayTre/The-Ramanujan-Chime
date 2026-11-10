@@ -11,6 +11,7 @@
     "mcp": "node agent/mcp-server.mjs",
     "selftest": "node agent/selftest.mjs",
     "verify:browser": "node agent/verify-browser.mjs",
+    "verify:viewer": "node spike/verify-bitwave-viewer.mjs",
     "serve": "python -m http.server 8080 --bind 127.0.0.1"
   }
 }

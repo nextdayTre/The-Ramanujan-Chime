@@ -1,0 +1,73 @@
+{
+  "schema": 3,
+  "app": "bitwave",
+  "savedAt": "2026-11-09T00:00:00.000Z",
+  "N": 64,
+  "view": {
+    "lane": "1",
+    "view3d": false,
+    "split3d": false,
+    "splitPair": [
+      "1",
+      "2"
+    ],
+    "activePane": 0,
+    "lfoMode": "rotcw",
+    "lfoRate": 4
+  },
+  "lanes": {
+    "1": {
+      "a": "8ADEFEDA85210125",
+      "b": "FFFFFFFF00000000",
+      "showB": false,
+      "binop": "xor",
+      "edit": "a",
+      "seededB": false,
+      "lfoB": "0",
+      "colA": -1,
+      "colB": -1,
+      "focus": "z",
+      "frameVis": {
+        "a": true,
+        "b": true,
+        "z": true
+      }
+    },
+    "2": {
+      "a": "0123456789ABCDEF",
+      "b": "FEDCBA9876543210",
+      "showB": true,
+      "binop": "xor",
+      "edit": "a",
+      "seededB": true,
+      "lfoB": "0",
+      "colA": -1,
+      "colB": -1,
+      "focus": "a",
+      "frameVis": {
+        "a": true,
+        "b": true,
+        "z": true
+      }
+    },
+    "3": {
+      "a": "F0F0F0F0F0F0F0F0",
+      "b": "0F0F0F0F0F0F0F0F",
+      "showB": false,
+      "binop": "and",
+      "edit": "b",
+      "seededB": true,
+      "lfoB": "0",
+      "colA": -1,
+      "colB": -1,
+      "focus": "z",
+      "frameVis": {
+        "a": true,
+        "b": true,
+        "z": true
+      }
+    }
+  },
+  "routes": [],
+  "parked": {}
+}

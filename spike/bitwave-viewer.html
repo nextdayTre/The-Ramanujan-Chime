@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BitWave → Ramanujan Sphere — read-only viewer</title>
+<!--
+  BITWAVE VIEWER SPIKE — standalone, read-only display sink. Not part of the instrument.
+
+  Loads the shared projection module js/bitwave-import.js (owner: another file, frozen API):
+      window.Harmony.BitWaveImport.bitwaveImport(input, opts)
+        -> {ok:true, importSchemaVersion:1, schemaVersion, width, lanes, focus, view,
+            routes, provenance, warnings}
+        -> {ok:false, importSchemaVersion:1, error:{code,message,hint?}}
+  This page never parses/derives BitWave data itself; it only renders the projection.
+  Expressions are displayed as text; nothing is eval()ed. No network, no fetch, classic
+  scripts only, works from file:// and served.
+
+  Frozen machine contract (see docs/BITWAVE-IMPORT.md + task board):
+    body[data-bitwave-viewer-ready="true"]                 mounted
+    body[data-bitwave-status="ok"|"empty"|"error"]
+    body[data-bitwave-origin="demo"|"fragment"|"paste"|"file"|"api"|"none"]
+    hidden <pre id="bitwave-viewer-state" data-schema-version="1"> = JSON.stringify(viewerState)
+    viewerState = {schemaVersion, ready, status, origin, import, error, render, scan}
+    render      = {lanes, frames, width, view (import provenance: '2d'|'3d'|'split'),
+                   camera ('iso'|'front'), focus:{lane,frame,label}} | null
+    window.bitwaveViewer = {ready, schemaVersion, getState, importInput, loadCanonical, clear, setScan}
+    events: 'bitwave-viewer:ready' (once), 'bitwave-viewer:change' (on imports / state changes)
+    #provenance on success starts exactly:
+        "BitWave import · schema {n} · {width}-bit · read-only" + source/name
+-->
+<style>
+  :root {
+    --bg1: #020507;
+    --panel: rgba(8, 14, 19, 0.9);
+    --line: #16323a;
+    --line-hi: #244c56;
+    --text: #cfe9ec;
+    --dim: #8fb3b9;
+    --muted: #5d757d;
+    --cyan: #4df3dd;
+    --green: #34d399;
+    --coral: #ff8c98;
+    --gold: #ffd166;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg1); }
+  body {
+    background: radial-gradient(1200px 800px at 55% 45%, #0b1720 0%, #060c11 48%, var(--bg1) 100%);
+    color: var(--text); font-family: var(--sans);
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+
+  #fallback {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 6; max-width: 460px; padding: 16px 18px; text-align: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.55; color: var(--dim);
+  }
+  #fallback[hidden] { display: none; }
+  #fallback b { color: var(--gold); font-weight: 500; }
+
+  aside {
+    position: fixed; top: 16px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 50px -24px #000, inset 0 1px 0 #ffffff08;
+    user-select: none; scrollbar-width: thin;
+  }
+  #hud {
+    left: 16px; width: 330px; max-height: calc(100vh - 32px); overflow-y: auto;
+    padding: 13px 14px 12px;
+  }
+  #inspector {
+    right: 16px; width: 336px; max-height: calc(100vh - 32px);
+    padding: 12px 12px 10px; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  #hud h1 { margin: 0 0 3px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan); font-weight: 600; }
+  #hud .sub { font-size: 9.5px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+  #hud .sub b { color: var(--gold); font-weight: 500; }
+  .lbl {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    font-size: 8.5px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--muted); margin: 9px 0 4px;
+  }
+  .lbl .ro { letter-spacing: 0.08em; color: #43606a; text-transform: none; }
+  .row { display: flex; gap: 5px; flex-wrap: wrap; }
+
+  button {
+    font-family: var(--mono); font-size: 10px; color: var(--dim);
+    background: #0b1419; border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 8px; cursor: pointer; transition: all .1s ease; line-height: 1.2;
+  }
+  button:hover { color: var(--text); border-color: var(--line-hi); background: #0e1a20; }
+  button.on { color: #07120f; background: var(--cyan); border-color: var(--cyan); font-weight: 600; }
+  button.on.gold { background: var(--gold); border-color: var(--gold); }
+  button:disabled { opacity: 0.45; cursor: default; }
+
+  #provenance { font-family: var(--mono); font-size: 9.5px; color: var(--cyan); line-height: 1.45; word-break: break-word; }
+  #status { font-family: var(--mono); font-size: 9.5px; color: var(--dim); line-height: 1.45; margin-top: 4px; }
+  body[data-bitwave-status="ok"] #status { color: var(--green); }
+  body[data-bitwave-status="error"] #status { color: var(--coral); }
+
+  #paste {
+    width: 100%; height: 66px; resize: vertical; outline: none;
+    font-family: var(--mono); font-size: 10px; color: var(--text);
+    background: #0a1613; border: 1px solid #14302a; border-radius: 6px;
+    padding: 5px 7px; line-height: 1.4;
+  }
+  #paste:focus { border-color: #2b6b57; }
+  #paste::placeholder { color: #4a636b; }
+
+  .warns { font-family: var(--mono); font-size: 9px; color: var(--gold); line-height: 1.45; word-break: break-word; }
+  .warns ul { margin: 0; padding-left: 14px; }
+
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: 8.5px; color: var(--muted); }
+  .legend i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 3px; vertical-align: 1px; }
+
+  /* ---- inspector ---- */
+  .insp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 7px; flex: 0 0 auto; }
+  .insp-head h2 { margin: 0; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cyan); font-weight: 600; }
+  #inspector-sub { font-family: var(--mono); font-size: 8.5px; color: var(--muted); text-align: right; line-height: 1.35; }
+  #laneCards { overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+  .insp-empty {
+    font-family: var(--mono); font-size: 9.5px; color: var(--muted);
+    border: 1px dashed #14302a; border-radius: 8px; padding: 12px 10px; text-align: center;
+  }
+
+  .lane-card {
+    border: 1px solid var(--line); border-radius: 9px;
+    padding: 7px 8px 5px; margin-bottom: 8px; background: rgba(9, 17, 22, 0.55);
+  }
+  .lane-card.lane-focus { border-color: rgba(255, 209, 102, 0.42); }
+  .lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .lane-no { font-family: var(--mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--cyan); white-space: nowrap; }
+  .lane-op { font-family: var(--mono); font-size: 9px; color: var(--dim); text-align: right; }
+
+  .frame-row { padding: 4px 5px 5px; border-bottom: 1px dotted #ffffff10; border-left: 2px solid transparent; }
+  .frame-row:last-child { border-bottom: none; }
+  .frame-row.is-focus { border-left-color: var(--gold); background: rgba(255, 209, 102, 0.055); border-radius: 5px; }
+  .frame-row.is-hidden { opacity: 0.55; }
+  .fr-head { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .fr-label { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--text); min-width: 18px; }
+  .frame-row.is-focus .fr-label { color: var(--gold); }
+  .fr-pop { font-family: var(--mono); font-size: 8.5px; color: var(--muted); }
+  .badge {
+    font-family: var(--mono); font-size: 7.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 1px 4px; border-radius: 3px; border: 1px solid transparent; white-space: nowrap;
+  }
+  .badge-focus { color: var(--gold); border-color: #6b5316; background: rgba(255, 209, 102, 0.08); }
+  .badge-src { color: var(--green); border-color: #1d4a3a; }
+  .badge-hidden { color: var(--coral); border-color: #5a2a30; }
+  .fr-hex { font-family: var(--mono); font-size: 9px; line-height: 1.35; color: var(--green); word-break: break-all; margin-top: 2px; }
+  .fr-expr { font-family: var(--mono); font-size: 8.5px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  #dropveil {
+    position: fixed; inset: 0; z-index: 40; pointer-events: none;
+    border: 2px dashed var(--cyan); background: rgba(3, 10, 13, 0.55);
+    opacity: 0; transition: opacity .12s ease;
+  }
+  #dropveil.on { opacity: 1; }
+</style>
+</head>
+<body data-bitwave-status="empty" data-bitwave-viewer-ready="false">
+<div id="stage" aria-hidden="true"></div>
+<div id="fallback" hidden></div>
+<div id="dropveil" aria-hidden="true"></div>
+
+<aside id="hud">
+  <h1>BitWave → Sphere</h1>
+  <div class="sub">Read-only display sink. A <b>.bitwave</b> project or <b>#bw=</b> share link becomes nine z-stacked plates in the hollow vessel. No editing, no round-trip, no network.</div>
+
+  <div class="lbl"><span>Provenance</span><span class="ro">read-only</span></div>
+  <div id="provenance">No BitWave project loaded.</div>
+  <div id="status" role="status">Empty — import a project, drop a file, or load the canonical demo.</div>
+
+  <div class="lbl"><span>Import</span><span class="ro">paste · file · drop</span></div>
+  <textarea id="paste" spellcheck="false" placeholder="Paste a .bitwave JSON document or a BitWave share link (#bw=…)"></textarea>
+  <div class="row" style="margin-top:5px">
+    <button id="btnImport">Import</button>
+    <button id="btnFile">File…</button>
+    <button id="btnCanon">Canonical demo</button>
+    <button id="btnClear">Clear</button>
+    <input type="file" id="fileInput" accept=".json,.bitwave,application/json,text/plain" hidden />
+  </div>
+
+  <div class="lbl"><span>View</span><span class="ro">quiet by default</span></div>
+  <div class="row">
+    <button id="btnIso" class="on">Iso</button>
+    <button id="btnFront">Front</button>
+    <button id="btnVessel" class="on">Vessel</button>
+    <button id="btnScan">Scan off</button>
+  </div>
+
+  <div class="lbl"><span>Warnings</span><span class="ro">textual</span></div>
+  <div id="warnings" class="warns">none</div>
+
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>data ink</span>
+    <span><i style="background:var(--cyan)"></i>frames / vessel</span>
+    <span><i style="background:var(--gold)"></i>focused frame</span>
+    <span><i style="background:var(--coral)"></i>hidden frame</span>
+  </div>
+</aside>
+
+<aside id="inspector">
+  <div class="insp-head"><h2>Frames</h2><span id="inspector-sub">no lanes</span></div>
+  <div id="laneCards"><div class="insp-empty">No frames loaded.</div></div>
+</aside>
+
+<pre id="bitwave-viewer-state" data-schema-version="1" hidden></pre>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/OrbitControls.js"></script>
+<script src="../js/bitwave-import.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // =========================================================================
+  // Frozen constants
+  // =========================================================================
+  var VIEWER_SCHEMA_VERSION = 1;
+  var CANONICAL_NAME = 'canonical-vectors.bitwave.json';
+  var ORIGINS = ['demo', 'fragment', 'paste', 'file', 'api', 'none'];
+
+  // Embedded copy of spike/fixtures/canonical-vectors.bitwave.json — the quiet
+  // default demo so the page works from file:// with zero network.
+  var CANONICAL_FIXTURE = {
+    schema: 3,
+    app: 'bitwave',
+    savedAt: '2026-11-09T00:00:00.000Z',
+    N: 64,
+    view: {
+      lane: '1',
+      view3d: false,
+      split3d: false,
+      splitPair: ['1', '2'],
+      activePane: 0,
+      lfoMode: 'rotcw',
+      lfoRate: 4
+    },
+    lanes: {
+      '1': {
+        a: '8ADEFEDA85210125',
+        b: 'FFFFFFFF00000000',
+        showB: false,
+        binop: 'xor',
+        edit: 'a',
+        seededB: false,
+        lfoB: '0',
+        colA: -1,
+        colB: -1,
+        focus: 'z',
+        frameVis: { a: true, b: true, z: true }
+      },
+      '2': {
+        a: '0123456789ABCDEF',
+        b: 'FEDCBA9876543210',
+        showB: true,
+        binop: 'xor',
+        edit: 'a',
+        seededB: true,
+        lfoB: '0',
+        colA: -1,
+        colB: -1,
+        focus: 'a',
+        frameVis: { a: true, b: true, z: true }
+      },
+      '3': {
+        a: 'F0F0F0F0F0F0F0F0',
+        b: '0F0F0F0F0F0F0F0F',
+        showB: false,
+        binop: 'and',
+        edit: 'b',
+        seededB: true,
+        lfoB: '0',
+        colA: -1,
+        colB: -1,
+        focus: 'z',
+        frameVis: { a: true, b: true, z: true }
+      }
+    },
+    routes: [],
+    parked: {}
+  };
+
+  // =========================================================================
+  // DOM
+  // =========================================================================
+  function $(id) { return document.getElementById(id); }
+  var dom = {
+    stage: $('stage'),
+    fallback: $('fallback'),
+    dropveil: $('dropveil'),
+    provenance: $('provenance'),
+    status: $('status'),
+    warnings: $('warnings'),
+    paste: $('paste'),
+    fileInput: $('fileInput'),
+    laneCards: $('laneCards'),
+    inspectorSub: $('inspector-sub'),
+    statePre: $('bitwave-viewer-state'),
+    btnImport: $('btnImport'),
+    btnFile: $('btnFile'),
+    btnCanon: $('btnCanon'),
+    btnClear: $('btnClear'),
+    btnIso: $('btnIso'),
+    btnFront: $('btnFront'),
+    btnVessel: $('btnVessel'),
+    btnScan: $('btnScan')
+  };
+
+  // =========================================================================
+  // Viewer state — the frozen machine contract
+  // =========================================================================
+  var viewerState = {
+    schemaVersion: VIEWER_SCHEMA_VERSION,
+    ready: false,
+    status: 'empty',
+    origin: 'none',
+    import: null,
+    error: null,
+    render: null,
+    scan: false
+  };
+  var cameraView = 'iso';
+
+  function cloneState() { return JSON.parse(JSON.stringify(viewerState)); }
+
+  function publish() {
+    try {
+      dom.statePre.textContent = JSON.stringify(viewerState);
+    } catch (e) {
+      dom.statePre.textContent = '{"schemaVersion":1,"ready":false,"status":"error","origin":"none","import":null,"error":{"code":"E_BITWAVE_INPUT","message":"state serialisation failed"},"render":null,"scan":false}';
+    }
+    document.body.setAttribute('data-bitwave-viewer-ready', viewerState.ready ? 'true' : 'false');
+    document.body.setAttribute('data-bitwave-status', viewerState.status);
+    document.body.setAttribute('data-bitwave-origin', viewerState.origin);
+    document.body.setAttribute('data-bitwave-view', cameraView);
+    document.body.setAttribute('data-bitwave-scan', viewerState.scan ? 'on' : 'off');
+    try {
+      window.dispatchEvent(new CustomEvent('bitwave-viewer:change', { detail: cloneState() }));
+    } catch (e2) { /* CustomEvent is always available in target browsers */ }
+  }
+
+  // =========================================================================
+  // Shared import module (js/bitwave-import.js)
+  // =========================================================================
+  function importModule() {
+    return (window.Harmony && window.Harmony.BitWaveImport) ? window.Harmony.BitWaveImport : null;
+  }
+
+  function importInput(input, opts) {
+    opts = opts || {};
+    var origin = ORIGINS.indexOf(opts.origin) >= 0 && opts.origin !== 'none' ? opts.origin : 'api';
+    var moduleOpts = {};
+    if (typeof opts.name === 'string' && opts.name) moduleOpts.name = opts.name;
+    if (opts.source === 'file' || opts.source === 'link') moduleOpts.source = opts.source;
+
+    var mod = importModule();
+    var result;
+    if (!mod || typeof mod.bitwaveImport !== 'function') {
+      result = {
+        ok: false,
+        importSchemaVersion: 1,
+        error: {
+          code: 'E_BITWAVE_INPUT',
+          message: 'BitWave import module (js/bitwave-import.js) is not loaded, so nothing can be imported.',
+          hint: 'Confirm spike/bitwave-viewer.html is opened from the repository (../js/bitwave-import.js next to the page).'
+        }
+      };
+    } else {
+      try {
+        result = mod.bitwaveImport(input, moduleOpts);
+      } catch (err) {
+        result = {
+          ok: false,
+          importSchemaVersion: 1,
+          error: {
+            code: 'E_BITWAVE_INPUT',
+            message: 'BitWave import module threw while importing: ' + (err && err.message ? err.message : String(err))
+          }
+        };
+      }
+    }
+    applyResult(result, origin);
+    return result;
+  }
+
+  function failInput(error, origin) {
+    var result = { ok: false, importSchemaVersion: 1, error: error };
+    applyResult(result, origin);
+    return result;
+  }
+
+  function loadCanonical() {
+    return importInput(CANONICAL_FIXTURE, { name: CANONICAL_NAME, origin: 'demo' });
+  }
+
+  function applyResult(result, origin) {
+    if (!result || typeof result !== 'object' || result.ok !== true) {
+      var err = (result && result.error) || { code: 'E_BITWAVE_INPUT', message: 'Import failed for an unknown reason.' };
+      viewerState.status = 'error';
+      viewerState.origin = ORIGINS.indexOf(origin) >= 0 ? origin : 'api';
+      viewerState.import = null;
+      viewerState.error = {
+        code: String(err.code || 'E_BITWAVE_INPUT'),
+        message: String(err.message || 'Import failed.')
+      };
+      if (err.hint) viewerState.error.hint = String(err.hint);
+      viewerState.render = null;
+      clearScene();
+      clearInspector();
+      dom.provenance.textContent = 'BitWave import \u00B7 refused \u00B7 ' + viewerState.error.code;
+      dom.status.textContent = viewerState.error.code + ' \u00B7 ' + viewerState.error.message +
+        (viewerState.error.hint ? ' \u00B7 ' + viewerState.error.hint : '');
+      showWarnings([]);
+      publish();
+      return;
+    }
+
+    var lanes = Array.isArray(result.lanes) ? result.lanes : [];
+    var focus = result.focus || {};
+    viewerState.status = 'ok';
+    viewerState.origin = ORIGINS.indexOf(origin) >= 0 ? origin : 'api';
+    viewerState.import = result;
+    viewerState.error = null;
+    viewerState.render = {
+      lanes: lanes.length,
+      frames: lanes.length * 3,
+      width: result.width,
+      view: result.view,
+      camera: cameraView,
+      focus: {
+        lane: String(focus.lane != null ? focus.lane : (lanes[0] ? lanes[0].id : '1')),
+        frame: String(focus.frame != null ? focus.frame : 'z'),
+        label: String(focus.label != null ? focus.label : 'Z1')
+      }
+    };
+
+    try { rebuildScene(result); } catch (err2) { /* a renderer hiccup must never break the data state */ }
+    rebuildInspector(result);
+    showProvenance(result);
+    showStatusOk(result);
+    showWarnings(result.warnings);
+    publish();
+  }
+
+  function clearViewer() {
+    viewerState.status = 'empty';
+    viewerState.origin = 'none';
+    viewerState.import = null;
+    viewerState.error = null;
+    viewerState.render = null;
+    clearScene();
+    clearInspector();
+    dom.provenance.textContent = 'No BitWave project loaded.';
+    dom.status.textContent = 'Empty — import a project, drop a file, or load the canonical demo.';
+    showWarnings([]);
+    dom.paste.value = '';
+    publish();
+  }
+
+  // =========================================================================
+  // HUD text
+  // =========================================================================
+  function showProvenance(result) {
+    var prov = result.provenance || {};
+    var text = 'BitWave import \u00B7 schema ' + result.schemaVersion + ' \u00B7 ' + result.width + '-bit \u00B7 read-only';
+    if (prov.source) text += ' \u00B7 ' + prov.source;
+    if (prov.name) text += ' \u00B7 ' + prov.name;
+    dom.provenance.textContent = text;
+  }
+
+  function showStatusOk(result) {
+    var lanes = Array.isArray(result.lanes) ? result.lanes : [];
+    var focus = result.focus || {};
+    var warnings = Array.isArray(result.warnings) ? result.warnings.length : 0;
+    dom.status.textContent = 'Rendered ' + lanes.length + ' lanes \u00B7 ' + (lanes.length * 3) +
+      ' plates \u00B7 ' + result.width + '-bit \u00B7 focus lane ' + focus.lane + ' \u00B7 ' + focus.label +
+      (warnings ? ' \u00B7 ' + warnings + ' warning' + (warnings === 1 ? '' : 's') : '');
+  }
+
+  function showWarnings(warnings) {
+    var list = Array.isArray(warnings) ? warnings : [];
+    dom.warnings.textContent = '';
+    if (!list.length) { dom.warnings.textContent = 'none'; return; }
+    var ul = document.createElement('ul');
+    for (var i = 0; i < list.length; i++) {
+      var li = document.createElement('li');
+      li.textContent = String(list[i]);
+      ul.appendChild(li);
+    }
+    dom.warnings.appendChild(ul);
+  }
+
+  // =========================================================================
+  // Inspector (right panel)
+  // =========================================================================
+  function makeBadge(text, cls) {
+    var span = document.createElement('span');
+    span.className = 'badge ' + cls;
+    span.textContent = text;
+    return span;
+  }
+
+  function describeSource(lane, key) {
+    if (key === 'z') return null;
+    var sources = lane && lane.sources;
+    if (!sources || !sources[key]) return null;
+    var src = sources[key];
+    if (!src || !src.kind) return null;
+    if (src.kind === 'dataset') return 'dataset ' + String(src.column);
+    if (src.kind === 'route') return '\u2190 ' + String(src.from);
+    if (src.kind === 'stored') return 'stored';
+    return String(src.kind);
+  }
+
+  function frameRow(lane, key, frame, topFocus, laneFocus) {
+    var row = document.createElement('div');
+    row.className = 'frame-row';
+    var focused = String(topFocus.lane) === String(lane.id) && String(topFocus.frame) === key;
+    if (focused) row.className += ' is-focus';
+    var hidden = !!(lane.frameVis && lane.frameVis[key] === false);
+    if (hidden) row.className += ' is-hidden';
+    row.setAttribute('data-bitwave-frame', String(lane.id) + '.' + frame.label);
+    row.setAttribute('data-hex', frame.hex);
+
+    var head = document.createElement('div');
+    head.className = 'fr-head';
+    var label = document.createElement('span');
+    label.className = 'fr-label';
+    label.textContent = frame.label;
+    head.appendChild(label);
+    var pop = document.createElement('span');
+    pop.className = 'fr-pop';
+    pop.textContent = 'pop ' + frame.popcount;
+    head.appendChild(pop);
+    if (focused) head.appendChild(makeBadge('focus', 'badge-focus'));
+    else if (laneFocus && String(lane.focus) === key) head.appendChild(makeBadge('lane focus', 'badge-focus'));
+    if (hidden) head.appendChild(makeBadge('hidden', 'badge-hidden'));
+    var srcText = describeSource(lane, key);
+    if (srcText) head.appendChild(makeBadge(srcText, 'badge-src'));
+    if (lane.driven && lane.driven[key] === true) head.appendChild(makeBadge('driven', 'badge-src'));
+    row.appendChild(head);
+
+    var hex = document.createElement('div');
+    hex.className = 'fr-hex';
+    hex.textContent = frame.hex;
+    hex.title = frame.hex;
+    row.appendChild(hex);
+
+    if (key === 'z') {
+      var deriv = document.createElement('div');
+      deriv.className = 'fr-expr';
+      deriv.textContent = 'derived \u00B7 ' + lane.labels.a + ' ' + (lane.opSymbol || '') + ' ' + lane.labels.b;
+      row.appendChild(deriv);
+    } else if (lane.expressions && typeof lane.expressions[key] === 'string' && lane.expressions[key]) {
+      var expr = document.createElement('div');
+      expr.className = 'fr-expr';
+      expr.textContent = 'expr \u00B7 ' + lane.expressions[key];
+      expr.title = lane.expressions[key];
+      row.appendChild(expr);
+    }
+    return row;
+  }
+
+  function rebuildInspector(result) {
+    var lanes = Array.isArray(result.lanes) ? result.lanes : [];
+    var topFocus = result.focus || {};
+    dom.laneCards.textContent = '';
+    for (var i = 0; i < lanes.length; i++) {
+      var lane = lanes[i];
+      var id = String(lane.id);
+      var laneFocus = String(topFocus.lane) === id;
+      var section = document.createElement('section');
+      section.className = 'lane-card' + (laneFocus ? ' lane-focus' : '');
+      section.setAttribute('data-bitwave-lane', id);
+
+      var head = document.createElement('div');
+      head.className = 'lane-head';
+      var no = document.createElement('span');
+      no.className = 'lane-no';
+      no.textContent = 'LANE ' + id;
+      var op = document.createElement('span');
+      op.className = 'lane-op';
+      op.textContent = String(lane.op || '').toUpperCase() + ' ' + (lane.opSymbol || '') + ' \u2192 ' + lane.labels.z;
+      head.appendChild(no);
+      head.appendChild(op);
+      section.appendChild(head);
+
+      var order = ['a', 'z', 'b']; // far -> middle -> near, matching the plate stack
+      for (var k = 0; k < order.length; k++) {
+        var key = order[k];
+        var frame = lane.frames && lane.frames[key];
+        if (!frame) continue;
+        section.appendChild(frameRow(lane, key, frame, topFocus, laneFocus));
+      }
+      dom.laneCards.appendChild(section);
+    }
+    if (!lanes.length) {
+      var empty = document.createElement('div');
+      empty.className = 'insp-empty';
+      empty.textContent = 'No frames loaded.';
+      dom.laneCards.appendChild(empty);
+    }
+    dom.inspectorSub.textContent = lanes.length + ' lanes \u00D7 3 frames \u00B7 ' + result.width + '-bit \u00B7 ' +
+      (result.provenance && result.provenance.source ? result.provenance.source : 'import');
+  }
+
+  function clearInspector() {
+    dom.laneCards.textContent = '';
+    var empty = document.createElement('div');
+    empty.className = 'insp-empty';
+    empty.textContent = 'No frames loaded.';
+    dom.laneCards.appendChild(empty);
+    dom.inspectorSub.textContent = 'no lanes';
+  }
+
+  // =========================================================================
+  // three.js stage
+  // =========================================================================
+  var VIEW_H = 8.6;
+  var PLATE_W = 2.0;
+  var PLATE_H = 1.45;
+  var INSET = 0.10;
+  var DEPTH = 0.62;
+  var LANE_X = [-3.22, 0, 3.22];
+  var VESSEL_R = 4.3;
+
+  var scene = null;
+  var camera = null;
+  var renderer = null;
+  var controls = null;
+  var vesselGroup = null;
+  var laneRoot = null;
+  var sceneOk = false;
+  var vesselOn = true;
+  var plates = [];
+  var scanLines = [];
+
+  function showFallback(message) {
+    dom.fallback.hidden = false;
+    dom.fallback.textContent = '';
+    var b = document.createElement('div');
+    b.textContent = '3D stage unavailable';
+    b.style.color = '#ffd166';
+    b.style.marginBottom = '6px';
+    var p = document.createElement('div');
+    p.textContent = message + ' The import, hidden state and inspector still work in text-only mode.';
+    dom.fallback.appendChild(b);
+    dom.fallback.appendChild(p);
+  }
+
+  function lineMaterial(color, opacity) {
+    return new THREE.LineBasicMaterial({
+      color: color, transparent: true, opacity: opacity,
+      depthWrite: false, depthTest: false
+    });
+  }
+
+  function polyline(points, color, opacity) {
+    return new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMaterial(color, opacity));
+  }
+
+  function rectPoints(w, h, z) {
+    var hw = w / 2, hh = h / 2;
+    return [
+      new THREE.Vector3(-hw, -hh, z || 0),
+      new THREE.Vector3(hw, -hh, z || 0),
+      new THREE.Vector3(hw, hh, z || 0),
+      new THREE.Vector3(-hw, hh, z || 0),
+      new THREE.Vector3(-hw, -hh, z || 0)
+    ];
+  }
+
+  function circlePoints(radius, segments, plane) {
+    var pts = [];
+    for (var i = 0; i <= segments; i++) {
+      var a = (i / segments) * Math.PI * 2;
+      var c = Math.cos(a) * radius;
+      var s = Math.sin(a) * radius;
+      if (plane === 'xz') pts.push(new THREE.Vector3(c, 0, s));
+      else if (plane === 'yz') pts.push(new THREE.Vector3(0, c, s));
+      else pts.push(new THREE.Vector3(c, s, 0));
+    }
+    return pts;
+  }
+
+  function addCircle(group, radius, color, opacity, plane, segments) {
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(circlePoints(radius, segments || 140, plane)),
+      lineMaterial(color, opacity)
+    ));
+  }
+
+  function addGlobe(group, radius, color, opacity, latCount, lonCount) {
+    var i, a;
+    for (i = 1; i < latCount; i++) {
+      var phi = Math.PI * i / latCount;
+      var ringR = radius * Math.sin(phi);
+      var y = radius * Math.cos(phi);
+      var lat = [];
+      for (a = 0; a <= 72; a++) {
+        var t = (a / 72) * Math.PI * 2;
+        lat.push(new THREE.Vector3(ringR * Math.cos(t), y, ringR * Math.sin(t)));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lat), lineMaterial(color, opacity)));
+    }
+    for (i = 0; i < lonCount; i++) {
+      var th = Math.PI * i / lonCount;
+      var lon = [];
+      for (a = 0; a <= 72; a++) {
+        var u = (a / 72) * Math.PI * 2;
+        lon.push(new THREE.Vector3(
+          radius * Math.cos(u) * Math.cos(th),
+          radius * Math.sin(u),
+          radius * Math.cos(u) * Math.sin(th)
+        ));
+      }
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lon), lineMaterial(color, opacity * 0.8)));
+    }
+  }
+
+  function makeLabel(text, colorCss, worldHeight, opacity) {
+    var pad = 8;
+    var fontPx = 44;
+    var font = '600 ' + fontPx + 'px ui-monospace, Consolas, "Cascadia Mono", monospace';
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    ctx.font = font;
+    var measured = ctx.measureText(text);
+    canvas.width = Math.max(2, Math.ceil(measured.width + pad * 2));
+    canvas.height = fontPx + pad * 2;
+    ctx = canvas.getContext('2d');
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = colorCss;
+    ctx.globalAlpha = opacity == null ? 0.9 : opacity;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 1);
+
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthWrite: false, depthTest: false
+    }));
+    sprite.scale.set(worldHeight * (canvas.width / canvas.height), worldHeight, 1);
+    return sprite;
+  }
+
+  function buildVessel() {
+    vesselGroup = new THREE.Group();
+    scene.add(vesselGroup);
+
+    var shell = new THREE.Group();
+    vesselGroup.add(shell);
+    addGlobe(shell, 1, 0x2fbfd4, 0.042, 7, 10);
+    addCircle(shell, 1, 0x4df3dd, 0.14, 'xy', 180);
+    addCircle(shell, 1, 0x4df3dd, 0.045, 'xz', 120);
+    addCircle(shell, 1, 0x4df3dd, 0.034, 'yz', 120);
+    shell.scale.setScalar(VESSEL_R);
+
+    var cavity = new THREE.Group();
+    vesselGroup.add(cavity);
+    addGlobe(cavity, 1, 0xff6b7a, 0.045, 4, 6);
+    addCircle(cavity, 1, 0xff6b7a, 0.07, 'xy', 120);
+    cavity.scale.setScalar(VESSEL_R * 0.618);
+  }
+
+  function fitCamera() {
+    if (!renderer || !camera) return;
+    var w = Math.max(1, window.innerWidth);
+    var h = Math.max(1, window.innerHeight);
+    var aspect = w / h;
+    var halfH = VIEW_H / 2;
+    camera.left = -halfH * aspect;
+    camera.right = halfH * aspect;
+    camera.top = halfH;
+    camera.bottom = -halfH;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+
+  function setView(view, doPublish) {
+    var v = view === 'front' ? 'front' : 'iso';
+    cameraView = v;
+    if (sceneOk && camera) {
+      if (v === 'front') camera.position.set(0, 0.15, 14);
+      else camera.position.set(4.8, 3.0, 6.4);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(0, 0, 0);
+      if (controls) {
+        controls.target.set(0, 0, 0);
+        controls.update();
+      }
+    }
+    dom.btnIso.classList.toggle('on', v === 'iso');
+    dom.btnFront.classList.toggle('on', v === 'front');
+    if (viewerState.render) viewerState.render.camera = v;
+    if (doPublish !== false) publish();
+  }
+
+  function setVessel(on) {
+    vesselOn = !!on;
+    if (vesselGroup) vesselGroup.visible = vesselOn;
+    dom.btnVessel.classList.toggle('on', vesselOn);
+    dom.btnVessel.textContent = vesselOn ? 'Vessel on' : 'Vessel off';
+  }
+
+  function syncScanUi() {
+    dom.btnScan.classList.toggle('on', viewerState.scan);
+    dom.btnScan.textContent = viewerState.scan ? 'Scan on' : 'Scan off';
+    for (var i = 0; i < scanLines.length; i++) scanLines[i].line.visible = viewerState.scan;
+  }
+
+  function setScan(on) {
+    viewerState.scan = !!on;
+    syncScanUi();
+    publish();
+  }
+
+  function initStage() {
+    try {
+      if (typeof THREE === 'undefined' || !THREE || !THREE.WebGLRenderer) {
+        throw new Error('three.js failed to load from ../vendor/three.min.js.');
+      }
+      scene = new THREE.Scene();
+      camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 300);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight));
+      renderer.domElement.setAttribute('aria-hidden', 'true');
+      dom.stage.appendChild(renderer.domElement);
+
+      if (THREE.OrbitControls) {
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.085;
+        controls.enablePan = false;
+        controls.minZoom = 0.6;
+        controls.maxZoom = 2.6;
+        controls.rotateSpeed = 0.7;
+        controls.target.set(0, 0, 0);
+      }
+
+      buildVessel();
+      laneRoot = new THREE.Group();
+      scene.add(laneRoot);
+
+      sceneOk = true;
+      fitCamera();
+      setView('iso', false);
+      setVessel(true);
+      window.addEventListener('resize', fitCamera);
+      requestAnimationFrame(frame);
+    } catch (err) {
+      sceneOk = false;
+      showFallback(err && err.message ? err.message : String(err));
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Monotone cubic Hermite spline — same shape rule as BitWave's spline.ts
+  // (Fritsch–Butland interior weights, zero end tangents; cannot overshoot).
+  // -------------------------------------------------------------------------
+  function buildSpline(xs, ys) {
+    var n = xs.length;
+    var h = new Array(n - 1);
+    var d = new Array(n - 1);
+    var m = new Array(n);
+    var i;
+    for (i = 0; i < n - 1; i++) {
+      h[i] = xs[i + 1] - xs[i];
+      d[i] = h[i] === 0 ? 0 : (ys[i + 1] - ys[i]) / h[i];
+    }
+    m[0] = 0;
+    m[n - 1] = 0;
+    for (i = 1; i < n - 1; i++) {
+      if (d[i - 1] * d[i] <= 0) {
+        m[i] = 0;
+      } else {
+        var w1 = 2 * h[i] + h[i - 1];
+        var w2 = h[i] + 2 * h[i - 1];
+        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
+      }
+    }
+    return { xs: xs, ys: ys, m: m, h: h, n: n };
+  }
+
+  function evalSpline(sp, x) {
+    var xs = sp.xs, ys = sp.ys, m = sp.m, h = sp.h, n = sp.n;
+    if (x <= xs[0]) return ys[0];
+    if (x >= xs[n - 1]) return ys[n - 1];
+    var i = 0;
+    while (i < n - 2 && x > xs[i + 1]) i++;
+    var t = (x - xs[i]) / h[i];
+    var t2 = t * t;
+    var t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i]
+      + (t3 - 2 * t2 + t) * h[i] * m[i]
+      + (-2 * t3 + 3 * t2) * ys[i + 1]
+      + (t3 - t2) * h[i] * m[i + 1];
+  }
+
+  // -------------------------------------------------------------------------
+  // Plates
+  // -------------------------------------------------------------------------
+  function stackEdges() {
+    var hw = PLATE_W / 2;
+    var hh = PLATE_H / 2;
+    var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+    var pts = [];
+    for (var i = 0; i < corners.length; i++) {
+      pts.push(new THREE.Vector3(corners[i][0], corners[i][1], -DEPTH));
+      pts.push(new THREE.Vector3(corners[i][0], corners[i][1], DEPTH));
+    }
+    var line = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      lineMaterial(0x2a8f86, 0.10)
+    );
+    line.renderOrder = 5;
+    return line;
+  }
+
+  function buildPlate(lane, key, frame, focused, visible) {
+    var g = new THREE.Group();
+    g.position.z = key === 'a' ? -DEPTH : (key === 'z' ? 0 : DEPTH);
+
+    // appearance is a monotonic function of depth: far is dimmer, near is full
+    var depthAlpha = key === 'a' ? 0.62 : (key === 'z' ? 1 : 0.86);
+    var alpha = visible ? depthAlpha : 0.18;
+    var frameColor = focused ? 0xffd166 : 0x8ff7ee;
+    var splineColor = focused ? 0xffd166 : 0x34d399;
+    var glowColor = focused ? 0xffb703 : 0x22c55e;
+    var badgeColor = visible ? (focused ? '#ffd166' : (key === 'a' ? '#6f8f86' : '#9fe9ee')) : '#546a71';
+
+    var w = PLATE_W;
+    var h = PLATE_H;
+    var pw = w * (1 - 2 * INSET);
+    var ph = h * (1 - 2 * INSET);
+    var nibbles = Array.isArray(frame.nibbles) ? frame.nibbles : [];
+    var n = nibbles.length;
+    var orderBase = 10 + (key === 'a' ? 0 : key === 'z' ? 10 : 20);
+
+    // faint plate fill so the spline reads over the vessel lines
+    var fill = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({
+        color: 0x061016, transparent: true, opacity: 0.17 * (visible ? 1 : 0.35),
+        depthWrite: false, depthTest: false
+      })
+    );
+    fill.position.z = -0.006;
+    g.add(fill);
+
+    // plate frame + plot rect
+    g.add(polyline(rectPoints(w, h, 0), frameColor, (focused ? 0.85 : 0.42) * alpha));
+    g.add(polyline(rectPoints(pw, ph, 0.002), 0x6ee7a0, 0.16 * alpha));
+
+    // nibble column ticks (fewer for dense widths)
+    if (n > 0) {
+      var step = n <= 32 ? 1 : Math.ceil(n / 32);
+      var colPos = [];
+      for (var j = 0; j < n; j += step) {
+        var cx = -pw / 2 + ((j + 0.5) / n) * pw;
+        colPos.push(cx, -ph / 2, 0.001, cx, ph / 2, 0.001);
+      }
+      var tickGeo = new THREE.BufferGeometry();
+      tickGeo.setAttribute('position', new THREE.Float32BufferAttribute(colPos, 3));
+      g.add(new THREE.LineSegments(tickGeo, lineMaterial(0x6ee7a0, 0.05 * alpha)));
+    }
+
+    // monotone-cubic spline through nibble values
+    if (n > 1) {
+      var xs = [];
+      var ys = [];
+      for (var k = 0; k < n; k++) {
+        xs.push(-pw / 2 + ((k + 0.5) / n) * pw);
+        ys.push(-ph / 2 + (Number(nibbles[k]) / 15) * ph);
+      }
+      var sp = buildSpline(xs, ys);
+      var samples = Math.max(64, Math.min(420, n * 6));
+      var pts = [];
+      for (var s = 0; s <= samples; s++) {
+        var x = xs[0] + (s / samples) * (xs[n - 1] - xs[0]);
+        pts.push(new THREE.Vector3(x, evalSpline(sp, x), 0));
+      }
+      var curve = new THREE.CatmullRomCurve3(pts);
+      var tubeSeg = Math.max(48, Math.min(240, samples));
+
+      var glow = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, tubeSeg, 0.011, 5, false),
+        new THREE.MeshBasicMaterial({
+          color: glowColor, transparent: true, opacity: 0.16 * alpha,
+          depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
+        })
+      );
+      glow.position.z = 0.004;
+      g.add(glow);
+
+      var core = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, tubeSeg, 0.0045, 5, false),
+        new THREE.MeshBasicMaterial({
+          color: splineColor, transparent: true, opacity: 0.95 * alpha,
+          depthWrite: false, depthTest: false
+        })
+      );
+      core.position.z = 0.005;
+      g.add(core);
+    }
+
+    // nibble dots only when there is room (<= 32 nibbles = width <= 128)
+    if (n > 0 && n <= 32) {
+      var dotGeo = new THREE.SphereGeometry(0.011, 8, 8);
+      var dotMat = new THREE.MeshBasicMaterial({
+        color: focused ? 0xfff1c2 : 0xbfffe8, transparent: true,
+        opacity: 0.85 * alpha, depthWrite: false, depthTest: false
+      });
+      for (var d = 0; d < n; d++) {
+        var dot = new THREE.Mesh(dotGeo, dotMat);
+        dot.position.set(
+          -pw / 2 + ((d + 0.5) / n) * pw,
+          -ph / 2 + (Number(nibbles[d]) / 15) * ph,
+          0.006
+        );
+        g.add(dot);
+      }
+    }
+
+    // frame badge (global label, e.g. A / Z1 / B)
+    var badge = makeLabel(frame.label, badgeColor, 0.13, 0.92);
+    badge.position.set(-w / 2 + 0.12, h / 2 - 0.11, 0.02);
+    g.add(badge);
+
+    // scan line (hidden unless scan mode is on)
+    var scanLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, -ph / 2, 0.02),
+        new THREE.Vector3(0, ph / 2, 0.02)
+      ]),
+      lineMaterial(0xffd166, 0.55)
+    );
+    scanLine.visible = viewerState.scan;
+    g.add(scanLine);
+    scanLines.push({ line: scanLine, pw: pw });
+
+    g.traverse(function (o) {
+      if (o.isLine || o.isMesh || o.isSprite) o.renderOrder = orderBase + (o.isSprite ? 5 : 0);
+    });
+    return g;
+  }
+
+  function disposeGroup(group) {
+    if (!group) return;
+    var kids = group.children.slice();
+    for (var i = kids.length - 1; i >= 0; i--) {
+      var child = kids[i];
+      group.remove(child);
+      child.traverse(function (o) {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (o.material.map) o.material.map.dispose();
+          o.material.dispose();
+        }
+      });
+    }
+  }
+
+  function clearScene() {
+    plates.length = 0;
+    scanLines.length = 0;
+    if (sceneOk && laneRoot) disposeGroup(laneRoot);
+    if (vesselGroup) vesselGroup.scale.setScalar(1);
+  }
+
+  function rebuildScene(result) {
+    if (!sceneOk || !laneRoot) return;
+    disposeGroup(laneRoot);
+    plates.length = 0;
+    scanLines.length = 0;
+
+    var lanes = Array.isArray(result.lanes) ? result.lanes : [];
+    var topFocus = result.focus || {};
+    for (var li = 0; li < lanes.length; li++) {
+      var lane = lanes[li];
+      var laneGroup = new THREE.Group();
+      laneGroup.position.x = LANE_X[li] || 0;
+      var laneFocus = String(topFocus.lane) === String(lane.id);
+
+      // stack label: e.g. "LANE 1 · XOR → Z1"
+      var label = makeLabel(
+        'LANE ' + lane.id + ' \u00B7 ' + String(lane.op || '').toUpperCase() + ' \u2192 ' + lane.labels.z,
+        laneFocus ? '#ffd166' : '#9fe9ee',
+        0.15, 0.85
+      );
+      label.position.set(0, PLATE_H / 2 + 0.32, 0);
+      laneGroup.add(label);
+
+      laneGroup.add(stackEdges());
+
+      var order = ['a', 'z', 'b']; // far -> middle -> near
+      for (var fi = 0; fi < order.length; fi++) {
+        var key = order[fi];
+        var frame = lane.frames && lane.frames[key];
+        if (!frame) continue;
+        var visible = !(lane.frameVis && lane.frameVis[key] === false);
+        var focused = laneFocus && String(topFocus.frame) === key;
+        laneGroup.add(buildPlate(lane, key, frame, focused, visible));
+      }
+      laneRoot.add(laneGroup);
+    }
+    syncScanUi();
+  }
+
+  // =========================================================================
+  // Render loop — quiet by default; scan mode adds a slow line + vessel breath
+  // =========================================================================
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!sceneOk || !renderer) return;
+    if (viewerState.scan) {
+      var scanT = ((now || 0) * 0.00005) % 1;
+      for (var i = 0; i < scanLines.length; i++) {
+        var rec = scanLines[i];
+        var x = -rec.pw / 2 + scanT * rec.pw;
+        var arr = rec.line.geometry.attributes.position.array;
+        arr[0] = x;
+        arr[3] = x;
+        rec.line.geometry.attributes.position.needsUpdate = true;
+      }
+      if (vesselGroup) vesselGroup.scale.setScalar(1 + Math.sin((now || 0) * 0.0006) * 0.006);
+    } else if (vesselGroup && vesselGroup.scale.x !== 1) {
+      vesselGroup.scale.setScalar(1);
+    }
+    if (controls) controls.update();
+    renderer.render(scene, camera);
+  }
+
+  // =========================================================================
+  // Input paths: paste, file, drag-drop
+  // =========================================================================
+  function importFile(file) {
+    if (!file) return;
+    try {
+      var reader = new FileReader();
+      reader.onload = function () {
+        importInput(String(reader.result == null ? '' : reader.result), { name: file.name, origin: 'file' });
+        dom.paste.value = '';
+      };
+      reader.onerror = function () {
+        failInput({ code: 'E_BITWAVE_INPUT', message: 'Could not read file ' + file.name }, 'file');
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      failInput({ code: 'E_BITWAVE_INPUT', message: 'Could not read file ' + file.name }, 'file');
+    }
+  }
+
+  function wireUi() {
+    dom.btnImport.addEventListener('click', function () {
+      importInput(dom.paste.value, { origin: 'paste' });
+    });
+    dom.btnFile.addEventListener('click', function () { dom.fileInput.click(); });
+    dom.fileInput.addEventListener('change', function () {
+      var files = dom.fileInput.files;
+      if (files && files.length) importFile(files[0]);
+      dom.fileInput.value = '';
+    });
+    dom.btnCanon.addEventListener('click', loadCanonical);
+    dom.btnClear.addEventListener('click', clearViewer);
+    dom.btnIso.addEventListener('click', function () { setView('iso'); });
+    dom.btnFront.addEventListener('click', function () { setView('front'); });
+    dom.btnVessel.addEventListener('click', function () { setVessel(!vesselOn); });
+    dom.btnScan.addEventListener('click', function () { setScan(!viewerState.scan); });
+
+    dom.paste.addEventListener('keydown', function (ev) {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+        ev.preventDefault();
+        importInput(dom.paste.value, { origin: 'paste' });
+      }
+    });
+
+    var dragDepth = 0;
+    window.addEventListener('dragenter', function (ev) {
+      if (!ev.dataTransfer) return;
+      ev.preventDefault();
+      dragDepth++;
+      dom.dropveil.classList.add('on');
+    });
+    window.addEventListener('dragover', function (ev) {
+      if (!ev.dataTransfer) return;
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'copy';
+    });
+    window.addEventListener('dragleave', function (ev) {
+      if (!ev.dataTransfer) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) dom.dropveil.classList.remove('on');
+    });
+    window.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      dragDepth = 0;
+      dom.dropveil.classList.remove('on');
+      var files = ev.dataTransfer && ev.dataTransfer.files;
+      if (files && files.length) importFile(files[0]);
+    });
+  }
+
+  // =========================================================================
+  // Public bridge (frozen surface)
+  // =========================================================================
+  window.bitwaveViewer = {
+    ready: true,
+    schemaVersion: VIEWER_SCHEMA_VERSION,
+    getState: cloneState,
+    importInput: importInput,
+    loadCanonical: loadCanonical,
+    clear: clearViewer,
+    setScan: setScan
+  };
+
+  // =========================================================================
+  // Boot: fragment link > ?empty=1 > embedded canonical demo
+  // =========================================================================
+  function boot() {
+    var params = null;
+    try { params = new URLSearchParams(location.search); } catch (e) { params = null; }
+    var hash = '';
+    try { hash = location.hash || ''; } catch (e2) { hash = ''; }
+
+    if (hash.indexOf('#bw=') !== -1) {
+      importInput(location.href, { origin: 'fragment' });
+    } else if (params && params.get('empty') === '1') {
+      clearViewer();
+    } else {
+      loadCanonical();
+    }
+
+    viewerState.ready = true;
+    publish();
+    try {
+      window.dispatchEvent(new CustomEvent('bitwave-viewer:ready', { detail: cloneState() }));
+    } catch (e3) { /* no-op */ }
+  }
+
+  initStage();
+  wireUi();
+  boot();
+})();
+</script>
+</body>
+</html>

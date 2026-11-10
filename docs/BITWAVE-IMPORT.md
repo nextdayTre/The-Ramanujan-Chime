@@ -1,7 +1,9 @@
-# BitWave import → Ramanujan Sphere display (design note for the next session)
+# BitWave import → Ramanujan Sphere display
 
-**Status:** agreed direction, nothing implemented yet. No code in this repo reads or writes
-BitWave data today; this note exists so a clean session can start with the decision already made.
+**Status:** first slice **implemented** (2026-11-10). The read-only projection, the standalone
+viewer and the independent verification harness exist in this repo. It is deliberately **not**
+integrated into the instrument (no dock tab/preset) and **not** exposed as an agent tool or a
+manifest/ecosystem link yet: the spike proves the display before any host decision.
 
 ## The decision
 
@@ -25,79 +27,154 @@ BitWave (authoritative, interactive)                Ramanujan Sphere (display si
 This removes the two hard parts of the earlier idea: no duplicated register/routing core, and no
 bidirectional state contract. The only new shared surface is a **read-only data projection**.
 
-## What `bitwave_import` is
+## What shipped (2026-11-10)
 
-A small, DOM-free projection (future `js/bitwave-import.js` or a section of the agent core):
+| path | role |
+|---|---|
+| [`js/bitwave-import.js`](../js/bitwave-import.js) | the one DOM-free projection of a `.bitwave` document / `#bw=` link to frames. Dual export exactly like `js/engine.js`: browser `<script>` → `window.Harmony.BitWaveImport`, Node `require()` → the same functions. No DOM, no `eval`, no `Function`, no dependencies. |
+| [`tests/bitwave-import.test.mjs`](../tests/bitwave-import.test.mjs) | canonical-vector, schema 1/2/3 acceptance, schema >3 refusal, width, share-codec, route/parked validation, `add`/`sub` wrap, expression-as-text and determinism tests. |
+| [`spike/bitwave-viewer.html`](../spike/bitwave-viewer.html) | standalone read-only viewer: paste box, file picker, drag-drop, `#bw=` auto-import, three lane z-stacks (9 plates) in the hollow-sphere language. Works from `file://` and served; no network. |
+| [`spike/fixtures/`](../spike/fixtures/) | three real BitWave examples copied verbatim (`demo` schema 2/64-bit, `glv-3phase-orbit` schema 3/256-bit, `rallentando-drift-n32` schema 3/32-bit) plus an authored canonical-vectors fixture. |
+| [`spike/verify-bitwave-viewer.mjs`](../spike/verify-bitwave-viewer.mjs) | independent, zero-dependency CDP verifier: drives headless Chrome over `file://` **and** a temporary served root, captures screenshots, compares the rendered frames to Node's own projection. |
+| `spike/shots/16–18-*.png` | reproducible reference captures (canonical 64-bit, 256-bit, schema-refused error state). |
 
+Commands (repository root):
+
+```powershell
+node --test tests/bitwave-import.test.mjs     # projection + canonical vectors
+node spike/verify-bitwave-viewer.mjs          # CDP gate (file:// + served), no screenshots
+node spike/verify-bitwave-viewer.mjs --capture # ... and write spike/shots/16–18
 ```
-bitwaveImport(input, opts) -> { ok, project, frames, warnings } | { ok:false, error }
-```
+
+Open `spike/bitwave-viewer.html` directly (double-click / `file://`) or serve the repo and open
+`/spike/bitwave-viewer.html`. The page loads the canonical fixture by default; paste a document
+or a link, drop a file, or append `#bw=<payload>` to import a snapshot.
+
+## The projection — `bitwaveImport(input, opts)`
 
 Input is either:
-1. a raw `.bitwave` JSON document (string/object), or
-2. a BitWave share link/URL whose `#bw=` fragment is `unpadded base64url(UTF-8 JSON)` — parse the
-   fragment locally, no network.
+
+1. a raw `.bitwave` JSON document (string or object), or
+2. a BitWave share link/URL whose `#bw=` fragment is `unpadded base64url(UTF-8 JSON)` —
+   parsed locally, no network, or a bare `bw=` / bare base64url payload.
 
 Output (the only data the viewer needs):
 
 ```
 {
-  schemaVersion: 1|2|3,     // refused if > 3 (read-only open not built)
-  width: 8|16|32|64|128|256,
-  lanes: [{ id: 1|2|3, op, frames: { A, B, Z }, sources, driven, expressions? }],
-  focus: { lane, frame },
-  view: '2d'|'3d',          // provenance only; the sphere chooses its own layout
-  provenance: { source: 'file'|'link', savedAt?, name? }
+  ok: true,
+  importSchemaVersion: 1,          // projection schema
+  schemaVersion: 1 | 2 | 3,        // BitWave project schema
+  width: 8 | 16 | 32 | 64 | 128 | 256,
+  lanes: [{
+    id: 1 | 2 | 3, op, opSymbol,
+    labels: { a, b, z },           // global frame names: A/B/Z1, C/D/Z2, E/F/Z3
+    frames: { a, b, z },           // { key, label, hex, nibbles, popcount }
+    focus, frameVis,
+    sources: { a, b }, driven: { a, b },
+    expressions: { a, b },          // text only — never evaluated
+    truthCounts: [n00, n01, n10, n11]
+  }],
+  focus: { lane: 1 | 2 | 3, frame, label },
+  view: '2d' | '3d' | 'split',      // provenance only; the viewer chooses its layout
+  routes: [{ from, to, mix }],
+  provenance: { source: 'file' | 'link', name?, savedAt? },
+  warnings: []
 }
 ```
 
-Rules:
+Failure shape: `{ ok: false, importSchemaVersion: 1, error: { code, message, hint? } }` with a
+closed code set: `E_BITWAVE_INPUT`, `E_BITWAVE_JSON`, `E_BITWAVE_SHARE`, `E_BITWAVE_SCHEMA`,
+`E_BITWAVE_WIDTH`, `E_BITWAVE_PROJECT`. It never throws.
 
-- **Never evaluate anything.** `expressions` are displayed as text, never `eval`/`Function`.
-- Validate `width` against the documented set and refuse unknown/newer schemas with a clear
-  message ("BitWave schema 4 is not supported by this viewer; update the viewer or re-save as 3").
-- `savedAt`, dataset and transient log are **not** rendered; the viewer is a snapshot view.
-- The exact BitWave project key names must be read from BitWave's `src/core/project.ts` /
-  `src/core/share.ts` (schema 3) — do not invent a parallel schema. BitWave: toolset `1.1.0`,
-  state schema `1`, `.bitwave` schema `3`.
+Rules as implemented:
+
+- **Never evaluate anything.** `expressions` are schema-3 text, displayed verbatim; there is no
+  `eval`/`Function`. `Z` is the only computed value: stored `A <op> B` per lane (bitwise, or
+  BigInt `add`/`sub` wrapping mod 2^N) — the project stores A/B only, so this is the one
+  unavoidable derivation and it matches BitWave's `derive.ts`.
+- **Validate width** against the documented set (`8/16/32/64/128/256`); a width outside it is
+  `E_BITWAVE_WIDTH`. Unknown/newer schemas are refused with a clear message
+  ("BitWave schema 4 is not supported by this viewer; update the viewer or re-save as schema 3").
+- **Schema 1 fields are validated as BitWave validates them** (`app`, `N`, `lanes.*.a/b`,
+  `showB`, `binop`, `colA/colB`, route ports, one route per destination, parked bases); schema-2/3
+  additive fields (`focus`, `frameVis`, `lfoMode/Rate`, `expressions`) are lenient, exactly as in
+  `project.ts`. `dataset` is used only to label operand sources; it is **not rendered**.
+  `savedAt` and the transient log are **not rendered** — the viewer is a snapshot view.
+- `sources`/`driven` mirror BitWave's own `buildUiState` semantics: a dataset column binding
+  first, then a routed frame source (with its mix), then `stored`; `driven` is true when a route
+  drives the operand.
+- **Canonical vectors** (BitWave `AGENTS.md`, also in `design-invariants`):
+  `A=8ADEFEDA85210125`, `B=FFFFFFFF00000000`, `Z1 = A ⊕ B = 7521012585210125` (popcount 20,
+  truth counts `23 11 9 21`). `spike/fixtures/canonical-vectors.bitwave.json` is the authored
+  fixture that exercises them.
 - Provenance is shown in the UI (e.g. "BitWave import · schema 3 · 64-bit · read-only").
 
-## Display mapping (start simple)
+## The viewer
 
-- A BitWave project is **3 lanes × 3 frames = up to 9 registers**, width 8–256 bits
-  (2–64 nibbles). The sphere already has the z-plane plate language from the spike.
-- **v1 viewer layout:** three z-stacks inside the vessel — stack 1 = lane 1 (A/Z1/B), stack 2 =
-  lane 2 (C/D/Z2), stack 3 = lane 3 (E/F/Z3) — or a lane switcher with one stack if 3 reads too
-  busy. Each frame is a plate; the waveform is the nibble spline (monotone cubic, same shape rule
-  as BitWave); the project's op/focus labels are shown; the focused frame gets the accent.
-- **Quiet by default.** No breathing unless a "scan" switch is on; the viewer is ambient, not a
-  second instrument. Dense widths (128/256) may need fewer nibble dots/labels.
-- Later: a "constellation" of 9 plates, or use the sphere's A/B/C slots as lane hosts. Not now.
+- **Layout:** three lane z-stacks inside the vessel — stack 1 = lane 1 (A/Z1/B), stack 2 = lane 2
+  (C/Z2/D), stack 3 = lane 3 (E/Z3/F). Each frame is a plate; the waveform is a monotone-cubic
+  nibble spline (BitWave's shape rule); the lane op and global frame labels are shown; the
+  project's focused frame gets the gold accent; frames hidden by `frameVis` are ghosted.
+- **Quiet by default.** No breathing, no auto-rotate, no scanning unless the scan switch is on.
+  Scan adds a slow scan line and a subtle vessel breath only while enabled.
+- Dense widths (128/256) drop the nibble dots/ticks to stay readable.
+- **Machine contract** (used by the verifier): `body[data-bitwave-viewer-ready="true"]`, the
+  hidden `#bitwave-viewer-state` JSON, `window.bitwaveViewer.getState()/importInput()/
+  loadCanonical()/clear()/setScan()`, `#provenance`, `#status`, and the inspector's
+  `[data-bitwave-frame="1.A"][data-hex]` hooks.
 
-## Suggested first slice (next session)
+## Verification (canonical vectors)
 
-1. Get 2–3 real `.bitwave` example files / links from BitWave (`examples/*.bitwave.json`,
-   `node agent/cli.mjs deeplink --project …`).
-2. Write `bitwaveImport()` + tests: schema 1/2/3 accepted, schema > 3 refused, bad base64 refused,
-   width validation, canonical BitWave vectors (`A=8ADEFEDA85210125`, `B=FFFFFFFF00000000`,
-   `Z1=7521012585210125`) render exactly.
-3. Build `spike/bitwave-viewer.html` first — paste box + file drop, read-only render, no
-   instrument changes. Verify `file://` and served, no console errors.
-4. Only if it feels right: integrate as a dock tab/preset in the instrument, and expose a pure
-   `bitwave_import` tool through the existing agent layer (manifest + CLI + deeplink).
+```powershell
+node --test tests/bitwave-import.test.mjs
+node spike/verify-bitwave-viewer.mjs --capture
+```
+
+The verifier derives every expected value in Node from `js/bitwave-import.js` and
+`spike/fixtures/*.json` — never from the page under test — and checks, in headless Chrome:
+
+- default canonical fixture and a canonical `#bw=` link render lane 1 as
+  `8ADEFEDA85210125 / FFFFFFFF00000000 / 7521012585210125` (popcount 20, truth counts
+  `23 11 9 21`, focus `Z1`), with provenance "schema 3 · 64-bit · read-only";
+- the 256-bit `glv-3phase-orbit` fixture imports and matches Node exactly;
+- schema 4 is refused with `E_BITWAVE_SCHEMA`, bad `#bw=` payloads with `E_BITWAVE_SHARE`, and
+  the page stays alive/ready with no console errors;
+- the paste/API path imports, errors and recovers (`loadCanonical()`), and reloads are
+  state-deterministic;
+- `file://` and served mode both work, and the `--capture` screenshots are non-blank (>50 KB).
+
+## Suggested first slice — delivered
+
+1. **Fixtures** — three real `.bitwave` examples copied verbatim into `spike/fixtures/`, plus an
+   authored canonical-vectors document; no network dependency. ✅
+2. **`bitwaveImport()` + tests** — schema 1/2/3 accepted, schema >3 refused, bad base64 refused,
+   width validation, canonical vectors exact. ✅
+3. **`spike/bitwave-viewer.html`** — paste box + file drop + `#bw=` import, read-only render,
+   no instrument changes; verified `file://` and served, no console errors. ✅
+4. **Integrate as a dock tab/preset and expose a pure `bitwave_import` tool** through the agent
+   layer (manifest + CLI + deeplink) — **not done**; deliberately deferred until the display has
+   been judged. The projection is already DOM-free and dual-exported, so this is an additive
+   step (and would be the first place to add a `relatedTools`/ecosystem claim, after it ships
+   and is tested).
 
 ## Non-goals (deliberately)
 
 - Routing GUI in the sphere; frame→sphere parameter routing; LFO/expression simulation.
 - Bidirectional sync or live iframe/postMessage coupling (possible later; not needed for display).
-- Porting BitWave's core into `js/engine.js`, or porting the sphere into BitWave.
+- Porting BitWave's core into `js/engine.js`, or porting the sphere into BitWave. (The viewer
+  derives `Z` only; it does not re-simulate routes, LFO or expressions.)
 - Claiming the link in the agent manifest/ecosystem map until it actually ships and is tested
   (both projects' "no invented links" rule).
 
 ## Reference points
 
 - BitWave: `AGENTS.md` (three surfaces, `.bitwave` schema 3, `#bw=` codec, canonical vectors),
-  `docs/AGENT-INTERFACE.md`, `src/core/project.ts`, `src/core/share.ts`, `examples/`.
-- This repo: `spike/bitwave-routing.html` (plate/z-stack renderer language to reuse),
-  `docs/ECOSYSTEM-MAP.md` (how to describe the link honestly once live), `js/agent-core.js`
-  (where a `bitwave_import` tool would live later).
+  `docs/AGENT-INTERFACE.md`, `src/core/project.ts`, `src/core/share.ts`,
+  `src/core/agent-state.ts`, `examples/` (local checkout at
+  `C:\Users\trevor\Documents\BitWave`; not a runtime dependency — fixtures are copied).
+- This repo: `js/bitwave-import.js`, `spike/bitwave-viewer.html`,
+  [`spike/bitwave-routing.html`](../spike/bitwave-routing.html) (plate/z-stack renderer language
+  reused), [`spike/README.md`](../spike/README.md), [`docs/ECOSYSTEM-MAP.md`](./ECOSYSTEM-MAP.md)
+  (how to describe the link honestly), [`js/agent-core.js`](../js/agent-core.js) (where a
+  `bitwave_import` tool would live later — not implemented in this slice).

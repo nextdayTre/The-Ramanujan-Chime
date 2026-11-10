@@ -1,0 +1,72 @@
+{
+  "schema": 3,
+  "app": "bitwave",
+  "N": 256,
+  "view": {
+    "lane": "1",
+    "view3d": false,
+    "split3d": false,
+    "splitPair": [
+      "1",
+      "2"
+    ],
+    "activePane": 0,
+    "lfoMode": "rotcw",
+    "lfoRate": 4
+  },
+  "lanes": {
+    "1": {
+      "a": "79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+      "b": "BCACE2E99DA01887AB0102B696902325872844067F15E98DA7BBA04400B88FCB",
+      "showB": true,
+      "binop": "xor",
+      "edit": "a",
+      "seededB": false,
+      "lfoB": "0",
+      "colA": -1,
+      "colB": -1,
+      "focus": "z",
+      "frameVis": {
+        "a": true,
+        "b": true,
+        "z": true
+      }
+    },
+    "2": {
+      "a": "BCACE2E99DA01887AB0102B696902325872844067F15E98DA7BBA04400B88FCB",
+      "b": "C994B69768832BCBFF5E9AB39AE8D1D3763BBF1E531BED98FE51DE5EE84F50FB",
+      "showB": true,
+      "binop": "xor",
+      "edit": "a",
+      "seededB": false,
+      "lfoB": "0",
+      "colA": -1,
+      "colB": -1,
+      "focus": "z",
+      "frameVis": {
+        "a": true,
+        "b": true,
+        "z": true
+      }
+    },
+    "3": {
+      "a": "C994B69768832BCBFF5E9AB39AE8D1D3763BBF1E531BED98FE51DE5EE84F50FB",
+      "b": "79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798",
+      "showB": true,
+      "binop": "xor",
+      "edit": "a",
+      "seededB": false,
+      "lfoB": "0",
+      "colA": -1,
+      "colB": -1,
+      "focus": "z",
+      "frameVis": {
+        "a": true,
+        "b": true,
+        "z": true
+      }
+    }
+  },
+  "routes": [],
+  "parked": {}
+}
