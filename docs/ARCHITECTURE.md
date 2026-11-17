@@ -1,6 +1,6 @@
 # Architecture & Extension Guide
 
-This document explains how **Ramanujan's Compassion** is structured so new mathematical experiments, presets, and audio/DSP modules can be added cleanly **without HTML or CSS bloat**.
+This document explains how **The Ramanujan Sphere** is structured so new mathematical experiments, presets, and audio/DSP modules can be added cleanly **without HTML or CSS bloat**.
 
 ---
 

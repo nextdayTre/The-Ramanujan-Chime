@@ -1,4 +1,4 @@
-# Ramanujan's Compassion
+# The Ramanujan Sphere
 
 > A zero-build 3D spatial-synth visualizer and IEEE-754 float32 mathematics laboratory, drivable by LLM agents through deeplinks, an in-page bridge, a JSON CLI and an MCP stdio server.
 

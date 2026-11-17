@@ -31,7 +31,7 @@ test('tool registry is canonical: 9 pure tools in fixed order', () => {
 test('manifest identity, catalog and selectors', () => {
   const m = AgentCore.getManifest();
   assert.equal(m.id, 'ramanujan-sphere');
-  assert.equal(m.title, "Ramanujan's Compassion");
+  assert.equal(m.title, 'The Ramanujan Sphere');
   assert.equal(m.version, '1.0.0');
   assert.equal(m.schemaVersion, 1);
   assert.equal(m.tools.length, 9);
