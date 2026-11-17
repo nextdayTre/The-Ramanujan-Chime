@@ -132,7 +132,7 @@
     var base = baseUrl();
     var names = toolNames();
     var lines = [
-      'Drive "Ramanujan Sphere × Harmony Engine" (tool id: ' + TOOL_ID +
+      'Drive "Ramanujan\'s Compassion" (tool id: ' + TOOL_ID +
         ', schemaVersion ' + SCHEMA_VERSION + ', toolset ' + TOOLSET_VERSION + ').',
       '',
       'Current view (deeplink): ' + deeplink,

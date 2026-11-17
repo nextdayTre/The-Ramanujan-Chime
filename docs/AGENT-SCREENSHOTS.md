@@ -1,6 +1,6 @@
 # Agent Screenshots — reproducible reference views
 
-Reference PNGs for the agent layer of **Ramanujan Sphere × Harmony Engine**
+Reference PNGs for the agent layer of **Ramanujan's Compassion**
 (`ramanujan-sphere`, schema 1, toolset 1.0.0). Every image is produced from a
 **canonical `?static=1` deeplink** by `agent/verify-browser.mjs --capture`, so the
 same link always renders the same state (contract §4.2). The harness also runs the

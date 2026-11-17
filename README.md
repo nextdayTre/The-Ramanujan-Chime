@@ -1,4 +1,4 @@
-# Ramanujan Sphere × Harmony Engine
+# Ramanujan's Compassion
 
 An interactive **3D spatial-synth visualizer and IEEE-754 `float32` mathematical laboratory** uniting **Srinivasa Ramanujan's 1914 series for $1/\pi$**, **quadrature sine/cosine synthesis**, **hollow-sphere carrier geometry**, **the Four-Bit Orbit (`1000 ↔ 0001` binary palindrome & Quadray tetrahedron)**, **Morlet wavelets**, **Weierstrass fractals & elliptic curves**, and **finite-field cyclic order $N$ groups (`secp256k1`)**.
 

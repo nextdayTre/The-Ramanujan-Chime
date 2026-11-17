@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Ramanujan Sphere × Harmony Engine — Spatial Synth Playground</title>
+<title>Ramanujan's Compassion — Spatial Synth Playground</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%2336d6c8' stroke-width='2'/><circle cx='8' cy='8' r='3' fill='%23ff6b7a'/></svg>" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -15,9 +15,9 @@
     <span class="brand-mark" aria-hidden="true">◍</span>
     <div class="brand-copy">
       <div class="brand-title-row">
-        <h1>Ramanujan Sphere <span class="brand-x">&times;</span> Harmony Engine</h1>
+        <h1>Ramanujan's Compassion</h1>
         <span class="badge-f32">IEEE-754 FLOAT32</span>
-        <button id="btnThesis" class="pill-btn subtle" type="button" title="Read the Harmony Engine & Hollow Sphere thesis">? Concept</button>
+        <button id="btnThesis" class="pill-btn subtle" type="button" title="Read the Ramanujan's Compassion & Hollow Sphere thesis">? Concept</button>
       </div>
       <p class="premise">Constant hollow sphere carrier <em>V = 4/3&middot;&pi;(R&sup3; &minus; r&sup3;)</em> &middot; internal 2D <em>f(x)/x</em> slice &middot; conjugate phasor twins <em>P + P&#772; = 2&middot;Re(P)</em></p>
     </div>
@@ -108,8 +108,42 @@
       </div>
 
       <div class="field strobe-field" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
-        <label for="orderN">Order N (Strobe) <output id="orderNOut">19</output></label>
-        <input type="range" id="orderN" data-agent-input="orderN" min="5" max="64" step="1" value="19" data-default="19" />
+        <div class="field-head">
+          <label for="orderN">Order N (Strobe)</label>
+          <div class="auto-pills" role="group" aria-label="Order N automation">
+            <button type="button" class="auto-pill" data-auto-target="orderN" data-auto-mode="pingpong" title="Ping-Pong: sweep back and forth between two green bounds">&#8644; Ping</button>
+            <button type="button" class="auto-pill" data-auto-target="orderN" data-auto-mode="repeat" title="Repeat: sweep from green Start to red Return bound and jump back to start">&#8635; Repeat</button>
+          </div>
+          <output id="orderNOut">19</output>
+        </div>
+        <div class="range-auto-wrap" id="orderNWrap">
+          <input type="range" id="orderN" data-agent-input="orderN" min="5" max="64" step="1" value="19" data-default="19" />
+          <div class="auto-track-overlay" id="orderNMarkers" hidden>
+            <div class="auto-band"></div>
+            <div class="auto-marker marker-start" data-handle="start" title="Drag Start bound (green)"></div>
+            <div class="auto-marker marker-end" data-handle="end" title="Drag End / Return bound"></div>
+          </div>
+        </div>
+        <div class="auto-panel" id="orderNAutoBar" hidden>
+          <button type="button" class="auto-play-btn active" id="orderNAutoPlay" title="Pause / Resume Order N automation">&#10074;&#10074;</button>
+          <label class="bound-ctl" title="Start bound (green line)">
+            <i class="bound-dot green"></i>
+            <input type="number" id="orderNStart" min="5" max="64" step="1" value="10" aria-label="Order N start bound" />
+          </label>
+          <span class="auto-arrow" id="orderNAutoArrow">&harr;</span>
+          <label class="bound-ctl" title="End / Return-to-start bound">
+            <i class="bound-dot green" id="orderNEndDot"></i>
+            <input type="number" id="orderNEnd" min="5" max="64" step="1" value="48" aria-label="Order N end bound" />
+          </label>
+          <select id="orderNSpeed" class="auto-speed" aria-label="Order N sweep speed" title="Steps per second">
+            <option value="1">1/s</option>
+            <option value="2">2/s</option>
+            <option value="4" selected>4/s</option>
+            <option value="8">8/s</option>
+            <option value="16">16/s</option>
+            <option value="32">32/s</option>
+          </select>
+        </div>
         <div class="strobe-sub mono" id="orderNBadge">19/19 &middot; prime order (full cycle)</div>
       </div>
     </section>
@@ -130,8 +164,42 @@
       </div>
 
       <div class="field">
-        <label for="phaseSlider">Phase &phi; <output id="phaseOut">0&deg;</output></label>
-        <input type="range" id="phaseSlider" data-agent-input="phase" min="-180" max="180" step="1" value="0" data-default="0" />
+        <div class="field-head">
+          <label for="phaseSlider">Phase &phi;</label>
+          <div class="auto-pills" role="group" aria-label="Phase automation">
+            <button type="button" class="auto-pill" data-auto-target="phase" data-auto-mode="pingpong" title="Ping-Pong: sweep back and forth between two green bounds">&#8644; Ping</button>
+            <button type="button" class="auto-pill" data-auto-target="phase" data-auto-mode="repeat" title="Repeat: sweep from green Start to red Return bound and jump back to start">&#8635; Repeat</button>
+          </div>
+          <output id="phaseOut">0&deg;</output>
+        </div>
+        <div class="range-auto-wrap" id="phaseWrap">
+          <input type="range" id="phaseSlider" data-agent-input="phase" min="-180" max="180" step="1" value="0" data-default="0" />
+          <div class="auto-track-overlay" id="phaseMarkers" hidden>
+            <div class="auto-band"></div>
+            <div class="auto-marker marker-start" data-handle="start" title="Drag Start bound (green)"></div>
+            <div class="auto-marker marker-end" data-handle="end" title="Drag End / Return bound"></div>
+          </div>
+        </div>
+        <div class="auto-panel" id="phaseAutoBar" hidden>
+          <button type="button" class="auto-play-btn active" id="phaseAutoPlay" title="Pause / Resume Phase automation">&#10074;&#10074;</button>
+          <label class="bound-ctl" title="Start angle in degrees (green line)">
+            <i class="bound-dot green"></i>
+            <input type="number" id="phaseStart" min="-180" max="180" step="1" value="-180" aria-label="Phase start bound" />
+          </label>
+          <span class="auto-arrow" id="phaseAutoArrow">&harr;</span>
+          <label class="bound-ctl" title="End / Return-to-start angle in degrees">
+            <i class="bound-dot green" id="phaseEndDot"></i>
+            <input type="number" id="phaseEnd" min="-180" max="180" step="1" value="180" aria-label="Phase end bound" />
+          </label>
+          <select id="phaseSpeed" class="auto-speed" aria-label="Phase sweep speed" title="Degrees per second">
+            <option value="15">15&deg;/s</option>
+            <option value="30">30&deg;/s</option>
+            <option value="60" selected>60&deg;/s</option>
+            <option value="120">120&deg;/s</option>
+            <option value="180">180&deg;/s</option>
+            <option value="360">360&deg;/s</option>
+          </select>
+        </div>
         <div class="sub-field">
           <input type="number" id="phaseDeg" data-agent-input="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
           <span>deg</span>
@@ -232,13 +300,46 @@
         </div>
       </div>
 
-      <!-- Top-Right Transport, 4-Bit Orbit, Order N Strobe & Zoom Lens Toggle HUD -->
+      <!-- Top-Right Transport, 4-Bit Orbit, Order N Strobe, Zoom Lens & Display Mode HUD -->
       <div class="hud hud-right">
-        <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" data-agent-toggle="animate" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
-        <button type="button" class="hud-pill active" data-toggle="trace" id="btnTrace" data-agent-toggle="trace">Trail</button>
-        <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" data-agent-toggle="fourBitOrbit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
-        <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" data-agent-toggle="strobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
-        <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" data-agent-toggle="magnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
+        <div class="hud-row">
+          <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" data-agent-toggle="animate" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
+          <button type="button" class="hud-pill active" data-toggle="trace" id="btnTrace" data-agent-toggle="trace">Trail</button>
+          <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" data-agent-toggle="fourBitOrbit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
+          <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" data-agent-toggle="strobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
+          <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" data-agent-toggle="magnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
+        </div>
+        <div class="hud-row">
+          <span class="hud-label">View:</span>
+          <span class="popout-sync-badge" id="popoutSyncBadge" hidden>&#9679; Live Sync</span>
+          <button type="button" class="hud-pill" id="btnTheatre" title="Theatre pop-out display inside this window (T key · Esc to exit)">&#9635; Theatre</button>
+          <button type="button" class="hud-pill" id="btnFullscreen" title="Browser Fullscreen display (Shift+F · Esc to exit)">&#9974; Fullscreen</button>
+          <button type="button" class="hud-pill" id="btnPopout" title="Open live-synced Pop-Out display window">&#8599; Pop-Out</button>
+          <button type="button" class="hud-pill" id="btnHudHide" hidden title="Hide HUD overlays for pure cinema view (H key)">Hide HUD</button>
+        </div>
+      </div>
+
+      <!-- Subtle corner button to restore HUD when hidden in Theatre / Fullscreen -->
+      <button type="button" class="hud-pill hud-restore" id="btnHudRestore" hidden title="Restore HUD overlays (H key)">Show HUD [H] &middot; Esc</button>
+
+      <!-- Slim Floating Theatre / Fullscreen Quick Controls (hidden in normal studio mode) -->
+      <div id="theatreBar" class="theatre-bar" hidden>
+        <div class="tb-ctl">
+          <span class="tb-lbl">N</span>
+          <input type="range" id="theatreOrderN" min="5" max="64" step="1" value="19" aria-label="Theatre Order N" />
+          <b id="theatreOrderNOut" class="mono tb-val gold">19</b>
+          <button type="button" class="auto-pill" data-auto-target="orderN" data-auto-mode="pingpong" title="Order N Ping-Pong">&#8644;</button>
+          <button type="button" class="auto-pill" data-auto-target="orderN" data-auto-mode="repeat" title="Order N Repeat">&#8635;</button>
+        </div>
+        <div class="tb-sep"></div>
+        <div class="tb-ctl">
+          <span class="tb-lbl">&phi;</span>
+          <input type="range" id="theatrePhase" min="-180" max="180" step="1" value="0" aria-label="Theatre Phase" />
+          <b id="theatrePhaseOut" class="mono tb-val">0&deg;</b>
+          <button type="button" class="auto-pill" data-auto-target="phase" data-auto-mode="pingpong" title="Phase Ping-Pong">&#8644;</button>
+          <button type="button" class="auto-pill" data-auto-target="phase" data-auto-mode="repeat" title="Phase Repeat">&#8635;</button>
+        </div>
+        <button type="button" class="hud-pill tb-exit" id="btnExitTheatre" title="Exit Theatre / Fullscreen (Esc)">&#10005; Exit</button>
       </div>
 
       <!-- Floating Four-Bit Orbit & Quadray Palindrome HUD Card -->

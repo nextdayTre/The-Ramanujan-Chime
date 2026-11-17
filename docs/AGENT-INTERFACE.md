@@ -1,6 +1,6 @@
 # Agent Interface Contract — `ramanujan-sphere` v1 (toolset 1.0.0)
 
-This is the **normative** contract for the agent layer of **Ramanujan Sphere × Harmony Engine**.
+This is the **normative** contract for the agent layer of **Ramanujan's Compassion**.
 `AGENTS.md` is the human/LLM onboarding; this file is the precise spec that the browser page,
 bridge, CLI, MCP server, generator and tests implement. If code and this document disagree,
 the code is wrong — fix the contract once, then every consumer.
@@ -24,7 +24,7 @@ Identity (must match across surfaces):
 | field | value |
 |---|---|
 | tool id | `ramanujan-sphere` |
-| title | `Ramanujan Sphere × Harmony Engine` |
+| title | `Ramanujan's Compassion` |
 | bridge global | `window.ramanujanSphere` |
 | hidden state element | `#ramanujan-sphere-state` |
 | window events | `ramanujan-sphere:ready`, `ramanujan-sphere:change` |
@@ -367,7 +367,7 @@ the browser harness.
 
 ```json
 {
-  "id": "ramanujan-sphere", "title": "Ramanujan Sphere × Harmony Engine",
+  "id": "ramanujan-sphere", "title": "Ramanujan's Compassion",
   "version": "1.0.0", "schemaVersion": 1,
   "description": "…what the instrument is and what agents can do…",
   "urls": { "app": "http://127.0.0.1:8080/", "manifest": "/agent/manifest.json",

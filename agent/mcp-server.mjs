@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ===== agent/mcp-server.mjs =====
-   Zero-dependency MCP stdio server for the Ramanujan Sphere x Harmony Engine
-   agent toolset (docs/AGENT-INTERFACE.md section 9).
+   Zero-dependency MCP stdio server for the Ramanujan's Compassion agent
+   toolset (docs/AGENT-INTERFACE.md section 9).
 
    Transport: newline-delimited JSON-RPC 2.0 on stdin/stdout.
    STDOUT CARRIES PROTOCOL MESSAGES ONLY — never diagnostics, never banners.

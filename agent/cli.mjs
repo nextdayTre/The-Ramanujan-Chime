@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ===== agent/cli.mjs =====
-   Zero-dependency command-line front end for the Ramanujan Sphere x Harmony
-   Engine agent toolset (docs/AGENT-INTERFACE.md section 2, 3 and 8).
+   Zero-dependency command-line front end for the Ramanujan's Compassion agent
+   toolset (docs/AGENT-INTERFACE.md section 2, 3 and 8).
 
    Nothing in this file re-implements a formula or a state projection: every
    tool result comes from the ONE shared core (js/agent-core.js, which wraps
@@ -579,7 +579,7 @@ function runSelftest() {
 /* ------------------------------------------------------------------ */
 
 const HELP_TEXT = [
-  'Ramanujan Sphere x Harmony Engine — agent CLI (toolset 1.0.0, schema 1)',
+  "Ramanujan's Compassion — agent CLI (toolset 1.0.0, schema 1)",
   '',
   'Usage:',
   '  node agent/cli.mjs <command> [flags] [--json]',

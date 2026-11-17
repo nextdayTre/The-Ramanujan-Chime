@@ -35,7 +35,7 @@
   var SCHEMA_VERSION = 1;
   var TOOLSET_VERSION = '1.0.0';
   var TOOL_ID = 'ramanujan-sphere';
-  var TOOL_TITLE = 'Ramanujan Sphere × Harmony Engine';
+  var TOOL_TITLE = "Ramanujan's Compassion";
   var TOOL_GLOBAL = 'ramanujanSphere';
   var STATE_SELECTOR = '#' + TOOL_ID + '-state';
   var EVENT_READY = TOOL_ID + ':ready';

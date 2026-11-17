@@ -85,6 +85,8 @@
   };
 
   var STATIC_MODE = /[?&]static(?:=1)?(?:&|$)/.test(location.search);
+  var IS_POPOUT = /[?&]popout=1(?:&|$)/.test(location.search);
+  var START_THEATRE = IS_POPOUT || /[?&]theatre=1(?:&|$)/.test(location.search);
   if (STATIC_MODE) {
     state.toggles.animate = false;
     state.toggles.autoRotate = false;
@@ -96,14 +98,22 @@
   var slots = null;
   var isRestoringSlot = false;
   var copyArmed = false;
+  var popoutWin = null;
+  var hasOpenerSync = false;
+  var isApplyingRemoteSync = false;
 
-  function bump() {
+  function bumpAnimated() {
     dirty++;
     if (slots && !isRestoringSlot && slots[state.activeSlot]) {
       slots[state.activeSlot] = captureSnapshot();
       syncSlotTooltips();
     }
+  }
+
+  function bump() {
+    bumpAnimated();
     if (!suppressAgentPublish) publishAgent();
+    if (!isApplyingRemoteSync && typeof sendPopoutSync === 'function') sendPopoutSync(true);
   }
   function $(id) { return document.getElementById(id); }
 
@@ -444,6 +454,13 @@
       state.ghostSlot = '';
       state.ghostPoints = [];
       state.ghostRev = (state.ghostRev || 0) + 1;
+      if (typeof setAutoMode === 'function') {
+        setAutoMode('orderN', 'off', true);
+        setAutoMode('phase', 'off', true);
+      }
+      if (typeof setTheatreMode === 'function' && !IS_POPOUT) {
+        setTheatreMode(false);
+      }
       setActiveTab('scopes');
       syncParamUI();
       syncHudToggles();
@@ -538,6 +555,10 @@
         if (out) out.textContent = d.fmt(state[d.key]);
       }
     });
+    if ($('theatreOrderN') && state.orderN != null) {
+      $('theatreOrderN').value = Math.round(state.orderN);
+      if ($('theatreOrderNOut')) $('theatreOrderNOut').textContent = String(Math.round(state.orderN));
+    }
     if ($('harmTabKOut')) $('harmTabKOut').textContent = String(Math.round(state.K));
     updateShellReadout();
   }
@@ -556,6 +577,9 @@
           state.toggles.strobeN = true;
           syncHudToggles();
         }
+        if ($('theatreOrderN')) $('theatreOrderN').value = Math.round(v);
+        if ($('theatreOrderNOut')) $('theatreOrderNOut').textContent = String(Math.round(v));
+        if (autoLanes && autoLanes.orderN) autoLanes.orderN.acc = 0;
         updateOrderNBadge();
       }
       if (d.key === 'n') updateOrderNBadge();
@@ -572,19 +596,355 @@
   });
 
   // ---- Phase Controls ----
-  function setPhaseFromDeg(deg) {
-    deg = parseFloat(deg) || 0;
+  function setPhaseFromDeg(deg, silentAgent) {
+    deg = parseFloat(deg);
+    if (!isFinite(deg)) deg = 0;
+    deg = Engine.clamp(deg, -180, 180);
     state.phaseRad = deg * Math.PI / 180;
-    $('phaseSlider').value = deg;
-    $('phaseDeg').value = deg;
-    $('phaseOut').textContent = deg.toFixed(0) + '°';
+    var disp = Math.round(deg);
+    $('phaseSlider').value = disp;
+    if (!silentAgent || document.activeElement !== $('phaseDeg')) {
+      $('phaseDeg').value = disp;
+    }
+    $('phaseOut').textContent = disp + '°';
     $('phaseRad').textContent = state.phaseRad.toFixed(4) + ' rad';
-    bump();
+    if ($('theatrePhase')) $('theatrePhase').value = disp;
+    if ($('theatrePhaseOut')) $('theatrePhaseOut').textContent = disp + '°';
+    if (silentAgent) {
+      bumpAnimated();
+    } else {
+      if (autoLanes && autoLanes.phase) autoLanes.phase.cursor = deg;
+      bump();
+    }
   }
   $('phaseSlider').addEventListener('input', function () { setPhaseFromDeg($('phaseSlider').value); });
   $('phaseDeg').addEventListener('input', function () { setPhaseFromDeg($('phaseDeg').value); });
   $('phaseSlider').addEventListener('dblclick', function () {
     setPhaseFromDeg(parseFloat($('phaseSlider').getAttribute('data-default')) || 0);
+  });
+
+  // ---- Ping-Pong & Repeat Automation for Order N and Phase ----
+  var autoLanes = {
+    orderN: {
+      key: 'orderN',
+      min: 5,
+      max: 64,
+      isInt: true,
+      mode: 'off',       // 'off' | 'pingpong' | 'repeat'
+      running: true,
+      start: 10,
+      end: 48,
+      speed: 4,
+      dir: 1,
+      acc: 0,
+      cursor: 19,
+      customized: false,
+      draggingUser: false,
+      sliderId: 'orderN',
+      markersId: 'orderNMarkers',
+      barId: 'orderNAutoBar',
+      playId: 'orderNAutoPlay',
+      startId: 'orderNStart',
+      endId: 'orderNEnd',
+      endDotId: 'orderNEndDot',
+      arrowId: 'orderNAutoArrow',
+      speedId: 'orderNSpeed',
+      getValue: function () { return Math.round(state.orderN || 19); },
+      setValue: function (val, silent) {
+        var iv = Math.round(Engine.clamp(val, 5, 64));
+        state.orderN = iv;
+        $('orderN').value = iv;
+        $('orderNOut').textContent = String(iv);
+        if ($('theatreOrderN')) $('theatreOrderN').value = iv;
+        if ($('theatreOrderNOut')) $('theatreOrderNOut').textContent = String(iv);
+        updateOrderNBadge();
+        if (silent) bumpAnimated(); else bump();
+      }
+    },
+    phase: {
+      key: 'phase',
+      min: -180,
+      max: 180,
+      isInt: false,
+      mode: 'off',
+      running: true,
+      start: -180,
+      end: 180,
+      speed: 60,
+      dir: 1,
+      acc: 0,
+      cursor: 0,
+      customized: false,
+      draggingUser: false,
+      sliderId: 'phaseSlider',
+      markersId: 'phaseMarkers',
+      barId: 'phaseAutoBar',
+      playId: 'phaseAutoPlay',
+      startId: 'phaseStart',
+      endId: 'phaseEnd',
+      endDotId: 'phaseEndDot',
+      arrowId: 'phaseAutoArrow',
+      speedId: 'phaseSpeed',
+      getValue: function () { return (state.phaseRad || 0) * 180 / Math.PI; },
+      setValue: function (val, silent) { setPhaseFromDeg(val, silent); }
+    }
+  };
+
+  function trackPercentCss(lane, val) {
+    var p = Engine.clamp((val - lane.min) / (lane.max - lane.min), 0, 1);
+    return 'calc(' + (p * 100).toFixed(4) + '% + ' + (8 - p * 16).toFixed(2) + 'px)';
+  }
+
+  function syncAutoLaneUI(lane) {
+    var active = lane.mode !== 'off';
+    var markersEl = $(lane.markersId);
+    var barEl = $(lane.barId);
+    var playBtn = $(lane.playId);
+    var startEl = $(lane.startId);
+    var endEl = $(lane.endId);
+    var endDot = $(lane.endDotId);
+    var arrowEl = $(lane.arrowId);
+    var speedEl = $(lane.speedId);
+
+    document.querySelectorAll('.auto-pill[data-auto-target="' + lane.key + '"]').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-auto-mode') === lane.mode);
+    });
+    if (barEl) barEl.hidden = !active;
+    if (markersEl) {
+      markersEl.hidden = !active;
+      markersEl.classList.toggle('mode-pingpong', lane.mode === 'pingpong');
+      markersEl.classList.toggle('mode-repeat', lane.mode === 'repeat');
+      markersEl.classList.toggle('dir-rev', lane.end < lane.start);
+      if (active) {
+        var lo = Math.min(lane.start, lane.end);
+        var hi = Math.max(lane.start, lane.end);
+        var pLo = Engine.clamp((lo - lane.min) / (lane.max - lane.min), 0, 1);
+        var pHi = Engine.clamp((hi - lane.min) / (lane.max - lane.min), 0, 1);
+        var band = markersEl.querySelector('.auto-band');
+        var mStart = markersEl.querySelector('.marker-start');
+        var mEnd = markersEl.querySelector('.marker-end');
+        if (band) {
+          band.style.left = trackPercentCss(lane, lo);
+          band.style.width = 'calc(' + ((pHi - pLo) * 100).toFixed(4) + '% - ' + ((pHi - pLo) * 16).toFixed(2) + 'px)';
+        }
+        if (mStart) mStart.style.left = trackPercentCss(lane, lane.start);
+        if (mEnd) mEnd.style.left = trackPercentCss(lane, lane.end);
+      }
+    }
+    if (playBtn) {
+      playBtn.classList.toggle('active', lane.running);
+      playBtn.innerHTML = lane.running ? '&#10074;&#10074;' : '&#9654;';
+    }
+    if (startEl && document.activeElement !== startEl) startEl.value = String(lane.start);
+    if (endEl && document.activeElement !== endEl) endEl.value = String(lane.end);
+    if (endDot) {
+      endDot.classList.toggle('green', lane.mode !== 'repeat');
+      endDot.classList.toggle('red', lane.mode === 'repeat');
+    }
+    if (arrowEl) {
+      arrowEl.textContent = lane.mode === 'repeat' ? '→' : '↔';
+    }
+    if (speedEl) speedEl.value = String(lane.speed);
+  }
+
+  function setAutoMode(key, mode, quiet) {
+    var lane = autoLanes[key];
+    if (!lane) return;
+    if (IS_POPOUT && hasOpenerSync && window.opener && !window.opener.closed && !isApplyingRemoteSync) {
+      sendPopoutCommand('autoMode', { key: key, mode: mode });
+      return;
+    }
+    var wasOff = lane.mode === 'off';
+    var nextMode = (lane.mode === mode) ? 'off' : mode;
+    lane.mode = nextMode;
+    if (nextMode !== 'off') {
+      lane.running = true;
+      lane.acc = 0;
+      if (wasOff && !lane.customized && key === 'orderN') {
+        var curN = lane.getValue();
+        lane.start = Math.max(lane.min, Math.min(10, curN));
+        lane.end = Math.min(lane.max, Math.max(48, curN));
+      }
+      var lo = Math.min(lane.start, lane.end);
+      var hi = Math.max(lane.start, lane.end);
+      var cur = lane.getValue();
+      if (cur < lo || cur > hi) {
+        cur = lane.start;
+        lane.setValue(cur, true);
+      }
+      lane.cursor = cur;
+      lane.dir = (lane.end >= lane.start) ? 1 : -1;
+      if (cur >= hi) lane.dir = -1;
+      else if (cur <= lo) lane.dir = 1;
+      if (key === 'orderN' && !state.toggles.strobeN && !quiet) {
+        state.toggles.strobeN = true;
+        syncHudToggles();
+        bump();
+      }
+    } else if (!quiet) {
+      publishAgent();
+    }
+    syncAutoLaneUI(lane);
+  }
+
+  function stepAutoLane(lane, dt) {
+    if (!lane || lane.mode === 'off' || !lane.running || lane.draggingUser) return false;
+    var lo = Math.min(lane.start, lane.end);
+    var hi = Math.max(lane.start, lane.end);
+    if (lane.isInt) {
+      lane.acc += dt * lane.speed;
+      var steps = Math.floor(lane.acc);
+      if (steps <= 0) return false;
+      lane.acc -= steps;
+      steps = Math.min(steps, 16);
+      var cur = lane.getValue();
+      var orig = cur;
+      if (lo === hi) {
+        cur = lo;
+      } else if (lane.mode === 'pingpong') {
+        for (var i = 0; i < steps; i++) {
+          if (cur < lo || cur > hi) {
+            cur = Engine.clamp(cur, lo, hi);
+          } else {
+            var next = cur + lane.dir;
+            if (next > hi) { lane.dir = -1; next = hi - 1; }
+            else if (next < lo) { lane.dir = 1; next = lo + 1; }
+            cur = Engine.clamp(next, lo, hi);
+          }
+        }
+      } else {
+        var rDir = lane.end >= lane.start ? 1 : -1;
+        for (var j = 0; j < steps; j++) {
+          if ((rDir > 0 && (cur < lane.start || cur >= lane.end)) ||
+              (rDir < 0 && (cur > lane.start || cur <= lane.end))) {
+            cur = lane.start;
+          } else {
+            cur += rDir;
+          }
+        }
+      }
+      if (cur !== orig) {
+        lane.setValue(cur, true);
+        return true;
+      }
+      return false;
+    }
+
+    var span = hi - lo;
+    if (span <= 0) {
+      if (Math.abs(lane.cursor - lo) > 1e-4) {
+        lane.cursor = lo;
+        lane.setValue(lo, true);
+        return true;
+      }
+      return false;
+    }
+    if (lane.mode === 'pingpong') {
+      var c = lane.cursor + lane.dir * lane.speed * dt;
+      for (var g = 0; g < 8 && (c > hi || c < lo); g++) {
+        if (c > hi) { c = hi - (c - hi); lane.dir = -1; }
+        else if (c < lo) { c = lo + (lo - c); lane.dir = 1; }
+      }
+      lane.cursor = Engine.clamp(c, lo, hi);
+    } else {
+      var delta = lane.end - lane.start;
+      var sDir = delta >= 0 ? 1 : -1;
+      var nextC = lane.cursor + sDir * lane.speed * dt;
+      if (sDir > 0 && nextC > lane.end) {
+        nextC = lane.start + ((nextC - lane.end) % Math.abs(delta));
+      } else if (sDir < 0 && nextC < lane.end) {
+        nextC = lane.start - ((lane.end - nextC) % Math.abs(delta));
+      }
+      lane.cursor = Engine.clamp(nextC, lo, hi);
+    }
+    lane.setValue(lane.cursor, true);
+    return true;
+  }
+
+  function bindAutoLaneControls(lane) {
+    var slider = $(lane.sliderId);
+    var markersEl = $(lane.markersId);
+    var playBtn = $(lane.playId);
+    var startEl = $(lane.startId);
+    var endEl = $(lane.endId);
+    var speedEl = $(lane.speedId);
+
+    if (slider) {
+      slider.addEventListener('pointerdown', function () { lane.draggingUser = true; });
+      window.addEventListener('pointerup', function () {
+        if (lane.draggingUser) {
+          lane.draggingUser = false;
+          lane.cursor = lane.getValue();
+        }
+      });
+    }
+    if (playBtn) {
+      playBtn.addEventListener('click', function () {
+        lane.running = !lane.running;
+        lane.acc = 0;
+        syncAutoLaneUI(lane);
+      });
+    }
+    function applyBound(which, raw) {
+      var v = parseFloat(raw);
+      if (!isFinite(v)) return;
+      v = Math.round(Engine.clamp(v, lane.min, lane.max));
+      lane[which] = v;
+      lane.customized = true;
+      var lo = Math.min(lane.start, lane.end);
+      var hi = Math.max(lane.start, lane.end);
+      var cur = lane.getValue();
+      if (cur < lo || cur > hi) {
+        var clamped = Engine.clamp(cur, lo, hi);
+        lane.cursor = clamped;
+        lane.setValue(clamped, false);
+      }
+      syncAutoLaneUI(lane);
+    }
+    if (startEl) startEl.addEventListener('change', function () { applyBound('start', startEl.value); });
+    if (endEl) endEl.addEventListener('change', function () { applyBound('end', endEl.value); });
+    if (speedEl) {
+      speedEl.addEventListener('change', function () {
+        var s = parseFloat(speedEl.value);
+        if (isFinite(s) && s > 0) lane.speed = s;
+      });
+    }
+    if (markersEl && slider) {
+      markersEl.querySelectorAll('.auto-marker[data-handle]').forEach(function (handleEl) {
+        handleEl.addEventListener('pointerdown', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var which = handleEl.getAttribute('data-handle');
+          function updateFromClientX(clientX) {
+            var rect = slider.getBoundingClientRect();
+            var usableLeft = rect.left + 8;
+            var usableWidth = Math.max(1, rect.width - 16);
+            var p = Engine.clamp((clientX - usableLeft) / usableWidth, 0, 1);
+            var val = Math.round(lane.min + p * (lane.max - lane.min));
+            applyBound(which, val);
+          }
+          function onMove(moveEv) { updateFromClientX(moveEv.clientX); }
+          function onUp() {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+          }
+          updateFromClientX(ev.clientX);
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+          window.addEventListener('pointercancel', onUp);
+        });
+      });
+    }
+    syncAutoLaneUI(lane);
+  }
+
+  bindAutoLaneControls(autoLanes.orderN);
+  bindAutoLaneControls(autoLanes.phase);
+  document.querySelectorAll('.auto-pill[data-auto-target]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setAutoMode(btn.getAttribute('data-auto-target'), btn.getAttribute('data-auto-mode'));
+    });
   });
 
   // ---- Formula Patch Bay ----
@@ -650,6 +1010,10 @@
   document.querySelectorAll('.hud-pill[data-toggle]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var key = btn.getAttribute('data-toggle');
+      if (IS_POPOUT && hasOpenerSync && window.opener && !window.opener.closed && !isApplyingRemoteSync) {
+        sendPopoutCommand('toggle', key);
+        return;
+      }
       state.toggles[key] = !state.toggles[key];
       syncHudToggles();
       bump();
@@ -1175,8 +1539,293 @@
     }
   }
 
+  // ---- Theatre / Fullscreen / Pop-Out Main Display Mode ----
+  var theatreMode = false;
+  var hudHidden = false;
+
+  function isFullscreenNow() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function syncDisplayModeUI() {
+    var fs = isFullscreenNow();
+    var expanded = theatreMode || fs || IS_POPOUT;
+    if (document.body) {
+      document.body.classList.toggle('theatre-mode', theatreMode || IS_POPOUT);
+      document.body.classList.toggle('is-fullscreen', fs);
+      document.body.classList.toggle('popout-mode', IS_POPOUT);
+      document.body.classList.toggle('hud-hidden', hudHidden && expanded);
+    }
+    if ($('btnTheatre')) $('btnTheatre').classList.toggle('active', theatreMode);
+    if ($('btnFullscreen')) $('btnFullscreen').classList.toggle('active', fs);
+    if ($('btnHudHide')) $('btnHudHide').hidden = !expanded;
+    if ($('btnHudRestore')) $('btnHudRestore').hidden = !(hudHidden && expanded);
+    if ($('theatreBar')) $('theatreBar').hidden = !expanded || hudHidden;
+    if ($('btnExitTheatre')) {
+      $('btnExitTheatre').textContent = (IS_POPOUT && !fs) ? '✕ Close' : '✕ Exit';
+    }
+    if ($('theatreOrderN')) $('theatreOrderN').value = Math.round(state.orderN || 19);
+    if ($('theatreOrderNOut')) $('theatreOrderNOut').textContent = String(Math.round(state.orderN || 19));
+    var pDeg = Math.round(((state.phaseRad || 0) * 180 / Math.PI));
+    if ($('theatrePhase')) $('theatrePhase').value = pDeg;
+    if ($('theatrePhaseOut')) $('theatrePhaseOut').textContent = pDeg + '°';
+  }
+
+  function setTheatreMode(on) {
+    theatreMode = !!on;
+    if (!theatreMode && !isFullscreenNow()) hudHidden = false;
+    syncDisplayModeUI();
+    requestAnimationFrame(function () { Scene3D.resize(); });
+  }
+
+  function setHudHidden(hidden) {
+    hudHidden = !!hidden;
+    syncDisplayModeUI();
+  }
+
+  function toggleFullscreen() {
+    var vp = $('viewport3d');
+    if (isFullscreenNow()) {
+      var exitFn = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exitFn) {
+        try { exitFn.call(document); } catch (e) { setTheatreMode(false); }
+      }
+      return;
+    }
+    var reqFn = vp && (vp.requestFullscreen || vp.webkitRequestFullscreen);
+    if (reqFn) {
+      try {
+        var res = reqFn.call(vp);
+        if (res && typeof res.catch === 'function') {
+          res.catch(function () { setTheatreMode(true); });
+        }
+      } catch (e) {
+        setTheatreMode(true);
+      }
+    } else {
+      setTheatreMode(!theatreMode);
+    }
+  }
+
+  function buildPopoutPayload(full) {
+    if (!full) {
+      return {
+        kind: 'tick',
+        playT: state.playT,
+        phaseRad: state.phaseRad,
+        orderN: state.orderN
+      };
+    }
+    var tg = {};
+    for (var k in state.toggles) {
+      if (hasOwn(state.toggles, k)) tg[k] = state.toggles[k];
+    }
+    return {
+      kind: 'full',
+      presetIndex: presetIndexNow(),
+      r: state.r, rIn: state.rIn, amp: state.amp, f: state.f,
+      K: state.K, orderN: state.orderN, a: state.a, b: state.b,
+      n: state.n, m: state.m, k: state.k, phaseRad: state.phaseRad,
+      twinMode: state.twinMode,
+      formulas: { x: state.formulas.x, y: state.formulas.y, z: state.formulas.z },
+      toggles: tg,
+      magZoom: state.magZoom,
+      magFocus: state.magFocus,
+      playT: state.playT,
+      ghostSlot: state.ghostSlot,
+      ghostRev: state.ghostRev,
+      ghostPoints: (state.toggles.ghostRef && state.ghostPoints) ? state.ghostPoints : null,
+      orderAutoMode: autoLanes.orderN.mode,
+      phaseAutoMode: autoLanes.phase.mode
+    };
+  }
+
+  function sendPopoutSync(full) {
+    if (IS_POPOUT || !popoutWin) return;
+    if (popoutWin.closed) {
+      popoutWin = null;
+      if ($('btnPopout')) $('btnPopout').classList.remove('active');
+      return;
+    }
+    try {
+      popoutWin.postMessage({ type: 'rs-sync', data: buildPopoutPayload(full) }, '*');
+    } catch (e) { /* ignore closed/unreachable */ }
+  }
+
+  function sendPopoutCommand(cmd, value) {
+    if (!IS_POPOUT || !window.opener || window.opener.closed) return;
+    try {
+      window.opener.postMessage({ type: 'rs-cmd', cmd: cmd, value: value }, '*');
+    } catch (e) { /* ignore */ }
+  }
+
+  function applyRemoteSync(data) {
+    if (!data || typeof data !== 'object') return;
+    isApplyingRemoteSync = true;
+    suppressAgentPublish = true;
+    try {
+      if (data.kind === 'tick') {
+        var changed = (state.phaseRad !== data.phaseRad) || (state.orderN !== data.orderN);
+        state.playT = data.playT;
+        if (data.orderN != null && data.orderN !== state.orderN) {
+          state.orderN = data.orderN;
+          $('orderN').value = Math.round(data.orderN);
+          $('orderNOut').textContent = String(Math.round(data.orderN));
+          if ($('theatreOrderN')) $('theatreOrderN').value = Math.round(data.orderN);
+          if ($('theatreOrderNOut')) $('theatreOrderNOut').textContent = String(Math.round(data.orderN));
+          updateOrderNBadge();
+        }
+        if (data.phaseRad != null && data.phaseRad !== state.phaseRad) {
+          setPhaseFromDeg((data.phaseRad * 180) / Math.PI, true);
+        }
+        if (changed) bumpAnimated();
+        return;
+      }
+      if (data.presetIndex != null && data.presetIndex !== state.presetIndex) {
+        applyPreset(data.presetIndex);
+      }
+      ['r', 'rIn', 'amp', 'f', 'K', 'orderN', 'a', 'b', 'n', 'm', 'k'].forEach(function (k) {
+        if (typeof data[k] === 'number') state[k] = data[k];
+      });
+      if (data.formulas) {
+        ['x', 'y', 'z'].forEach(function (axis) {
+          if (data.formulas[axis] != null) state.formulas[axis] = data.formulas[axis];
+        });
+      }
+      if (data.twinMode) setTwinMode(data.twinMode);
+      if (data.toggles) {
+        for (var tk in data.toggles) {
+          if (hasOwn(data.toggles, tk)) state.toggles[tk] = !!data.toggles[tk];
+        }
+      }
+      if (typeof data.magZoom === 'number') state.magZoom = data.magZoom;
+      if (data.magFocus) state.magFocus = data.magFocus;
+      if (typeof data.playT === 'number') state.playT = data.playT;
+      if (data.ghostPoints) {
+        state.ghostSlot = data.ghostSlot || '';
+        state.ghostRev = data.ghostRev || 0;
+        state.ghostPoints = data.ghostPoints;
+      }
+      if (data.orderAutoMode) {
+        autoLanes.orderN.mode = data.orderAutoMode;
+        syncAutoLaneUI(autoLanes.orderN);
+      }
+      if (data.phaseAutoMode) {
+        autoLanes.phase.mode = data.phaseAutoMode;
+        syncAutoLaneUI(autoLanes.phase);
+      }
+      syncParamUI();
+      if (typeof data.phaseRad === 'number') {
+        setPhaseFromDeg((data.phaseRad * 180) / Math.PI, true);
+      }
+      syncHudToggles();
+      syncMagChips();
+      bumpAnimated();
+    } finally {
+      suppressAgentPublish = false;
+      isApplyingRemoteSync = false;
+    }
+  }
+
+  function openPopout() {
+    if (popoutWin && !popoutWin.closed) {
+      popoutWin.focus();
+      sendPopoutSync(true);
+      return;
+    }
+    var baseUrl = deeplinkNow();
+    var popUrl = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + 'popout=1';
+    popoutWin = window.open(popUrl, 'ramanujan-sphere-popout', 'popup=yes,width=1200,height=820');
+    var btn = $('btnPopout');
+    if (!popoutWin || popoutWin.closed) {
+      popoutWin = null;
+      if (btn) {
+        var orig = btn.innerHTML;
+        btn.textContent = 'Blocked — use Theatre';
+        setTimeout(function () { btn.innerHTML = orig; }, 2200);
+      }
+      return;
+    }
+    if (btn) btn.classList.add('active');
+    setTimeout(function () { sendPopoutSync(true); }, 350);
+  }
+
+  window.addEventListener('message', function (ev) {
+    var msg = ev && ev.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'rs-popout-hello' && !IS_POPOUT && popoutWin && ev.source === popoutWin) {
+      sendPopoutSync(true);
+    } else if (msg.type === 'rs-sync' && IS_POPOUT && ev.source === window.opener) {
+      hasOpenerSync = true;
+      if ($('popoutSyncBadge')) $('popoutSyncBadge').hidden = false;
+      applyRemoteSync(msg.data);
+    } else if (msg.type === 'rs-cmd' && !IS_POPOUT && popoutWin && ev.source === popoutWin) {
+      if (msg.cmd === 'orderN') {
+        $('orderN').value = msg.value;
+        $('orderN').dispatchEvent(new Event('input'));
+      } else if (msg.cmd === 'phase') {
+        setPhaseFromDeg(msg.value);
+      } else if (msg.cmd === 'autoMode' && msg.value) {
+        setAutoMode(msg.value.key, msg.value.mode);
+        sendPopoutSync(true);
+      } else if (msg.cmd === 'toggle' && hasOwn(state.toggles, msg.value)) {
+        state.toggles[msg.value] = !state.toggles[msg.value];
+        syncHudToggles();
+        bump();
+      }
+    }
+  });
+
+  if ($('btnTheatre')) $('btnTheatre').addEventListener('click', function () { setTheatreMode(!theatreMode); });
+  if ($('btnFullscreen')) $('btnFullscreen').addEventListener('click', toggleFullscreen);
+  if ($('btnPopout')) $('btnPopout').addEventListener('click', openPopout);
+  if ($('btnHudHide')) $('btnHudHide').addEventListener('click', function () { setHudHidden(true); });
+  if ($('btnHudRestore')) $('btnHudRestore').addEventListener('click', function () { setHudHidden(false); });
+  if ($('btnExitTheatre')) {
+    $('btnExitTheatre').addEventListener('click', function () {
+      if (isFullscreenNow()) toggleFullscreen();
+      else if (IS_POPOUT) window.close();
+      else setTheatreMode(false);
+    });
+  }
+  if ($('theatreOrderN')) {
+    $('theatreOrderN').addEventListener('input', function () {
+      var v = parseInt($('theatreOrderN').value, 10);
+      if (IS_POPOUT && hasOpenerSync && window.opener && !window.opener.closed) {
+        sendPopoutCommand('orderN', v);
+      } else {
+        $('orderN').value = v;
+        $('orderN').dispatchEvent(new Event('input'));
+      }
+    });
+  }
+  if ($('theatrePhase')) {
+    $('theatrePhase').addEventListener('input', function () {
+      var v = parseFloat($('theatrePhase').value);
+      if (IS_POPOUT && hasOpenerSync && window.opener && !window.opener.closed) {
+        sendPopoutCommand('phase', v);
+      } else {
+        setPhaseFromDeg(v);
+      }
+    });
+  }
+  document.addEventListener('fullscreenchange', function () {
+    if (!isFullscreenNow() && !theatreMode) hudHidden = false;
+    syncDisplayModeUI();
+    requestAnimationFrame(function () { Scene3D.resize(); });
+  });
+  document.addEventListener('webkitfullscreenchange', function () {
+    if (!isFullscreenNow() && !theatreMode) hudHidden = false;
+    syncDisplayModeUI();
+    requestAnimationFrame(function () { Scene3D.resize(); });
+  });
+
   // ---- Keyboard Studio Shortcuts ----
   window.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') {
+      if (theatreMode && !IS_POPOUT && !isFullscreenNow()) { setTheatreMode(false); return; }
+      if (hudHidden) { setHudHidden(false); return; }
+    }
     var tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : '';
     if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
 
@@ -1208,10 +1857,17 @@
       state.toggles.strobeN = !state.toggles.strobeN;
       syncHudToggles();
       bump();
+    } else if ((ev.key === 'f' || ev.key === 'F') && ev.shiftKey) {
+      ev.preventDefault();
+      toggleFullscreen();
     } else if (ev.key === 'f' || ev.key === 'F') {
       Scene3D.setCameraView('front', state);
       syncHudToggles();
       bump();
+    } else if (ev.key === 't' || ev.key === 'T') {
+      if (!IS_POPOUT) setTheatreMode(!theatreMode);
+    } else if (ev.key === 'h' || ev.key === 'H') {
+      if (theatreMode || isFullscreenNow() || IS_POPOUT) setHudHidden(!hudHidden);
     } else if (ev.key === 'b' || ev.key === 'B') {
       state.toggles.fourBitOrbit = !state.toggles.fourBitOrbit;
       syncHudToggles();
@@ -1245,6 +1901,16 @@
       publishAgent();
     }
     initSlots();
+    if (START_THEATRE) {
+      theatreMode = true;
+      syncDisplayModeUI();
+      requestAnimationFrame(function () { Scene3D.resize(); });
+    } else {
+      syncDisplayModeUI();
+    }
+    if (IS_POPOUT && window.opener && !window.opener.closed) {
+      try { window.opener.postMessage({ type: 'rs-popout-hello' }, '*'); } catch (e) { /* ignore */ }
+    }
     // Signal the bridge (js/agent-bridge.js) that the app is initialized and the
     // state is stable; it installs window.ramanujanSphere and emits the single
     // mount `ramanujan-sphere:change` event after this point.
@@ -1262,8 +1928,22 @@
     var dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    if (state.toggles.animate) {
-      state.playT = (state.playT + dt * PLAY_SPEED) % 1;
+    if (IS_POPOUT && hasOpenerSync && (!window.opener || window.opener.closed)) {
+      hasOpenerSync = false;
+      if ($('popoutSyncBadge')) $('popoutSyncBadge').hidden = true;
+    }
+
+    var remoteControlled = IS_POPOUT && hasOpenerSync;
+    var autoMoved = false;
+    if (!remoteControlled) {
+      if (stepAutoLane(autoLanes.orderN, dt)) autoMoved = true;
+      if (stepAutoLane(autoLanes.phase, dt)) autoMoved = true;
+      if (state.toggles.animate) {
+        state.playT = (state.playT + dt * PLAY_SPEED) % 1;
+      }
+      if (popoutWin && (autoMoved || state.toggles.animate)) {
+        sendPopoutSync(false);
+      }
     }
 
     if (dirty !== lastRendered) {
