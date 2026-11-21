@@ -1,4 +1,4 @@
-# AGENTS.md — The Ramanujan Sphere
+# AGENTS.md — Ramanujan's Gift
 
 > **Read this first, then [`docs/AGENT-INTERFACE.md`](docs/AGENT-INTERFACE.md).** This file gets
 > a fresh LLM from zero to driving the instrument; the contract file is the normative spec
@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | Tool id | `ramanujan-sphere` |
-| Title | The Ramanujan Sphere |
+| Title | Ramanujan's Gift |
 | Versions | toolset `1.0.0` · `schemaVersion` 1 |
 | App URL | `http://127.0.0.1:8080/` |
 | Bridge | `window.ramanujanSphere` |
@@ -19,7 +19,7 @@
 
 ## 1. What this is
 
-The Ramanujan Sphere is a **zero-build, single-page 3D spatial-synth
+Ramanujan's Gift is a **zero-build, single-page 3D spatial-synth
 visualiser and IEEE-754 `float32` mathematics laboratory**: a constant hollow-sphere vessel
 `V = 4/3·π(R³ − r³)` carries quadrature trajectories `(x(t), y(t), z(t))`, Four-Bit Orbit
 palindromes, Morlet wavelets, Weierstrass fractals, Lissajous knots and finite-field
@@ -667,7 +667,7 @@ current deeplink, the path to `AGENTS.md`, `window.ramanujanSphere`, the
 `agent/manifest.json` path and every tool name. A hand-written equivalent that works with a
 fresh agent:
 
-> You are driving The Ramanujan Sphere (`ramanujan-sphere`, schema 1). Read
+> You are driving Ramanujan's Gift (`ramanujan-sphere`, schema 1). Read
 > `AGENTS.md` and `docs/AGENT-INTERFACE.md` in
 > `C:\Users\trevor\Documents\Ramanujan Sphere`; the app is served at
 > `http://127.0.0.1:8080/`. Read state from `window.ramanujanSphere.getState()` or the hidden

@@ -4,7 +4,7 @@
   "tool": "manifest",
   "data": {
     "id": "ramanujan-sphere",
-    "title": "The Ramanujan Sphere",
+    "title": "Ramanujan's Gift",
     "version": "1.0.0",
     "schemaVersion": 1,
     "description": "Interactive 3D spatial-synth and IEEE-754 float32 mathematics laboratory built on a constant hollow sphere V = 4/3π(R³ − r³) with an internal 2D f(x)/x slice, conjugate/antipodal phasor twins, the Four-Bit Orbit (1000 ↔ 0001 palindrome + Quadray tetrahedron), Ramanujan 1914 1/π, the discrete cyclic order-N strobe, and secp256k1 Frobenius point counting. Agents can analyze patches, inspect float32 bits, build reproducible deeplinks, and drive the live UI through the page bridge or the headless CLI/MCP server.",

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ===== agent/cli.mjs =====
-   Zero-dependency command-line front end for The Ramanujan Sphere agent
+   Zero-dependency command-line front end for the Ramanujan's Gift agent
    toolset (docs/AGENT-INTERFACE.md section 2, 3 and 8).
 
    Nothing in this file re-implements a formula or a state projection: every
@@ -579,7 +579,7 @@ function runSelftest() {
 /* ------------------------------------------------------------------ */
 
 const HELP_TEXT = [
-  'The Ramanujan Sphere — agent CLI (toolset 1.0.0, schema 1)',
+  "Ramanujan's Gift — agent CLI (toolset 1.0.0, schema 1)",
   '',
   'Usage:',
   '  node agent/cli.mjs <command> [flags] [--json]',
