@@ -331,6 +331,152 @@ select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 .shell-meter b { color: var(--accent-bright); margin-left: 4px; }
 
+/* ---- §§1-3 Dual-Sphere Time-Stretch, Lock-V & Modal Syzygy Controls ---- */
+.vessel-head-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lock-vol-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  background: var(--panel2);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.lock-vol-btn:hover { color: var(--text); border-color: var(--accent); }
+.lock-vol-btn.active {
+  background: rgba(255, 176, 77, 0.22);
+  border-color: rgba(255, 194, 68, 0.78);
+  color: #ffd166;
+  box-shadow: 0 0 8px rgba(255, 176, 77, 0.22);
+}
+
+.syzygy-snap-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.snap-lbl {
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-right: 2px;
+}
+.snap-chip {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 3px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+  background: var(--panel2);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.snap-chip:hover { color: var(--text); border-color: var(--accent); }
+.snap-chip.active {
+  background: rgba(110, 231, 160, 0.18);
+  border-color: rgba(110, 231, 160, 0.65);
+  color: #6ee7a0;
+}
+
+.stretch-mod-card {
+  margin-top: 6px;
+  background: rgba(16, 24, 35, 0.78);
+  border: 1px solid rgba(54, 214, 200, 0.24);
+  border-radius: 6px;
+  padding: 6px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mod-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.mod-cell {
+  background: rgba(9, 14, 21, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+.mod-cell-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+.mod-cell-top b {
+  color: var(--accent-bright);
+  font-size: 10px;
+}
+.mod-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.mod-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #36d6c8, #6ee7a0);
+  border-radius: 2px;
+}
+.syzygy-status {
+  font-size: 10px;
+  text-align: center;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: rgba(54, 214, 200, 0.08);
+  border: 1px solid rgba(54, 214, 200, 0.25);
+  color: #b8ece2;
+}
+.syzygy-status.locked {
+  background: rgba(255, 194, 68, 0.14);
+  border-color: rgba(255, 194, 68, 0.55);
+  color: #ffd166;
+}
+.stretch-route-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.route-lbl {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-right: 2px;
+  white-space: nowrap;
+}
+.route-chip {
+  flex: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line-2);
+  background: var(--panel2);
+  color: var(--muted);
+  font-size: 9.5px;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+.route-chip:hover { color: var(--text); }
+.route-chip.active {
+  background: rgba(54, 214, 200, 0.2);
+  border-color: rgba(54, 214, 200, 0.65);
+  color: var(--accent-bright);
+}
+
 .strobe-field {
   margin-top: 8px;
   background: rgba(255, 176, 77, 0.05);
@@ -527,6 +673,141 @@ input[type=range] {
   color: #4df3dd;
   border-color: rgba(77, 243, 221, 0.78);
   box-shadow: 0 0 12px rgba(77, 243, 221, 0.22);
+}
+.hud-pill.accent-emerald.active {
+  background: rgba(16, 60, 42, 0.88);
+  color: #6ee7a0;
+  border-color: rgba(110, 231, 160, 0.78);
+  box-shadow: 0 0 12px rgba(110, 231, 160, 0.22);
+}
+.hud-pill.accent-green.active {
+  background: rgba(5, 48, 22, 0.92);
+  color: #00ff66;
+  border-color: rgba(0, 255, 102, 0.82);
+  box-shadow: 0 0 12px rgba(0, 255, 102, 0.28);
+}
+
+/* Harmor Void Palette Mode (§5.6): pure #000000 digital silence void */
+body.harmor-void .viewport {
+  background: #000000 !important;
+  border-color: rgba(0, 255, 102, 0.42);
+}
+
+/* ---- Floating Dual-Sphere Modal Resonance & Archimedes Slice HUD Card (§§1–3) ---- */
+.res-widget {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  width: 288px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(11, 16, 24, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(110, 231, 160, 0.42);
+  border-radius: 11px;
+  padding: 8px 10px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.54);
+  transition: right 0.16s ease;
+}
+.res-widget[hidden] { display: none !important; }
+.res-widget.shift-left { right: 204px; }
+.res-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #6ee7a0;
+  background: rgba(110, 231, 160, 0.14);
+  border: 1px solid rgba(110, 231, 160, 0.45);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.res-badge.locked {
+  color: #ffd166;
+  background: rgba(255, 194, 68, 0.18);
+  border-color: rgba(255, 194, 68, 0.68);
+}
+.res-modes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.res-mode-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 5px;
+  background: rgba(20, 28, 40, 0.85);
+  border: 1px solid var(--line-2);
+  font-size: 9px;
+  color: var(--muted);
+}
+.res-mode-item b { font-size: 11px; color: var(--text); margin-top: 1px; }
+.res-mode-item em { font-style: normal; font-size: 8.8px; color: var(--muted); }
+.res-mode-item.res-outer { border-color: rgba(77, 243, 221, 0.45); }
+.res-mode-item.res-outer b { color: #4df3dd; }
+.res-mode-item.res-inner { border-color: rgba(255, 107, 122, 0.45); }
+.res-mode-item.res-inner b { color: #ff8c98; }
+.res-mode-item.res-wall  { border-color: rgba(255, 176, 77, 0.45); }
+.res-mode-item.res-wall  b { color: #ffd166; }
+
+.res-arch-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.arch-chip {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 700;
+}
+.arch-chip.plateau {
+  background: rgba(110, 231, 160, 0.16);
+  border: 1px solid rgba(110, 231, 160, 0.55);
+  color: #6ee7a0;
+}
+.arch-chip.cap {
+  background: rgba(54, 214, 200, 0.14);
+  border: 1px solid rgba(54, 214, 200, 0.45);
+  color: #4df3dd;
+}
+.arch-canvas {
+  width: 100%;
+  height: 58px;
+  display: block;
+  background: rgba(8, 12, 18, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.res-slice-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.res-slice-ctl .mag-chip {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  font-size: 9.5px;
+}
+.res-slice-ctl .mag-chip.active {
+  background: rgba(110, 231, 160, 0.22);
+  border-color: rgba(110, 231, 160, 0.68);
+  color: #6ee7a0;
+}
+.res-slice-ctl input[type=range] {
+  flex: 1;
+  height: 12px;
+  accent-color: #6ee7a0;
+}
+.slice-z-val {
+  font-size: 9.5px;
+  color: #b8ece2;
+  min-width: 50px;
+  text-align: right;
 }
 
 /* ---- Floating Four-Bit Orbit & Quadray Palindrome HUD Card ---- */

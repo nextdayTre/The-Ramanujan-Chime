@@ -52,6 +52,11 @@
     ghostRev: 0,
     magZoom: 16,
     magFocus: 'trough',    // 'playhead' | 'origin' | 'trough'
+    lockVolume: false,     // §2.1 Constant-Volume Time-Stretch Lock: R(r) = (r^3 + R0^3)^(1/3)
+    lockedR0: 0.96868,     // Reference solid radius R0 = (R^3 - rIn^3)^(1/3)
+    stretchMode: 'off',    // 'off' | 'pitchLock' | 'tape' | 'jacobian' (§2.2 / §2.3)
+    archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
+    archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
     formulas: {
       x: 'r*cos(TAU*f*t+phase)',
       y: 'r*sin(TAU*f*t+phase)',
@@ -72,6 +77,8 @@
       strobeN: false,
       fourBitOrbit: true,
       quadrayTetra: true,
+      resonanceMode: true,
+      harmorVoid: false,
       magnifier: false,
       ghostRef: false,
       refWaves: false,
@@ -535,15 +542,85 @@
     }
   }
 
-  function updateShellReadout() {
+  function updateShellReadout(changedKey) {
+    if (state.lockVolume && Engine.solveConstantVolumeR) {
+      if (changedKey === 'rIn') {
+        var newR = Engine.clamp(Engine.solveConstantVolumeR(state.rIn, state.lockedR0), 0.3, 2.6);
+        state.r = newR;
+        if ($('radius')) $('radius').value = newR;
+        if ($('radiusOut')) $('radiusOut').textContent = newR.toFixed(2);
+      } else if (changedKey === 'r') {
+        if (state.r < state.lockedR0) {
+          state.lockedR0 = state.r;
+          state.rIn = 0;
+        } else {
+          state.rIn = Engine.clamp(Engine.solveConstantVolumeRIn(state.r, state.lockedR0), 0, Math.min(2.4, state.r));
+        }
+        if ($('innerRadius')) $('innerRadius').value = state.rIn;
+        if ($('innerRadiusOut')) $('innerRadiusOut').textContent = state.rIn.toFixed(2);
+      }
+    }
+
     if (state.rIn > state.r) {
       state.rIn = state.r;
-      $('innerRadius').value = state.rIn;
-      $('innerRadiusOut').textContent = state.rIn.toFixed(2);
+      if ($('innerRadius')) $('innerRadius').value = state.rIn;
+      if ($('innerRadiusOut')) $('innerRadiusOut').textContent = state.rIn.toFixed(2);
     }
+
     var m = Engine.shellMetrics(state);
-    $('shellVolOut').textContent = m.volShell.toFixed(2);
-    $('shellWallOut').textContent = m.thickness.toFixed(2);
+    if ($('shellVolOut')) $('shellVolOut').textContent = m.volShell.toFixed(2);
+    if ($('shellWallOut')) $('shellWallOut').textContent = m.thickness.toFixed(2);
+
+    if (Engine.sphereResonance) {
+      var res = Engine.sphereResonance(state, state.playT);
+      if ($('shellRingAreaOut')) $('shellRingAreaOut').textContent = res.ringAreaConst.toFixed(2);
+      if ($('btnLockVol')) $('btnLockVol').classList.toggle('active', !!state.lockVolume);
+      if ($('shellFormulaBadge')) {
+        $('shellFormulaBadge').innerHTML = state.lockVolume
+          ? 'V&#8320; LOCKED &middot; dR/dr=&eta;&sup2;'
+          : '4/3&pi;(R&sup3;&minus;r&sup3;)';
+      }
+      if ($('modEtaOut')) $('modEtaOut').textContent = res.eta.toFixed(3);
+      if ($('modEtaFill')) $('modEtaFill').style.width = (res.eta * 100).toFixed(1) + '%';
+      if ($('modAreaOut')) $('modAreaOut').textContent = res.jacobian.toFixed(3);
+      if ($('modAreaFill')) $('modAreaFill').style.width = (res.jacobian * 100).toFixed(1) + '%';
+      if ($('modVolOut')) $('modVolOut').textContent = res.volFrac.toFixed(3);
+      if ($('modVolFill')) $('modVolFill').style.width = (res.volFrac * 100).toFixed(1) + '%';
+      if ($('modStretchOut')) {
+        $('modStretchOut').textContent = res.cavityActive
+          ? (res.stretchRatio.toFixed(2) + '× (+' + res.stretchOctaves.toFixed(2) + 'o)')
+          : 'OFF (r=0)';
+      }
+      if ($('modStretchFill')) {
+        var octPct = res.cavityActive ? Engine.clamp((res.stretchOctaves / 3.0) * 100, 3, 100) : 0;
+        $('modStretchFill').style.width = octPct.toFixed(1) + '%';
+      }
+      var syzEl = $('syzygyBadge');
+      if (syzEl) {
+        var centsStr = (res.syzygy.detuneCents >= 0 ? '+' : '') + res.syzygy.detuneCents.toFixed(1) + '¢';
+        if (!res.cavityActive) {
+          syzEl.textContent = 'OSC A Solid Ball (r = 0) · OSC B Off';
+          syzEl.classList.remove('locked');
+        } else if (res.bowHalfPowerLock) {
+          syzEl.textContent = '★ −3 dB 4-BIT BOW TANGENCY (η = 1/√2 ≈ 0.707 · α = √2)';
+          syzEl.classList.add('locked');
+        } else if (res.syzygy.tripleLock) {
+          syzEl.textContent = '★ TRIPLE LOCK ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.classList.add('locked');
+        } else {
+          syzEl.textContent = 'Modes ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.classList.toggle('locked', !!res.syzygy.locked);
+        }
+      }
+      document.querySelectorAll('.snap-chip[data-eta]').forEach(function (chip) {
+        var targetEta = parseFloat(chip.getAttribute('data-eta'));
+        chip.classList.toggle('active', Math.abs(res.eta - targetEta) <= 0.0085);
+      });
+    }
+    document.querySelectorAll('.route-chip[data-stretch]').forEach(function (chip) {
+      chip.classList.toggle('active', chip.getAttribute('data-stretch') === (state.stretchMode || 'off'));
+    });
+
     updateOrderNBadge();
   }
 
@@ -571,7 +648,7 @@
       state[d.key] = v;
       if (out) out.textContent = d.fmt(v);
       if (d.key === 'K' && $('harmTabKOut')) $('harmTabKOut').textContent = d.fmt(v);
-      if (d.key === 'r' || d.key === 'rIn') updateShellReadout();
+      if (d.key === 'r' || d.key === 'rIn') updateShellReadout(d.key);
       if (d.key === 'orderN') {
         if (!state.toggles.strobeN) {
           state.toggles.strobeN = true;
@@ -594,6 +671,60 @@
       }
     });
   });
+
+  // ---- §§1-3 Lock-V Constant-Volume Time-Stretch, Syzygy Snaps & Stretch Mod Coupling ----
+  if ($('btnLockVol')) {
+    $('btnLockVol').addEventListener('click', function () {
+      state.lockVolume = !state.lockVolume;
+      if (state.lockVolume) {
+        var r3 = state.r * state.r * state.r;
+        var rin3 = (state.rIn || 0) * (state.rIn || 0) * (state.rIn || 0);
+        state.lockedR0 = Engine.cbrt(Math.max(0.01, r3 - rin3));
+      }
+      updateShellReadout();
+      bump();
+    });
+  }
+
+  document.querySelectorAll('.snap-chip[data-eta]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var targetEta = parseFloat(chip.getAttribute('data-eta'));
+      if (!isFinite(targetEta)) return;
+      if (state.lockVolume && Engine.solveConstantVolumePairForEta) {
+        var pair = Engine.solveConstantVolumePairForEta(targetEta, state.lockedR0);
+        state.r = Engine.clamp(pair.R, 0.3, 2.6);
+        state.rIn = Engine.clamp(pair.rIn, 0, Math.min(2.4, state.r));
+      } else {
+        state.rIn = Engine.clamp(state.r * targetEta, 0, Math.min(2.4, state.r));
+      }
+      syncParamUI();
+      bump();
+    });
+  });
+
+  document.querySelectorAll('.route-chip[data-stretch]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      state.stretchMode = chip.getAttribute('data-stretch') || 'off';
+      updateShellReadout();
+      bump();
+    });
+  });
+
+  if ($('btnArchAuto')) {
+    $('btnArchAuto').addEventListener('click', function () {
+      state.archimedesAuto = !state.archimedesAuto;
+      $('btnArchAuto').classList.toggle('active', !!state.archimedesAuto);
+      bump();
+    });
+  }
+  if ($('archimedesZSlider')) {
+    $('archimedesZSlider').addEventListener('input', function () {
+      state.archimedesAuto = false;
+      if ($('btnArchAuto')) $('btnArchAuto').classList.remove('active');
+      state.archimedesZNorm = Engine.clamp(parseFloat($('archimedesZSlider').value) || 0, -1, 1);
+      bump();
+    });
+  }
 
   // ---- Phase Controls ----
   function setPhaseFromDeg(deg, silentAgent) {
@@ -996,6 +1127,14 @@
     var fbWidget = $('fourBitWidget');
     if (fbWidget) {
       fbWidget.hidden = !state.toggles.fourBitOrbit;
+    }
+    var resWidget = $('resonanceWidget');
+    if (resWidget) {
+      resWidget.hidden = !state.toggles.resonanceMode;
+      resWidget.classList.toggle('shift-left', !!state.toggles.magnifier);
+    }
+    if (document.body) {
+      document.body.classList.toggle('harmor-void', !!state.toggles.harmorVoid);
     }
     var qBtn = $('btnQuadrayTetra');
     if (qBtn) {
@@ -1473,6 +1612,167 @@
         ' &harr; 1(0001) x=' + fb.real1.x.toFixed(2) +
         ' &middot; &theta;=' + fb.deg.toFixed(0) + '&deg;';
     }
+
+    if (state.toggles.resonanceMode && Engine.sphereResonance && $('resonanceWidget')) {
+      var res = Engine.sphereResonance(state, state.playT);
+      updateResonanceWidget(res);
+    }
+  }
+
+  // ---- §§1–3 Floating Dual-Sphere Resonance & Archimedes Constant-Area Slice Canvas ----
+  function drawArchimedesCanvas(res) {
+    var c = $('archimedesCanvas');
+    if (!c) return;
+    var g = c.getContext('2d');
+    var w = c.width, h = c.height;
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
+
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = harmor ? '#000000' : '#080c12';
+    g.fillRect(0, 0, w, h);
+
+    var R = Math.max(0.05, res.R);
+    var rIn = Math.max(0, res.rIn);
+    var maxArea = Math.PI * R * R;
+    var padX = 12, padTop = 9, padBot = 13;
+    var plotW = w - padX * 2;
+    var plotH = h - padTop - padBot;
+
+    function xForZ(z) { return padX + ((z + R) / (2 * R)) * plotW; }
+    function yForArea(a) { return padTop + plotH * (1 - Engine.clamp(a / Math.max(1e-5, maxArea), 0, 1)); }
+
+    // 1. Shaded Archimedes Constant-Area Plateau Corridor [-rIn, +rIn]
+    if (res.cavityActive) {
+      var xL = xForZ(-rIn), xR = xForZ(rIn);
+      g.fillStyle = harmor ? 'rgba(0, 255, 102, 0.14)' : 'rgba(110, 231, 160, 0.12)';
+      g.fillRect(xL, padTop, Math.max(1, xR - xL), plotH);
+
+      g.strokeStyle = harmor ? 'rgba(0, 255, 102, 0.45)' : 'rgba(255, 107, 122, 0.55)';
+      g.lineWidth = 1;
+      g.setLineDash([2, 2]);
+      g.beginPath();
+      g.moveTo(xL, padTop); g.lineTo(xL, padTop + plotH);
+      g.moveTo(xR, padTop); g.lineTo(xR, padTop + plotH);
+      g.stroke();
+      g.setLineDash([]);
+    }
+
+    // 2. Reference Outer Circle Area Curve pi*(R^2 - z^2) (faint dashed parabola)
+    if (res.cavityActive) {
+      g.strokeStyle = harmor ? 'rgba(57, 255, 20, 0.28)' : 'rgba(77, 243, 221, 0.28)';
+      g.lineWidth = 1;
+      g.setLineDash([3, 3]);
+      g.beginPath();
+      for (var s = 0; s <= 64; s++) {
+        var u = (s / 64) * 2 - 1;
+        var z = u * R;
+        var aOut = Math.PI * Math.max(0, R * R - z * z);
+        var px = xForZ(z), py = yForArea(aOut);
+        if (s === 0) g.moveTo(px, py); else g.lineTo(px, py);
+      }
+      g.stroke();
+      g.setLineDash([]);
+    }
+
+    // 3. Archimedes Ring Area Curve A_ring(z) = pi*(rho_out^2 - rho_in^2):
+    //    Flat horizontal plateau pi*(R^2 - r^2) across [-r, +r], parabolic taper in polar caps!
+    g.beginPath();
+    for (var i = 0; i <= 80; i++) {
+      var ui = (i / 80) * 2 - 1;
+      var zi = ui * R;
+      var aO = Math.PI * Math.max(0, R * R - zi * zi);
+      var aI = (res.cavityActive && Math.abs(zi) <= rIn) ? (Math.PI * Math.max(0, rIn * rIn - zi * zi)) : 0;
+      var aRing = aO - aI;
+      var xi = xForZ(zi), yi = yForArea(aRing);
+      if (i === 0) g.moveTo(xi, yi); else g.lineTo(xi, yi);
+    }
+    g.strokeStyle = harmor ? '#00ff66' : '#6ee7a0';
+    g.lineWidth = 2;
+    g.stroke();
+
+    // 4. Current Axial Slice Cursor at z = res.slice.z
+    var sl = res.slice;
+    var cx = xForZ(sl.z);
+    var cy = yForArea(sl.areaRing);
+
+    g.strokeStyle = sl.inCavitySpan ? '#ffd166' : '#4df3dd';
+    g.lineWidth = 1.2;
+    g.beginPath();
+    g.moveTo(cx, padTop);
+    g.lineTo(cx, padTop + plotH);
+    g.stroke();
+
+    g.fillStyle = sl.inCavitySpan ? '#ffd166' : '#4df3dd';
+    g.beginPath();
+    g.arc(cx, cy, 3.3, 0, Math.PI * 2);
+    g.fill();
+
+    // 5. Axis labels (-R, -r, +r, +R)
+    g.fillStyle = '#8b9bb0';
+    g.font = '9px "Cascadia Code", Consolas, monospace';
+    g.textAlign = 'left';
+    g.fillText('−R', 3, h - 3);
+    g.textAlign = 'right';
+    g.fillText('+R', w - 3, h - 3);
+    if (res.cavityActive) {
+      g.fillStyle = harmor ? '#00ff66' : '#6ee7a0';
+      g.textAlign = 'center';
+      g.fillText('[-r..+r] CONST AREA', w * 0.5, h - 3);
+    } else {
+      g.textAlign = 'center';
+      g.fillText('z = 0 (Solid Sphere)', w * 0.5, h - 3);
+    }
+  }
+
+  function updateResonanceWidget(res) {
+    var triadBadge = $('resTriadBadge');
+    if (triadBadge) {
+      if (res.bowHalfPowerLock) {
+        triadBadge.textContent = '★ −3 dB BOW LOCK';
+      } else if (res.syzygy.locked && res.cavityActive) {
+        triadBadge.textContent = '★ ' + res.syzygy.triadText + ' LOCK';
+      } else {
+        triadBadge.textContent = res.syzygy.triadText;
+      }
+      triadBadge.classList.toggle('locked', !!(res.syzygy.locked || res.bowHalfPowerLock));
+    }
+
+    if ($('resOutMult')) $('resOutMult').textContent = '1.00×';
+    if ($('resOutK')) $('resOutK').textContent = 'k₁=' + res.modes.outer[0].toFixed(2);
+
+    if ($('resInMult')) {
+      $('resInMult').textContent = res.cavityActive ? (res.stretchRatio.toFixed(2) + '×') : 'OFF';
+    }
+    if ($('resInK')) {
+      $('resInK').textContent = res.cavityActive ? ('k₁=' + res.modes.inner[0].toFixed(2)) : 'r = 0';
+    }
+
+    if ($('resWallMult')) {
+      $('resWallMult').textContent = res.wallRatio ? (res.wallRatio.toFixed(2) + '×') : '—';
+    }
+    if ($('resWallK')) {
+      $('resWallK').textContent = res.modes.shell[0] ? ('k₁=' + res.modes.shell[0].toFixed(2)) : '—';
+    }
+
+    var archBadge = $('resArchBadge');
+    if (archBadge) {
+      if (res.slice.inCavitySpan) {
+        archBadge.textContent = 'CONST π(R²−r²) = ' + res.slice.areaRing.toFixed(2);
+        archBadge.className = 'arch-chip plateau';
+      } else {
+        archBadge.textContent = 'CAP π(R²−z²) = ' + res.slice.areaRing.toFixed(2);
+        archBadge.className = 'arch-chip cap';
+      }
+    }
+
+    if ($('resSliceZOut')) {
+      $('resSliceZOut').textContent = 'z=' + (res.slice.z >= 0 ? '+' : '') + res.slice.z.toFixed(2);
+    }
+    if (state.archimedesAuto !== false && $('archimedesZSlider')) {
+      $('archimedesZSlider').value = res.slice.zNorm.toFixed(2);
+    }
+
+    drawArchimedesCanvas(res);
   }
 
   var _bitCache = { x: '', y: '', z: '' };
@@ -1870,6 +2170,14 @@
       if (theatreMode || isFullscreenNow() || IS_POPOUT) setHudHidden(!hudHidden);
     } else if (ev.key === 'b' || ev.key === 'B') {
       state.toggles.fourBitOrbit = !state.toggles.fourBitOrbit;
+      syncHudToggles();
+      bump();
+    } else if (ev.key === 'r' || ev.key === 'R') {
+      state.toggles.resonanceMode = !state.toggles.resonanceMode;
+      syncHudToggles();
+      bump();
+    } else if (ev.key === 'v' || ev.key === 'V') {
+      state.toggles.harmorVoid = !state.toggles.harmorVoid;
       syncHudToggles();
       bump();
     }

@@ -214,6 +214,45 @@ test('eval_point matches Engine.point exactly (float32)', () => {
   assert.equal(res.data.readout.status, 'ON SPHERE');
 });
 
+test('§§1–3 sphereResonance: time-stretch modulators, radial ladders, triple syzygy lock & Archimedes constant-area slice', () => {
+  // 1. Exact 2:1 Octave Triple Lock (R=1.0, rIn=0.5 => eta=0.5, alpha=2.0, triad 1 : 2 : 2)
+  const oct = Engine.sphereResonance({ r: 1.0, rIn: 0.5, archimedesAuto: false, archimedesZNorm: 0.25 }, 0);
+  close(oct.eta, 0.5, 1e-6, 'eta=0.5');
+  close(oct.jacobian, 0.25, 1e-6, 'jacobian eta^2=0.25');
+  close(oct.volFrac, 0.875, 1e-6, '1-eta^3=0.875');
+  close(oct.stretchRatio, 2.0, 1e-6, 'alpha=2.0');
+  close(oct.stretchOctaves, 1.0, 1e-6, 'octaves=+1.0');
+  assert.equal(oct.syzygy.ratioText, '2:1');
+  assert.equal(oct.syzygy.locked, true);
+  assert.equal(oct.syzygy.tripleLock, true);
+  assert.equal(oct.syzygy.triadText, '1 : 2 : 2');
+  close(oct.modes.inner[0], 2 * oct.modes.outer[0], 1e-5, 'k1_in = 2 * k1_out');
+  close(oct.modes.shell[0], 2 * oct.modes.outer[0], 1e-5, 'k1_shell = 2 * k1_out');
+
+  // 2. Archimedes Constant-Area Slice Theorem (§3.3):
+  //    Across any |z| <= rIn, A_ring(z) = pi*(rho_out^2 - rho_in^2) === pi*(R^2 - rIn^2)
+  const expectedRing = Math.fround(Math.PI * (1.0 - 0.25));
+  for (const zN of [-0.49, -0.25, 0, 0.25, 0.49]) {
+    const sl = Engine.sphereResonance({ r: 1.0, rIn: 0.5, archimedesAuto: false, archimedesZNorm: zN }, 0).slice;
+    assert.equal(sl.inCavitySpan, true, `zNorm=${zN} inside cavity span`);
+    close(sl.areaRing, expectedRing, 1e-5, `Archimedes invariant at zNorm=${zN}`);
+  }
+  // Outside cavity span (|z| > rIn), A_ring(z) tapers parabolically < pi*(R^2 - rIn^2)
+  const cap = Engine.sphereResonance({ r: 1.0, rIn: 0.5, archimedesAuto: false, archimedesZNorm: 0.8 }, 0).slice;
+  assert.equal(cap.inCavitySpan, false);
+  assert.ok(cap.areaRing < expectedRing, 'polar cap area tapers below plateau');
+
+  // 3. Constant-Volume Stretch Law (§2.1): R(r) = (r^3 + R0^3)^(1/3)
+  const r0 = 1.0;
+  const rInTest = 0.75;
+  const Rstretched = Engine.solveConstantVolumeR(rInTest, r0);
+  close(Rstretched ** 3 - rInTest ** 3, r0 ** 3, 1e-12, 'V_shell conserved under solveConstantVolumeR');
+  close(Engine.solveConstantVolumeRIn(Rstretched, r0), rInTest, 1e-12, 'inverse solveConstantVolumeRIn');
+  const pair = Engine.solveConstantVolumePairForEta(0.5, r0);
+  close(pair.rIn / pair.R, 0.5, 1e-12, 'pair ratio eta=0.5');
+  close(pair.R ** 3 - pair.rIn ** 3, r0 ** 3, 1e-12, 'pair conserves V_shell');
+});
+
 function stdPick(o) {
   const out = {};
   for (const k of Object.keys(o).sort()) out[k] = o[k];

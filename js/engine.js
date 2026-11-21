@@ -117,7 +117,8 @@
     'min', 'max', 'clamp', 'lerp', 'frac',
     'saw', 'square', 'triangle',
     'weierstrass', 'weierstrassNorm', 'morlet', 'morletIm', 'gauss',
-    'fourierSquare', 'fourierSaw'
+    'fourierSquare', 'fourierSaw',
+    'eta', 'alpha', 'ringArea'
   ];
 
   var FNS = [
@@ -131,15 +132,57 @@
 
   function paramsFor(t, s) {
     var u = 2 * t - 1;
-    var rIn = Math.min(s.rIn != null ? s.rIn : 0.45, s.r);
+    var R = Math.max(0.05, s.r != null ? s.r : 1);
+    var rIn = Math.min(s.rIn != null ? s.rIn : 0.45, R);
+    var eta = R > 0 ? clamp(rIn / R, 0, 1) : 0;
+    var alpha = rIn > 0.005 ? (R / rIn) : 1;
+    var ringArea = PI * (R * R - rIn * rIn);
     var K = s.K != null ? s.K : 6;
     var N = s.orderN != null ? s.orderN : 19;
     var a = s.a != null ? s.a : 0.5;
     var b = s.b != null ? s.b : 3;
+    var effF = s.f;
+    var effPhase = s.phaseRad || 0;
+    var fns = FNS;
+
+    // Optional §2.2 / §2.3 Time-Stretch Modulation Coupling (default 'off' keeps all baseline presets bit-exact)
+    var sm = s.stretchMode;
+    if (sm && sm !== 'off') {
+      // Reference ratio alpha0 = 1 / 0.45 ≈ 2.2222 so default rIn=0.45 is neutral (1.0x)
+      var alphaNorm = rIn > 0.005 ? clamp((0.45 / eta), 0.2, 6.0) : 1.0;
+      if (sm === 'tape') {
+        // Tape-style resampling (§2.2): ω_0 -> ω_0 / α (pitch drops as stretch increases)
+        effF = s.f / alphaNorm;
+      } else if (sm === 'jacobian') {
+        // Radial Jacobian warp (§2.1 / §2.3): dR/dr|_V = η² modulates phase & harmonic decay
+        effPhase = effPhase + (eta * eta) * PI;
+      } else if (sm === 'pitchLock') {
+        // Pitch-locked DAW time-stretching (§2.2): Gaussian envelope σ -> α·σ while carrier ω_0 stays locked
+        var sigScale = alphaNorm;
+        var morletStretched = function (x, w0, ph, sigma) {
+          return morlet(x, w0, ph, (sigma == null ? 1 : sigma) * sigScale);
+        };
+        var morletImStretched = function (x, w0, ph, sigma) {
+          return morletIm(x, w0, ph, (sigma == null ? 1 : sigma) * sigScale);
+        };
+        var gaussStretched = function (x, sigma) {
+          return gauss(x, (sigma == null ? 1 : sigma) * sigScale);
+        };
+        fns = [
+          Math.sin, Math.cos, Math.tan, Math.atan2, Math.asin, Math.acos,
+          Math.sqrt, cbrtFn, Math.abs, Math.floor, Math.ceil, Math.pow, Math.exp, Math.log, Math.sign,
+          Math.min, Math.max, clamp, lerp, frac,
+          sawCompat, square, triCompat,
+          weierstrass, weierstrassNorm, morletStretched, morletImStretched, gaussStretched,
+          fourierSquare, fourierSaw
+        ];
+      }
+    }
+
     return [
       t, u, TAU, PI,
-      s.r, rIn, s.amp, s.f, s.n, s.m, s.k, K, N, a, b, s.phaseRad
-    ].concat(FNS);
+      s.r, rIn, s.amp, effF, s.n, s.m, s.k, K, N, a, b, effPhase
+    ].concat(fns, [eta, alpha, ringArea]);
   }
 
   // Compile expression string -> function, or null on syntax/runtime error
@@ -254,6 +297,201 @@
       volOuter: volOuter,
       volCavity: volCavity,
       volShell: volShell
+    };
+  }
+
+  // ---- §§1–3 Active Dual-Sphere Time-Stretch, Modal Resonance & Archimedes Slice ----
+
+  // Constant-volume law (§2.1): V_shell = 4/3 * pi * R0^3 => R(r) = (r^3 + R0^3)^(1/3)
+  function solveConstantVolumeR(rIn, r0) {
+    var r = Math.max(0, rIn || 0);
+    var base = Math.max(0.05, r0 || 0.96868);
+    return cbrtFn(r * r * r + base * base * base);
+  }
+
+  function solveConstantVolumeRIn(R, r0) {
+    var outer = Math.max(0.05, R || 1);
+    var base = Math.max(0.05, r0 || 0.96868);
+    var diff = outer * outer * outer - base * base * base;
+    return diff > 0 ? cbrtFn(diff) : 0;
+  }
+
+  // Given desired cavity ratio eta = r/R in [0, 0.96] and locked volume radius R0,
+  // solve R^3 * (1 - eta^3) = R0^3 => R = R0 / (1 - eta^3)^(1/3), r = eta * R.
+  function solveConstantVolumePairForEta(eta, r0) {
+    var e = clamp(eta || 0, 0, 0.96);
+    var base = Math.max(0.05, r0 || 0.96868);
+    var denom = cbrtFn(Math.max(1e-4, 1 - e * e * e));
+    var R = base / denom;
+    return { R: R, rIn: e * R };
+  }
+
+  var CONSONANT_RATIOS = [
+    { p: 1, q: 1, name: 'Unison' },
+    { p: 6, q: 5, name: 'Minor 3rd' },
+    { p: 5, q: 4, name: 'Major 3rd' },
+    { p: 4, q: 3, name: 'Perfect 4th' },
+    { p: 3, q: 2, name: 'Perfect 5th' },
+    { p: 8, q: 5, name: 'Minor 6th' },
+    { p: 5, q: 3, name: 'Major 6th' },
+    { p: 7, q: 4, name: 'Harmonic 7th' },
+    { p: 2, q: 1, name: 'Octave' },
+    { p: 5, q: 2, name: 'Major 10th' },
+    { p: 3, q: 1, name: 'Twelfth (Oct+5th)' },
+    { p: 4, q: 1, name: 'Double Octave' },
+    { p: 5, q: 1, name: '2 Oct + Maj 3rd' },
+    { p: 6, q: 1, name: '2 Oct + 5th' },
+    { p: 8, q: 1, name: 'Triple Octave' }
+  ];
+
+  function nearestHarmonicRatio(ratio) {
+    if (!ratio || !isFinite(ratio) || ratio <= 0) {
+      return { p: 1, q: 0, ratioText: '∞ (Solid Ball)', intervalName: 'OSC B Off', detuneCents: 0, locked: true, tripleLock: false, triadText: '1 : — : 1' };
+    }
+    var best = CONSONANT_RATIOS[0];
+    var bestCents = Infinity;
+    for (var i = 0; i < CONSONANT_RATIOS.length; i++) {
+      var c = CONSONANT_RATIOS[i];
+      var cand = c.p / c.q;
+      var cents = 1200 * (Math.log(ratio / cand) / Math.LN2);
+      if (Math.abs(cents) < Math.abs(bestCents)) {
+        best = c;
+        bestCents = cents;
+      }
+    }
+    var bestP = best.p, bestQ = best.q;
+    var key = bestP + ':' + bestQ;
+    var name = best.name;
+    var locked = Math.abs(bestCents) <= 10.0;
+
+    // Coupled modal triad (Outer : Inner : Wall):
+    // When locked to a simple rational p:q (p > q), express as exact reduced integers;
+    // when detuned (e.g. default R=1.0, r=0.45 => 20/9 = 2.22x, +182.4 cents from 2:1 Octave),
+    // show 1 : α : β so the modal beating ratios are immediately clear!
+    var wallMult = ratio / Math.max(0.01, ratio - 1);
+    var triadText = '1 : ' + ratio.toFixed(2) + ' : ' + wallMult.toFixed(2);
+    var tripleLock = false;
+    if (locked && bestP > bestQ) {
+      var diffPQ = bestP - bestQ;
+      var tOut = bestQ * diffPQ;
+      var tIn = bestP * diffPQ;
+      var tWall = bestP * bestQ;
+      var gTri = gcd(gcd(tOut, tIn), tWall);
+      tOut = Math.round(tOut / gTri);
+      tIn = Math.round(tIn / gTri);
+      tWall = Math.round(tWall / gTri);
+      triadText = tOut + ' : ' + tIn + ' : ' + tWall;
+      tripleLock = true;
+    }
+
+    return {
+      p: bestP,
+      q: bestQ,
+      ratioText: key,
+      intervalName: name,
+      detuneCents: bestCents,
+      locked: locked,
+      tripleLock: tripleLock,
+      triadText: triadText
+    };
+  }
+
+  function sphereResonance(state, playT) {
+    var R = Math.max(0.05, state.r != null ? state.r : 1);
+    var rIn = clamp(state.rIn != null ? state.rIn : 0, 0, R);
+    var cavityActive = rIn > 0.005;
+    var thickness = Math.max(0, R - rIn);
+    var eta = R > 0 ? clamp(rIn / R, 0, 1) : 0;
+    var eta2 = eta * eta;                          // dR/dr|_V radial Jacobian & A_in / A_out
+    var volFrac = Math.max(0, 1 - eta * eta * eta);// V_shell / V_outer
+    var stretchRatio = cavityActive ? (R / rIn) : null;
+    var stretchOctaves = cavityActive ? (Math.log(R / rIn) / Math.LN2) : 0;
+    var wallRatio = thickness > 1e-4 ? (R / thickness) : null;
+    var r0ConstVol = cbrtFn(Math.max(0, R * R * R - rIn * rIn * rIn));
+
+    // Radial breathing mode ladders (l = 0, k_q = q * pi / L for q = 1..8, §3.1)
+    var modesOuter = [], modesInner = [], modesShell = [];
+    for (var q = 1; q <= 8; q++) {
+      modesOuter.push(Math.fround((q * PI) / R));
+      modesInner.push(cavityActive ? Math.fround((q * PI) / rIn) : 0);
+      modesShell.push(thickness > 1e-4 ? Math.fround((q * PI) / thickness) : 0);
+    }
+
+    var syz = nearestHarmonicRatio(stretchRatio);
+
+    // -3 dB half-power 4-bit bow tangency threshold (§5.7 preview: rIn >= R / sqrt(2))
+    var halfPowerR = R * Math.SQRT1_2;
+    var bowTouchesCavity = cavityActive && (rIn >= halfPowerR - 1e-3);
+    var bowHalfPowerLock = cavityActive && (Math.abs(eta - Math.SQRT1_2) <= 0.008);
+
+    // Archimedes' Constant-Area Slice Theorem (§3.3) at axial position z in [-R, +R]
+    var zNorm;
+    if (state.archimedesAuto !== false) {
+      // Smooth axial scan driven deterministically by playT (sin(TAU * playT) starts at z=0 equator at t=0)
+      zNorm = Math.sin(TAU * (playT || 0));
+    } else {
+      zNorm = clamp(state.archimedesZNorm != null ? state.archimedesZNorm : 0, -1, 1);
+    }
+    var sliceZ = zNorm * R;
+    var rhoOut = Math.sqrt(Math.max(0, R * R - sliceZ * sliceZ));
+    var inCavitySpan = cavityActive && (Math.abs(sliceZ) <= rIn + 1e-5);
+    var rhoIn = inCavitySpan ? Math.sqrt(Math.max(0, rIn * rIn - sliceZ * sliceZ)) : 0;
+    var areaOut = PI * rhoOut * rhoOut;
+    var areaIn = PI * rhoIn * rhoIn;
+    var areaRing = areaOut - areaIn;
+    var ringAreaConst = PI * (R * R - rIn * rIn);
+
+    return {
+      R: Math.fround(R),
+      rIn: Math.fround(rIn),
+      cavityActive: cavityActive,
+      thickness: Math.fround(thickness),
+      r0ConstVol: Math.fround(r0ConstVol),
+      eta: Math.fround(eta),
+      jacobian: Math.fround(eta2),
+      volFrac: Math.fround(volFrac),
+      stretchRatio: stretchRatio != null ? Math.fround(stretchRatio) : null,
+      stretchOctaves: Math.fround(stretchOctaves),
+      wallRatio: wallRatio != null ? Math.fround(wallRatio) : null,
+      ringAreaConst: Math.fround(ringAreaConst),
+      halfPowerR: Math.fround(halfPowerR),
+      bowTouchesCavity: bowTouchesCavity,
+      bowHalfPowerLock: bowHalfPowerLock,
+      mods: {
+        eta: Math.fround(eta),
+        area: Math.fround(eta2),
+        vol: Math.fround(volFrac),
+        stretch: stretchRatio != null ? Math.fround(stretchRatio) : 1,
+        octaves: Math.fround(stretchOctaves)
+      },
+      modes: {
+        outer: modesOuter,
+        inner: modesInner,
+        shell: modesShell
+      },
+      syzygy: {
+        ratio: stretchRatio != null ? Math.fround(stretchRatio) : null,
+        wallRatio: wallRatio != null ? Math.fround(wallRatio) : null,
+        nearestP: syz.p,
+        nearestQ: syz.q,
+        ratioText: syz.ratioText,
+        intervalName: syz.intervalName,
+        detuneCents: Math.fround(syz.detuneCents),
+        locked: syz.locked,
+        tripleLock: syz.tripleLock,
+        triadText: syz.triadText
+      },
+      slice: {
+        zNorm: Math.fround(zNorm),
+        z: Math.fround(sliceZ),
+        rhoOut: Math.fround(rhoOut),
+        rhoIn: Math.fround(rhoIn),
+        areaOut: Math.fround(areaOut),
+        areaIn: Math.fround(areaIn),
+        areaRing: Math.fround(areaRing),
+        ringAreaConst: Math.fround(ringAreaConst),
+        inCavitySpan: inCavitySpan
+      }
     };
   }
 
@@ -686,6 +924,10 @@
       compile: compile, validate: validate, paramsFor: paramsFor,
       sample: sample, point: point, sampleWindow: sampleWindow,
       shellMetrics: shellMetrics, zoneOf: zoneOf,
+      sphereResonance: sphereResonance,
+      solveConstantVolumeR: solveConstantVolumeR,
+      solveConstantVolumeRIn: solveConstantVolumeRIn,
+      solveConstantVolumePairForEta: solveConstantVolumePairForEta,
       gcd: gcd, isPrimeInt: isPrimeInt, discreteGroup: discreteGroup,
       twinOf: twinOf,
       playhead: playhead, readout: readout,

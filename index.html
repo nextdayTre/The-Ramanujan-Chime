@@ -84,27 +84,74 @@
       <div id="patchNote" class="note"></div>
     </section>
 
-    <!-- 2. Hollow Sphere Constant Carrier -->
+    <!-- 2. Hollow Sphere Constant Carrier & §§1-3 Dual-Sphere Time-Stretch / Modal Resonance -->
     <section class="group">
       <div class="group-head">
         <span class="kicker">Hollow Sphere Vessel</span>
-        <span class="kicker-sub mono" id="shellFormulaBadge">4/3&pi;(R&sup3;&minus;r&sup3;)</span>
+        <div class="vessel-head-right">
+          <button type="button" id="btnLockVol" class="mini-btn lock-vol-btn" title="Constant-Volume Time-Stretch (§2.1): keep V = 4/3·π(R³ − r³) invariant so expanding Cavity r drives Outer R = (r³ + R₀³)^(1/3) with Jacobian dR/dr = η²">&#128274; Lock V</button>
+          <span class="kicker-sub mono" id="shellFormulaBadge">4/3&pi;(R&sup3;&minus;r&sup3;)</span>
+        </div>
       </div>
 
       <div class="field-row">
         <div class="field small">
-          <label for="radius">Outer R <output id="radiusOut">1.00</output></label>
-          <input type="range" id="radius" data-agent-input="r" min="0.3" max="2.6" step="0.05" value="1" data-default="1" />
+          <label for="radius" title="Outer Sphere R (OSC A — always active)">OSC A &middot; R <output id="radiusOut">1.00</output></label>
+          <input type="range" id="radius" data-agent-input="r" min="0.3" max="2.6" step="0.01" value="1" data-default="1" />
         </div>
         <div class="field small">
-          <label for="innerRadius">Cavity r <output id="innerRadiusOut">0.45</output></label>
-          <input type="range" id="innerRadius" data-agent-input="rIn" min="0" max="2.4" step="0.05" value="0.45" data-default="0.45" />
+          <label for="innerRadius" title="Inner Cavity r (OSC B — nested resonator &amp; time-stretch core)">OSC B &middot; r <output id="innerRadiusOut">0.45</output></label>
+          <input type="range" id="innerRadius" data-agent-input="rIn" min="0" max="2.4" step="0.01" value="0.45" data-default="0.45" />
         </div>
+      </div>
+
+      <!-- Quick Modal Syzygy & Half-Power Snap Ratios (§3.1 & §5.7) -->
+      <div class="syzygy-snap-row" role="group" aria-label="Dual-Sphere Modal Ratio Presets">
+        <span class="snap-lbl">&eta;=r/R:</span>
+        <button type="button" class="snap-chip" data-eta="0" title="r = 0 (Solid Ball — OSC A only, OSC B off)">0 Solid</button>
+        <button type="button" class="snap-chip active" data-eta="0.45" title="η = 0.45 (α = 20:9 ≈ 2.22× · +182.4¢ modal beating)">.45 Beat</button>
+        <button type="button" class="snap-chip" data-eta="0.5" title="η = 0.50 (α = 2:1 Exact Octave · Triple Harmonic Lock 1 : 2 : 2!)">.50 Oct&#9733;</button>
+        <button type="button" class="snap-chip" data-eta="0.6667" title="η = 2/3 (α = 3:2 Perfect Fifth · Triple Lock 2 : 3 : 6!)">.67 5th&#9733;</button>
+        <button type="button" class="snap-chip" data-eta="0.7071" title="η = 1/√2 ≈ 0.7071 (−3 dB Half-Power 4-Bit Bow Tangency!)">.71 &minus;3dB</button>
+        <button type="button" class="snap-chip" data-eta="0.75" title="η = 0.75 (α = 4:3 Perfect Fourth · Wall 4× Double Octave · Lock 3 : 4 : 12!)">.75 4th&#9733;</button>
       </div>
 
       <div class="shell-meter">
         <span>Shell Vol <b id="shellVolOut" class="mono">3.81</b></span>
         <span>Wall &Delta;r <b id="shellWallOut" class="mono">0.55</b></span>
+        <span>Ring A <b id="shellRingAreaOut" class="mono" title="Archimedes Constant Cross-Sectional Ring Area π(R² − r²) across |z| ≤ r">2.51</b></span>
+      </div>
+
+      <!-- §2.3 Four Geometric Time-Stretch Modulators & §3.1 Modal Syzygy Readout -->
+      <div class="stretch-mod-card">
+        <div class="mod-grid mono">
+          <div class="mod-cell" title="mod_eta: Linear cavity-to-carrier macro ratio η = r / R ∈ [0, 1)">
+            <div class="mod-cell-top"><span>&eta; = r/R</span><b id="modEtaOut">0.450</b></div>
+            <div class="mod-bar"><i id="modEtaFill" style="width:45%"></i></div>
+          </div>
+          <div class="mod-cell" title="mod_area: Radial Jacobian dR/dr|_V = η² = A_in / A_out (instantaneous constant-volume expansion rate)">
+            <div class="mod-cell-top"><span>&eta;&sup2; = dR/dr</span><b id="modAreaOut">0.203</b></div>
+            <div class="mod-bar"><i id="modAreaFill" style="width:20.3%"></i></div>
+          </div>
+          <div class="mod-cell" title="mod_vol: Fraction of sphere volume in shell wall 1 − η³ = V_shell / V_outer">
+            <div class="mod-cell-top"><span>1&minus;&eta;&sup3; = V/V<sub>out</sub></span><b id="modVolOut">0.909</b></div>
+            <div class="mod-bar"><i id="modVolFill" style="width:90.9%"></i></div>
+          </div>
+          <div class="mod-cell" title="mod_stretch: Time-stretch ratio α = R / r = 1/η and musical octave shift log₂(R/r)">
+            <div class="mod-cell-top"><span>&alpha; = R/r</span><b id="modStretchOut">2.22&times; (+1.15o)</b></div>
+            <div class="mod-bar"><i id="modStretchFill" style="width:55%"></i></div>
+          </div>
+        </div>
+        <div class="syzygy-status mono" id="syzygyBadge" title="Coupled Radial Breathing Modes (ℓ = 0): Outer 1/R : Inner 1/r : Wall 1/(R−r)">
+          Modes 1 : 2.22 : 1.82 &middot; 20:9 (+182.4&cent; beat)
+        </div>
+        <div class="stretch-route-row" role="group" aria-label="Time-Stretch Modulation Coupling (§2.2)">
+          <span class="route-lbl">Stretch Mod:</span>
+          <button type="button" class="route-chip active" data-stretch="off" title="Unmodulated formula evaluation (baseline)">Off</button>
+          <button type="button" class="route-chip" data-stretch="pitchLock" title="Pitch-Locked DAW Time-Stretch (§2.2): Morlet/Gaussian window σ ↦ α·σ while carrier frequency f stays locked">Pitch &sigma;&middot;&alpha;</button>
+          <button type="button" class="route-chip" data-stretch="tape" title="Tape-Style Resampling (§2.2): Carrier frequency f ↦ f / α (pitch drops as stretch α increases)">Tape f/&alpha;</button>
+          <button type="button" class="route-chip" data-stretch="jacobian" title="Radial Jacobian Phase Warp (§2.1): Phase φ ↦ φ + η²·π">Jacobian &eta;&sup2;</button>
+        </div>
       </div>
 
       <div class="field strobe-field" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
@@ -300,12 +347,14 @@
         </div>
       </div>
 
-      <!-- Top-Right Transport, 4-Bit Orbit, Order N Strobe, Zoom Lens & Display Mode HUD -->
+      <!-- Top-Right Transport, 4-Bit Orbit, Dual-Sphere Resonance, Order N Strobe, Zoom Lens & Display Mode HUD -->
       <div class="hud hud-right">
         <div class="hud-row">
           <button type="button" class="hud-pill active" data-toggle="animate" id="btnPlay" data-agent-toggle="animate" title="Play / Pause oscillator (Space)">&#9654; Animate</button>
           <button type="button" class="hud-pill active" data-toggle="trace" id="btnTrace" data-agent-toggle="trace">Trail</button>
           <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" data-agent-toggle="fourBitOrbit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
+          <button type="button" class="hud-pill accent-emerald active" data-toggle="resonanceMode" id="btnResonance" title="Toggle §§1–3 Active Dual-Sphere Coupled Modal Resonance &amp; Archimedes Constant-Area Axial Slice (R key)">&#9673; Resonance</button>
+          <button type="button" class="hud-pill accent-green" data-toggle="harmorVoid" id="btnHarmorVoid" title="Toggle Harmor Void Palette (§5.6): [Cavity = BitWave = Luminous Green] over pure #000000 digital silence (V key)">&#9680; Harmor Void</button>
           <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" data-agent-toggle="strobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
           <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" data-agent-toggle="magnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
         </div>
@@ -374,6 +423,44 @@
           <button type="button" class="mag-chip cam-btn" data-cam="top" title="Top XZ view: 1111/F crowns the center while 8 and 1 continue their orbit">Top XZ [1111/F]</button>
           <button type="button" class="mag-chip cam-btn" data-cam="iso" title="3D Isometric view showing both Meridian & Equatorial orbits">3D Iso</button>
           <button type="button" class="mag-chip active" id="btnQuadrayTetra" data-agent-toggle="quadrayTetra" title="Toggle inscribed Quadray Tetrahedron (1,0,0,0), (0,1,0,0), (0,0,1,0), (0,0,0,1) & blue origin vectors">Quadray</button>
+        </div>
+      </div>
+
+      <!-- Floating Dual-Sphere Modal Resonance & Archimedes Constant-Area Slice HUD Card (§§1–3) -->
+      <div id="resonanceWidget" class="res-widget">
+        <div class="fb-head">
+          <span class="fb-title">&#9673; Dual-Sphere Resonance (&sect;&sect;1&ndash;3)</span>
+          <span class="res-badge mono" id="resTriadBadge">1 : 2.22 : 1.82</span>
+        </div>
+
+        <div class="res-modes-grid mono">
+          <div class="res-mode-item res-outer" title="Outer Sphere Radial Fundamental k₁ = π / R (OSC A — always active)">
+            <span>OSC A &middot; 1/R</span>
+            <b id="resOutMult">1.00&times;</b>
+            <em id="resOutK">k&#8321;=3.14</em>
+          </div>
+          <div class="res-mode-item res-inner" title="Inner Cavity Radial Fundamental k₁ = π / r = α·k_out (OSC B — nested core)">
+            <span>OSC B &middot; 1/r</span>
+            <b id="resInMult">2.22&times;</b>
+            <em id="resInK">k&#8321;=6.98</em>
+          </div>
+          <div class="res-mode-item res-wall" title="Hollow Shell Wall Fundamental k₁ = π / (R − r) = k_out / (1 − η)">
+            <span>Wall &middot; 1/&Delta;r</span>
+            <b id="resWallMult">1.82&times;</b>
+            <em id="resWallK">k&#8321;=5.71</em>
+          </div>
+        </div>
+
+        <div class="res-arch-head mono">
+          <span>Archimedes Slice A<sub>ring</sub>(z)</span>
+          <b id="resArchBadge" class="arch-chip plateau">CONST &pi;(R&sup2;&minus;r&sup2;)</b>
+        </div>
+        <canvas id="archimedesCanvas" class="arch-canvas" width="268" height="58"></canvas>
+
+        <div class="res-slice-ctl mono">
+          <button type="button" id="btnArchAuto" class="mag-chip active" title="Sweep axial slice z automatically with oscillator playhead">Auto z(t)</button>
+          <input type="range" id="archimedesZSlider" min="-1" max="1" step="0.01" value="0" aria-label="Archimedes axial slice z/R" />
+          <span id="resSliceZOut" class="slice-z-val">z=+0.45</span>
         </div>
       </div>
 

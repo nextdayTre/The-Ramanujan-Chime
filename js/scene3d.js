@@ -12,7 +12,7 @@
   'use strict';
 
   var renderer, scene, camera, controls, container, resizeObs;
-  var sphereGroup, sliceGroup, strobeGroup, fourBitGroup, quadrayGroup, gridHelper, axesHelper;
+  var sphereGroup, sliceGroup, strobeGroup, fourBitGroup, quadrayGroup, resonanceGroup, gridHelper, axesHelper;
   var curveLine, antipodalLine, conjugateLine, realTraceLine, ghostLine;
   var marker, antipodalMarker, conjugateMarker, realTraceMarker, magTargetRing;
   var vectorLine, conjugateChordLine;
@@ -21,15 +21,25 @@
   var fbMerNode8, fbMerNode1, fbEqNode8, fbEqNode1;
   var fbMerBadge8, fbMerBadge1, fbEqBadge8, fbEqBadge1;
   var fbMerChord, fbEqChord, fbBridgeLines;
+  var resSliceMesh, resSliceOuterRim, resSliceInnerRim, resSliceSpokes;
+  var resModeOuterRing, resModeInnerRing, resModeWallRing, resHalfPowerRing;
 
   var lastRendered = -1;
   var lastSphereSig = '';
+  var lastResSliceKey = '';
   var cameraMoved = true;
 
   // 4-zone color relative to Hollow Sphere (Cavity rIn .. Shell .. Outer R)
-  function distColor(x, y, z, R, rIn) {
+  // In Harmor Void mode (§5.6), [Cavity_Shell_Color] = [Bitwave_Color] = Luminous Green over #000000 silence
+  function distColor(x, y, z, R, rIn, harmorVoid) {
     var d = Math.sqrt(x * x + y * y + z * z);
     var tol = R * 0.045;
+    if (harmorVoid) {
+      if (Math.abs(d - R) <= tol) return [0.22, 1.00, 0.45];          // ON SPHERE (neon Harmor green)
+      if (d > R + tol) return [0.75, 1.00, 0.32];                     // OUTSIDE (lime harmonic peak)
+      if (rIn > 0.02 && d < rIn - tol * 0.5) return [0.00, 0.96, 0.42];// IN CAVITY (same luminous green substance)
+      return [0.15, 0.92, 0.48];                                      // IN SHELL (emerald green)
+    }
     if (Math.abs(d - R) <= tol) return [0.30, 0.95, 0.87];          // ON SPHERE (cyan)
     if (d > R + tol) return [1.00, 0.42, 0.42];                     // OUTSIDE (coral red)
     if (rIn > 0.02 && d < rIn - tol * 0.5) return [0.35, 0.66, 1.0];// IN CAVITY (sky blue)
@@ -148,15 +158,17 @@
     scene.add(gridHelper);
     scene.add(axesHelper);
 
-    // Vessel, internal 2D slice, Discrete Order N Strobe, and Four-Bit Orbit groups
+    // Vessel, internal 2D slice, Discrete Order N Strobe, Four-Bit Orbit, and §§1-3 Resonance groups
     sphereGroup = new THREE.Group();
     sliceGroup = new THREE.Group();
     strobeGroup = new THREE.Group();
     fourBitGroup = new THREE.Group();
+    resonanceGroup = new THREE.Group();
     scene.add(sphereGroup);
     scene.add(sliceGroup);
     scene.add(strobeGroup);
     scene.add(fourBitGroup);
+    scene.add(resonanceGroup);
 
     strobeNodeGeo = new THREE.SphereGeometry(0.024, 12, 12);
     strobeMatIdent = new THREE.MeshBasicMaterial({ color: 0x6ee7a0 });
@@ -272,33 +284,44 @@
     var cutaway = !!state.toggles.cutaway;
     var showSurface = state.toggles.surface !== false;
     var showWire = state.toggles.wireframe !== false;
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
+
+    var colOuterSurf = harmor ? 0x0b5229 : 0x1b7a91;
+    var colOuterWire = harmor ? 0x147a3e : 0x2e506c;
+    var colInnerSurf = harmor ? 0x00ff66 : 0xd95b72;
+    var colInnerWire = harmor ? 0x39ff14 : 0x7b4c63;
+    var colCutOuter  = harmor ? 0x0e6b36 : 0x1d88a2;
+    var colCutWire   = harmor ? 0x1c8c4b : 0x366485;
+    var colCutRing   = harmor ? 0x00ff66 : 0x36d6c8;
+    var colCutRimOut = harmor ? 0x39ff14 : 0x4df3dd;
+    var colCutInner  = harmor ? 0x00ff66 : 0xff6b7a;
 
     if (!cutaway) {
-      // Full Outer Carrier Sphere
+      // Full Outer Carrier Sphere (OSC A)
       var outerGeo = new THREE.SphereGeometry(R, 52, 34);
       if (showSurface) {
         sphereGroup.add(new THREE.Mesh(outerGeo, new THREE.MeshPhongMaterial({
-          color: 0x1b7a91, transparent: true, opacity: 0.14,
+          color: colOuterSurf, transparent: true, opacity: harmor ? 0.12 : 0.14,
           side: THREE.DoubleSide, depthWrite: false
         })));
       }
       if (showWire) {
         sphereGroup.add(new THREE.Mesh(outerGeo, new THREE.MeshBasicMaterial({
-          color: 0x2e506c, wireframe: true, transparent: true, opacity: 0.36
+          color: colOuterWire, wireframe: true, transparent: true, opacity: harmor ? 0.34 : 0.36
         })));
       }
-      // Inner Cavity Core Sphere
+      // Inner Cavity Core Sphere (OSC B)
       if (rIn > 0.02) {
         var innerGeo = new THREE.SphereGeometry(rIn, 36, 24);
         if (showSurface) {
           sphereGroup.add(new THREE.Mesh(innerGeo, new THREE.MeshPhongMaterial({
-            color: 0xd95b72, transparent: true, opacity: 0.11,
+            color: colInnerSurf, transparent: true, opacity: harmor ? 0.22 : 0.11,
             side: THREE.DoubleSide, depthWrite: false
           })));
         }
         if (showWire) {
           sphereGroup.add(new THREE.Mesh(innerGeo, new THREE.MeshBasicMaterial({
-            color: 0x7b4c63, wireframe: true, transparent: true, opacity: 0.25
+            color: colInnerWire, wireframe: true, transparent: true, opacity: harmor ? 0.48 : 0.25
           })));
         }
       }
@@ -308,17 +331,17 @@
       var botOuterGeo = new THREE.SphereGeometry(R, 56, 24, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
       if (showSurface) {
         sphereGroup.add(new THREE.Mesh(botOuterGeo, new THREE.MeshPhongMaterial({
-          color: 0x1d88a2, transparent: true, opacity: 0.24,
+          color: colCutOuter, transparent: true, opacity: 0.24,
           side: THREE.DoubleSide, depthWrite: false
         })));
       }
       if (showWire) {
         var topWireGeo = new THREE.SphereGeometry(R, 40, 18, 0, Math.PI * 2, 0, Math.PI / 2);
         sphereGroup.add(new THREE.Mesh(topWireGeo, new THREE.MeshBasicMaterial({
-          color: 0x366485, wireframe: true, transparent: true, opacity: 0.24
+          color: colCutWire, wireframe: true, transparent: true, opacity: 0.24
         })));
         sphereGroup.add(new THREE.Mesh(botOuterGeo, new THREE.MeshBasicMaterial({
-          color: 0x366485, wireframe: true, transparent: true, opacity: 0.42
+          color: colCutWire, wireframe: true, transparent: true, opacity: 0.42
         })));
       }
 
@@ -327,28 +350,28 @@
         var ringGeo = new THREE.RingGeometry(rIn, R, 72);
         ringGeo.rotateX(-Math.PI / 2);
         sphereGroup.add(new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({
-          color: 0x36d6c8, transparent: true, opacity: 0.25,
+          color: colCutRing, transparent: true, opacity: 0.25,
           side: THREE.DoubleSide, depthWrite: false
         })));
       }
-      sphereGroup.add(makeCircleLoop(R, 96, 0x4df3dd, 0.75, 'xz'));
+      sphereGroup.add(makeCircleLoop(R, 96, colCutRimOut, 0.75, 'xz'));
 
-      // Inner Cavity Bowl & Coral Rim (rIn)
+      // Inner Cavity Bowl & Rim (rIn)
       if (rIn > 0.02) {
         var botInnerGeo = new THREE.SphereGeometry(rIn, 40, 18, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
         if (showSurface) {
           sphereGroup.add(new THREE.Mesh(botInnerGeo, new THREE.MeshPhongMaterial({
-            color: 0xff6b7a, transparent: true, opacity: 0.22,
+            color: colCutInner, transparent: true, opacity: harmor ? 0.30 : 0.22,
             side: THREE.DoubleSide, depthWrite: false
           })));
           var cavDisk = new THREE.CircleGeometry(rIn, 64);
           cavDisk.rotateX(-Math.PI / 2);
           sphereGroup.add(new THREE.Mesh(cavDisk, new THREE.MeshBasicMaterial({
-            color: 0xff6b7a, transparent: true, opacity: 0.16,
+            color: colCutInner, transparent: true, opacity: harmor ? 0.22 : 0.16,
             side: THREE.DoubleSide, depthWrite: false
           })));
         }
-        sphereGroup.add(makeCircleLoop(rIn, 72, 0xff6b7a, 0.85, 'xz'));
+        sphereGroup.add(makeCircleLoop(rIn, 72, colCutInner, 0.88, 'xz'));
       }
     }
 
@@ -415,6 +438,158 @@
 
     sliceGroup.visible = state.toggles.sliceGrid !== false;
     rebuildFourBit(state);
+    rebuildResonance(state);
+  }
+
+  // ---- §§1–3 Active Dual-Sphere Coupled Modal Resonance & Archimedes Constant-Area Slice ----
+  function rebuildResonance(state) {
+    if (!resonanceGroup) return;
+    clearGroup(resonanceGroup);
+    lastResSliceKey = '';
+
+    var R = Math.max(0.1, state.r);
+    var rIn = Math.min(Math.max(0, state.rIn != null ? state.rIn : 0), R * 0.98);
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
+
+    // 1. Coupled Radial Breathing Mode Nodal Rings (l = 0, §3.1):
+    //    - Outer Mode (OSC A): k_1 = pi / R (1x)
+    //    - Inner Cavity Mode (OSC B): k_1 = pi / r (alpha = R/r)
+    //    - Hollow Shell Wall Mode: k_1 = pi / (R - r) at mid-shell radius (R + r) / 2
+    resModeOuterRing = makeCircleLoop(1.0, 96, harmor ? 0x39ff14 : 0x4df3dd, 0.72, 'xz');
+    resModeOuterRing.scale.set(R, 1, R);
+    resonanceGroup.add(resModeOuterRing);
+
+    resModeInnerRing = makeCircleLoop(1.0, 72, harmor ? 0x00ff66 : 0xff6b7a, 0.85, 'xz');
+    resModeInnerRing.scale.set(Math.max(0.001, rIn), 1, Math.max(0.001, rIn));
+    resModeInnerRing.visible = rIn > 0.01;
+    resonanceGroup.add(resModeInnerRing);
+
+    var rMid = 0.5 * (R + rIn);
+    resModeWallRing = makeCircleLoop(1.0, 84, 0xffd166, 0.78, 'xz');
+    resModeWallRing.scale.set(rMid, 1, rMid);
+    resModeWallRing.visible = (R - rIn) > 0.01;
+    resonanceGroup.add(resModeWallRing);
+
+    // 2. -3 dB Half-Power Bow Tangency Reference Ring at R / sqrt(2) ≈ 0.7071 R (§5.7 preview)
+    var rHalf = R * Math.SQRT1_2;
+    resHalfPowerRing = makeCircleLoop(rHalf, 72, 0x9d8cff, 0.36, 'xy');
+    resonanceGroup.add(resHalfPowerRing);
+
+    // 3. Archimedes Constant-Area Corridor Boundary Rings at z = -rIn and z = +rIn
+    if (rIn > 0.02 && rIn < R * 0.99) {
+      var rhoCap = Math.sqrt(Math.max(0, R * R - rIn * rIn));
+      var capFront = makeCircleLoop(rhoCap, 64, 0x6ee7a0, 0.35, 'xy');
+      capFront.position.z = rIn;
+      var capBack = makeCircleLoop(rhoCap, 64, 0x6ee7a0, 0.35, 'xy');
+      capBack.position.z = -rIn;
+      resonanceGroup.add(capFront, capBack);
+    }
+
+    // 4. Archimedes Moving Cross-Sectional Annular Disc perpendicular to Z-axis at z = sliceZ (§3.3)
+    resSliceMesh = new THREE.Mesh(
+      new THREE.RingGeometry(0.01, R, 72),
+      new THREE.MeshBasicMaterial({
+        color: harmor ? 0x00ff66 : 0x6ee7a0,
+        transparent: true,
+        opacity: 0.24,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      })
+    );
+    resonanceGroup.add(resSliceMesh);
+
+    resSliceOuterRim = makeCircleLoop(1.0, 84, harmor ? 0x39ff14 : 0x4df3dd, 0.92, 'xy');
+    resSliceInnerRim = makeCircleLoop(1.0, 64, harmor ? 0x00ff66 : 0xff6b7a, 0.95, 'xy');
+    resonanceGroup.add(resSliceOuterRim, resSliceInnerRim);
+
+    resSliceSpokes = new THREE.LineSegments(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.72 })
+    );
+    resonanceGroup.add(resSliceSpokes);
+  }
+
+  function updateResonance(playT, state) {
+    if (!resonanceGroup) return;
+    var on = !!(state.toggles && state.toggles.resonanceMode);
+    resonanceGroup.visible = on;
+    if (!on || !Harmony.engine.sphereResonance) return;
+
+    var res = Harmony.engine.sphereResonance(state, playT);
+    var R = res.R, rIn = res.rIn;
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
+    var f = (state.f != null) ? state.f : 1;
+    var ph = state.phaseRad || 0;
+    var basePhase = Math.PI * 2 * f * (playT || 0) + ph;
+
+    // 1. Coupled Radial Standing-Wave Breathing Pulse (l = 0, §3.1):
+    //    Outer pulses at 1x, Inner pulses at alpha = R/r, Wall node pulses at beta = R/(R-r)
+    var pulseAmp = 0.022;
+    if (resModeOuterRing) {
+      var sOut = R * (1 + pulseAmp * Math.cos(basePhase));
+      resModeOuterRing.scale.set(sOut, 1, sOut);
+    }
+    if (resModeInnerRing) {
+      resModeInnerRing.visible = res.cavityActive;
+      if (res.cavityActive && res.stretchRatio) {
+        var sIn = rIn * (1 + pulseAmp * Math.cos(basePhase * res.stretchRatio));
+        resModeInnerRing.scale.set(Math.max(0.001, sIn), 1, Math.max(0.001, sIn));
+      }
+    }
+    if (resModeWallRing) {
+      resModeWallRing.visible = res.thickness > 0.01;
+      if (res.thickness > 0.01 && res.wallRatio) {
+        var rMid = 0.5 * (R + rIn);
+        var sWall = rMid * (1 + pulseAmp * Math.cos(basePhase * res.wallRatio));
+        resModeWallRing.scale.set(sWall, 1, sWall);
+        resModeWallRing.material.color.setHex(res.syzygy.locked ? 0xffd166 : (harmor ? 0x39ff14 : 0x6ee7a0));
+        resModeWallRing.material.opacity = res.syzygy.locked ? 0.92 : 0.55;
+      }
+    }
+    if (resHalfPowerRing) {
+      resHalfPowerRing.material.opacity = res.bowTouchesCavity ? 0.78 : 0.28;
+      resHalfPowerRing.material.color.setHex(res.bowHalfPowerLock ? 0xffd166 : 0x9d8cff);
+    }
+
+    // 2. Archimedes Axial Slice Disc at z = res.slice.z (§3.3)
+    var sl = res.slice;
+    var rhoOut = Math.max(0.002, sl.rhoOut);
+    var rhoIn = sl.inCavitySpan ? Math.max(0.001, sl.rhoIn) : 0.0005;
+    var sliceKey = rhoIn.toFixed(3) + '|' + rhoOut.toFixed(3) + '|' + (sl.inCavitySpan ? 1 : 0) + '|' + (harmor ? 1 : 0);
+
+    if (resSliceMesh && sliceKey !== lastResSliceKey) {
+      lastResSliceKey = sliceKey;
+      if (resSliceMesh.geometry) resSliceMesh.geometry.dispose();
+      resSliceMesh.geometry = new THREE.RingGeometry(rhoIn, rhoOut, 64);
+      // Inside [-r, +r], A_ring(z) = pi*(R^2 - r^2) is strictly constant (emerald/green plateau);
+      // in the polar caps |z| > r, it tapers parabolically (cyan/gold cap)
+      resSliceMesh.material.color.setHex(
+        harmor ? (sl.inCavitySpan ? 0x00ff66 : 0x16a34a)
+               : (sl.inCavitySpan ? 0x6ee7a0 : 0x36d6c8)
+      );
+      resSliceMesh.material.opacity = sl.inCavitySpan ? 0.26 : 0.16;
+    }
+    if (resSliceMesh) resSliceMesh.position.z = sl.z;
+
+    if (resSliceOuterRim) {
+      resSliceOuterRim.position.z = sl.z;
+      resSliceOuterRim.scale.set(rhoOut, rhoOut, 1);
+    }
+    if (resSliceInnerRim) {
+      resSliceInnerRim.visible = sl.inCavitySpan && sl.rhoIn > 0.005;
+      resSliceInnerRim.position.z = sl.z;
+      resSliceInnerRim.scale.set(Math.max(0.001, sl.rhoIn), Math.max(0.001, sl.rhoIn), 1);
+    }
+    if (resSliceSpokes) {
+      var r0 = sl.inCavitySpan ? sl.rhoIn : 0;
+      var spPos = [
+         r0, 0, sl.z,   rhoOut, 0, sl.z,
+        -r0, 0, sl.z,  -rhoOut, 0, sl.z,
+         0,  r0, sl.z,  0,  rhoOut, sl.z,
+         0, -r0, sl.z,  0, -rhoOut, sl.z
+      ];
+      resSliceSpokes.geometry.setAttribute('position', new THREE.Float32BufferAttribute(spPos, 3));
+    }
   }
 
   // Build Four-Bit Orbit (1000 ↔ 0001 Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron)
@@ -646,13 +821,14 @@
       return;
     }
     var R = state.r, rIn = Math.min(state.rIn != null ? state.rIn : 0, R);
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
     var pos = [], col = [];
     for (var i = 0; i < points.length - 1; i++) {
       var a = points[i], b = points[i + 1];
       if (!a.valid || !b.valid) continue;
       pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
-      var ca = distColor(a.x, a.y, a.z, R, rIn);
-      var cb = distColor(b.x, b.y, b.z, R, rIn);
+      var ca = distColor(a.x, a.y, a.z, R, rIn, harmor);
+      var cb = distColor(b.x, b.y, b.z, R, rIn, harmor);
       col.push(ca[0], ca[1], ca[2], cb[0], cb[1], cb[2]);
     }
     curveLine.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -873,7 +1049,8 @@
       rInVal.toFixed(3),
       state.toggles.cutaway ? 1 : 0,
       state.toggles.surface ? 1 : 0,
-      state.toggles.wireframe ? 1 : 0
+      state.toggles.wireframe ? 1 : 0,
+      state.toggles.harmorVoid ? 1 : 0
     ].join('|');
 
     var dirtyDidChange = (dirty !== lastRendered) || (sphereSig !== lastSphereSig);
@@ -896,9 +1073,11 @@
 
     updatePlayhead(points, playT, state);
     updateFourBit(playT, state);
+    updateResonance(playT, state);
     controls.update();
 
-    if (state.toggles.autoRotate || state.toggles.animate || dirtyDidChange || cameraMoved) {
+    var resActive = !!(state.toggles.resonanceMode);
+    if (state.toggles.autoRotate || state.toggles.animate || resActive || dirtyDidChange || cameraMoved) {
       renderer.render(scene, camera);
       cameraMoved = false;
     }
