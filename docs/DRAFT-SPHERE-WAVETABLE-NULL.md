@@ -677,3 +677,11 @@ Keeping **BitWave** cleanly independent as its own tool, *The Ramanujan Chime* e
 - **Bottom Rail `BitWave` View (`EQ / Slice | PCM Groove | BitWave`):** Draws the luminous emerald Fritsch–Carlson monotone-cubic register spline (`A`, dashed `B`, glowing `Z`, `0x8` zero-crossing midline, live playhead dot, and bottom hex nibble strip) directly inside the `6 · Floor WT` rail.
 - **3D Floor & MiniMeters Coupling (`Engine.floorField`):** In **`3D Wavetable`** mode, the register stack (`A` back → active/`Z` center `2D f(x)` slice → `B` front) sculpts the translucent 3D Cutaway Floor. In **`MiniMeters 3D`** mode, `Engine.fftMag()` extracts the real harmonic spectrum and RMS/Crest Factor of the cyclic register on the center `2D f(x)` slice with 3D cavity dispersion.
 - **Custom Arbitrary LFO (`5 · Mod & Logic → BitWave Reg`):** Exposes `tap_bitwave` (`#4af28a`) as a draggable modulation source scanning the active BitWave register's monotone-cubic spline centered on `0x8 = 0.0`, so any BitWave register can modulate `Phase φ`, `Order N`, `Slice z/R`, `Cavity r`, `Partials K`, or `Floor Zoom` deterministically.
+
+### 10.7 Spherical Twin Decompiler (`BitWaveFeed.decompileTwins`)
+
+Treats any static BitWave seed register $W_0$ (`8b` dipole `A5 ↔ 5A`, `64b`, or `256b`) seated on the `2D f(x)` slice through exact `BigInt` Dihedral / Klein-Four ($V_4$) register algebra driven modularly around $360^\circ$ by `Phase φ`, `playT`, the top `TWIN` toolbar, and the Hollow Vessel ratio $\eta = r / R$:
+
+- **Spatial Twin Identities:** Primary `P = ROL(W₀, k(θ))`, Conjugate `P̄ = ~P` (1's complement across `0x8`), Antipodal `−P` (180° counter-orbit `ROR(W₀, k + W/2)` or 2's complement `(2^W − P) mod 2^W`), and Observed State `Z(θ)`.
+- **Modular `if–then` Rules:** `Follow TWIN` (`Off / −P Null / P̄ Conj / Both`), `Cavity r Gate` (flips nibbles outside `|y_i| ≤ η` across the cavity wall to `P̄`), `360° Quadrant` (`Q1→P`, `Q2→P̄`, `Q3→−P`, `Q4→P⊕−P`), `b-anti ⊕`, and `2s-Comp Null`.
+- **Live Readouts & Modulation:** Displays deterministic `HEX · DEC · BIN` per spatial twin in `6 · Floor WT`, morphs the 3D Cutaway Floor (`P → Z → −P`), and feeds `Z(θ)` into `5 · Mod & Logic → BitWave Reg`.

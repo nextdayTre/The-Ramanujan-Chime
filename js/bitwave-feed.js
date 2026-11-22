@@ -26,6 +26,21 @@
   };
 
   // ---- Canonical Built-In Starter Projects (for instant 1-click auditioning) ----
+  var DIPOLE_8_DOC = {
+    schema: 3,
+    app: 'bitwave',
+    savedAt: '2026-11-22T00:00:00.000Z',
+    N: 8,
+    view: { lane: '1', view3d: false, split3d: false, splitPair: ['1', '2'], activePane: 0, lfoMode: 'rotcw', lfoRate: 4 },
+    lanes: {
+      '1': { a: 'A5', b: 'FF', showB: true, binop: 'xor', edit: 'a', seededB: false, lfoB: '0', colA: -1, colB: -1, focus: 'a', frameVis: { a: true, b: true, z: true } },
+      '2': { a: '81', b: '18', showB: true, binop: 'xor', edit: 'a', seededB: true, lfoB: '0', colA: -1, colB: -1, focus: 'z', frameVis: { a: true, b: true, z: true } },
+      '3': { a: 'F0', b: '0F', showB: true, binop: 'xor', edit: 'a', seededB: true, lfoB: '0', colA: -1, colB: -1, focus: 'z', frameVis: { a: true, b: true, z: true } }
+    },
+    routes: [],
+    parked: {}
+  };
+
   var CANONICAL_64_DOC = {
     schema: 3,
     app: 'bitwave',
@@ -611,10 +626,236 @@
   }
 
   function loadPreset(presetId) {
+    if (presetId === 'dipole8') {
+      return ingest(DIPOLE_8_DOC, { transport: 'preset', name: '8b Dipole A5 \u2194 5A' });
+    }
     if (presetId === 'pulse256') {
       return ingest(PULSE_256_DOC, { transport: 'preset', name: '256b Edge Pulse' });
     }
     return ingest(CANONICAL_64_DOC, { transport: 'preset', name: '64b Canonical A\u2295B' });
+  }
+
+  // ---- Spherical Twin Decompiler (BigInt-Exact Dihedral / Klein-Four V4 Register Algebra) ----
+  // Treats any static BitWave seed register W0 on the 2D f(x) slice through the Ramanujan Chime's
+  // spatial twin identities (Primary P, Conjugate P̄, Antipodal −P, Syzygy Observed Z) modulated
+  // modularly around 360 deg (Phase phi / playT) and gated by the Hollow Vessel ratio eta = r / R.
+  var TWIN_RULES = [
+    { id: 'twin',      label: 'Follow TWIN' },
+    { id: 'cavity',    label: 'Cavity r Gate' },
+    { id: 'quadrant',  label: '360\u00B0 Quadrant' },
+    { id: 'banti_xor', label: 'b-anti XOR' },
+    { id: 'null_add',  label: '2s-Comp Null' }
+  ];
+
+  var twinEnabled = false;
+  var twinRule = 'twin'; // 'twin' | 'cavity' | 'quadrant' | 'banti_xor' | 'null_add'
+
+  function bigFromNibbles(nibbles) {
+    var v = BigInt(0);
+    for (var i = 0; i < nibbles.length; i++) {
+      v = (v << BigInt(4)) | BigInt(clamp(Math.round(nibbles[i] || 0), 0, 15));
+    }
+    return v;
+  }
+
+  function nibblesFromBig(val, nibCount) {
+    var out = new Array(nibCount);
+    var cur = val;
+    var mask4 = BigInt(0xF);
+    for (var i = nibCount - 1; i >= 0; i--) {
+      out[i] = Number(cur & mask4);
+      cur = cur >> BigInt(4);
+    }
+    return out;
+  }
+
+  function rolBig(val, shift, widthBits) {
+    var W = BigInt(widthBits);
+    var mask = (BigInt(1) << W) - BigInt(1);
+    var v = val & mask;
+    var k = ((shift % widthBits) + widthBits) % widthBits;
+    if (k === 0) return v;
+    var bk = BigInt(k);
+    return ((v << bk) | (v >> (W - bk))) & mask;
+  }
+
+  function rorBig(val, shift, widthBits) {
+    var W = BigInt(widthBits);
+    var mask = (BigInt(1) << W) - BigInt(1);
+    var v = val & mask;
+    var k = ((shift % widthBits) + widthBits) % widthBits;
+    if (k === 0) return v;
+    var bk = BigInt(k);
+    return ((v >> bk) | (v << (W - bk))) & mask;
+  }
+
+  function fmtBinGrouped(val, widthBits) {
+    var raw = val.toString(2);
+    while (raw.length < widthBits) raw = '0' + raw;
+    if (widthBits <= 16) {
+      var parts = [];
+      for (var i = 0; i < raw.length; i += 4) parts.push(raw.slice(i, i + 4));
+      return parts.join(' ');
+    }
+    return raw.slice(0, 8) + '\u2026' + raw.slice(raw.length - 8);
+  }
+
+  function fmtDecCompact(val) {
+    var s = val.toString(10);
+    if (s.length <= 16) return s;
+    return s.slice(0, 7) + '\u2026' + s.slice(s.length - 5) + ' (' + s.length + 'd)';
+  }
+
+  function packRegister(val, nibCount, label) {
+    var W = nibCount * 4;
+    var mask = (BigInt(1) << BigInt(W)) - BigInt(1);
+    var v = val & mask;
+    var nibs = nibblesFromBig(v, nibCount);
+    var hex = hexFromNibbles(nibs);
+    var decFull = v.toString(10);
+    return {
+      label: label || '',
+      hex: hex,
+      dec: fmtDecCompact(v),
+      decFull: decFull,
+      bin: fmtBinGrouped(v, W),
+      nibbles: nibs,
+      popcount: popcountNibbles(nibs)
+    };
+  }
+
+  function decompileTwins(seedNibbles, opts) {
+    opts = opts || {};
+    var nibs = (seedNibbles && seedNibbles.length >= 2) ? seedNibbles : DEFAULT_LFO_NIBBLES;
+    var M = nibs.length;
+    var W = M * 4;
+    var mask = (BigInt(1) << BigInt(W)) - BigInt(1);
+    var seedBig = bigFromNibbles(nibs);
+
+    var rawTheta = typeof opts.thetaDeg === 'number' && isFinite(opts.thetaDeg) ? opts.thetaDeg : 0;
+    var thetaDeg = ((rawTheta % 360) + 360) % 360;
+    var stepK = Math.floor((thetaDeg / 360) * W) % W;
+    var quadrant = Math.min(4, Math.floor(thetaDeg / 90) + 1); // 1..4
+    var eta = clamp(typeof opts.eta === 'number' && isFinite(opts.eta) ? opts.eta : 0.45, 0, 1);
+    var twinMode = opts.twinMode || 'both';
+    var rule = opts.rule || twinRule || 'twin';
+
+    // 1. Primary P(theta): circular clockwise bit-rotation around 360 deg
+    var pBig = rolBig(seedBig, stepK, W);
+    // 2. Conjugate P_conj(theta): bitwise 1's complement (~P = P ^ F...F), reflecting vertically across 0x8
+    var conjBig = (~pBig) & mask;
+    // 3. Antipodal -P(theta): either true 180-deg counter-orbit ROR(W0, k + W/2) or exact 2's complement (2^W - P)
+    var use2sComp = (rule === 'null_add') || (opts.nullKind === '2s-comp');
+    var nullBig = use2sComp
+      ? (((BigInt(1) << BigInt(W)) - pBig) & mask)
+      : rorBig(seedBig, stepK + (W >> 1), W);
+
+    var P = packRegister(pBig, M, 'P');
+    var conj = packRegister(conjBig, M, 'P\u0304');
+    var nullTwin = packRegister(nullBig, M, '\u2212P');
+    nullTwin.kind = use2sComp ? '2s-comp' : 'b-anti';
+
+    // Cavity amplitude threshold mask per nibble: |y_i| <= eta -> IN CAVITY (1), else IN SHELL (0)
+    var cavityMask = new Array(M);
+    var inCavityCount = 0;
+    for (var ci = 0; ci < M; ci++) {
+      var ampNorm = Math.abs((P.nibbles[ci] - 8) / 8);
+      var inside = ampNorm <= eta + 1e-6;
+      cavityMask[ci] = inside ? 1 : 0;
+      if (inside) inCavityCount++;
+    }
+
+    // 4. Observed State Z(theta) via modular if-this-then-that rule
+    var obsBig = pBig;
+    var obsLabel = 'P';
+    var ruleLabel = 'Follow TWIN';
+
+    if (rule === 'cavity') {
+      ruleLabel = 'Cavity r Gate';
+      var gated = new Array(M);
+      for (var gi = 0; gi < M; gi++) {
+        // if IN CAVITY (|y| <= r) -> keep P nibble; if IN SHELL (|y| > r) -> flip to Conjugate P̄!
+        gated[gi] = cavityMask[gi] ? P.nibbles[gi] : conj.nibbles[gi];
+      }
+      obsBig = bigFromNibbles(gated);
+      obsLabel = 'CAV(' + inCavityCount + '/' + M + ')';
+    } else if (rule === 'quadrant') {
+      ruleLabel = '360\u00B0 Quadrant';
+      if (quadrant === 1) { obsBig = pBig; obsLabel = 'Q1: P'; }
+      else if (quadrant === 2) { obsBig = conjBig; obsLabel = 'Q2: P\u0304 Conj'; }
+      else if (quadrant === 3) { obsBig = nullBig; obsLabel = 'Q3: \u2212P Null'; }
+      else { obsBig = (pBig ^ nullBig) & mask; obsLabel = 'Q4: P\u2295\u2212P'; }
+    } else if (rule === 'banti_xor') {
+      ruleLabel = 'b-anti XOR';
+      obsBig = (pBig ^ nullBig) & mask;
+      obsLabel = 'P \u2295 \u2212P';
+    } else if (rule === 'null_add') {
+      ruleLabel = '2s-Comp Null';
+      obsBig = (pBig + nullBig) & mask;
+      obsLabel = 'P + (\u2212P)';
+    } else {
+      // Follow top TWIN toolbar ('off' | 'antipodal' | 'conjugate' | 'both')
+      ruleLabel = 'Follow TWIN';
+      if (twinMode === 'off') { obsBig = pBig; obsLabel = 'P (Off)'; }
+      else if (twinMode === 'conjugate') { obsBig = conjBig; obsLabel = 'P\u0304 Conj'; }
+      else if (twinMode === 'antipodal') { obsBig = nullBig; obsLabel = '\u2212P Null'; }
+      else { obsBig = (pBig ^ nullBig) & mask; obsLabel = 'P \u2295 \u2212P'; }
+    }
+
+    var observed = packRegister(obsBig, M, obsLabel);
+    return {
+      width: W,
+      nibbleCount: M,
+      thetaDeg: Math.round(thetaDeg * 10) / 10,
+      stepK: stepK,
+      quadrant: quadrant,
+      eta: eta,
+      rule: rule,
+      ruleLabel: ruleLabel,
+      twinMode: twinMode,
+      cavityMask: cavityMask,
+      inCavityCount: inCavityCount,
+      P: P,
+      conj: conj,
+      nullTwin: nullTwin,
+      observed: observed,
+      balanced: observed.popcount === (W >> 1),
+      isNull: observed.popcount === 0
+    };
+  }
+
+  function decompileForState(state, playT) {
+    var ln = getActiveLaneObj();
+    if (!ln || !twinEnabled) return null;
+    var fr = ln.frames[selectedFrame] || ln.frames.z || ln.frames.a;
+    if (!fr || !fr.nibbles || fr.nibbles.length < 2) return null;
+    var R = Math.max(0.1, (state && state.r) ? state.r : 1.0);
+    var rIn = Math.max(0, Math.min(R, (state && state.rIn != null) ? state.rIn : 0.45));
+    var eta = rIn / R;
+    var phaseDeg = ((state && state.phaseRad) ? state.phaseRad : 0) * 180 / Math.PI;
+    var tVal = (typeof playT === 'number' && isFinite(playT)) ? playT : ((state && state.playT) || 0);
+    var thetaDeg = tVal * 360 + phaseDeg;
+    return decompileTwins(fr.nibbles, {
+      thetaDeg: thetaDeg,
+      eta: eta,
+      twinMode: (state && state.twinMode) || 'both',
+      rule: twinRule
+    });
+  }
+
+  function getTwinConfig() {
+    return { enabled: twinEnabled, rule: twinRule, rules: TWIN_RULES };
+  }
+
+  function setTwinConfig(cfg) {
+    if (!cfg || typeof cfg !== 'object') return;
+    if (typeof cfg.enabled === 'boolean') twinEnabled = cfg.enabled;
+    if (typeof cfg.rule === 'string') {
+      for (var i = 0; i < TWIN_RULES.length; i++) {
+        if (TWIN_RULES[i].id === cfg.rule) { twinRule = cfg.rule; break; }
+      }
+    }
+    notify();
   }
 
   function clear() {
@@ -704,8 +945,14 @@
     };
   }
 
-  // Always returns a valid nibble array for ModMatrix tap_bitwave (falls back to canonical sine when dormant)
-  function getLfoNibbles() {
+  // Always returns a valid nibble array for ModMatrix tap_bitwave (uses live Twin Decompiler when enabled)
+  function getLfoNibbles(state, playT) {
+    if (active && twinEnabled && state) {
+      var dec = decompileForState(state, playT);
+      if (dec && dec.observed && dec.observed.nibbles && dec.observed.nibbles.length >= 2) {
+        return dec.observed.nibbles;
+      }
+    }
     var ln = getActiveLaneObj();
     if (ln) {
       var fr = ln.frames[selectedFrame] || ln.frames.z || ln.frames.a;
@@ -757,6 +1004,7 @@
   var api = {
     CHANNEL_NAME: 'bitwave-feed',
     DEFAULT_LFO_NIBBLES: DEFAULT_LFO_NIBBLES,
+    TWIN_RULES: TWIN_RULES,
     parseInput: parseInput,
     ingest: ingest,
     loadPreset: loadPreset,
@@ -764,6 +1012,10 @@
     isActive: function () { return active; },
     getFeed: getFeed,
     getLfoNibbles: getLfoNibbles,
+    decompileTwins: decompileTwins,
+    decompileForState: decompileForState,
+    getTwinConfig: getTwinConfig,
+    setTwinConfig: setTwinConfig,
     setLane: setLane,
     setFrame: setFrame,
     subscribe: subscribe,

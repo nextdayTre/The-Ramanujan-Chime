@@ -2883,3 +2883,20 @@ body.mod-dragging .floor-zoom-ctl[data-mod-target].drop-hover {
 .floor-scope-btn[data-fscope="bitwave"].active {
   color: #7affad !important;
 }
+.floor-bw-twin.active {
+  background: rgba(54, 214, 200, 0.16) !important;
+  border-color: rgba(54, 214, 200, 0.62) !important;
+  color: var(--accent-bright) !important;
+}
+.floor-readouts[hidden] { display: none !important; }
+.floor-twin-readouts b {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-twin-readouts .twin-row-p span { color: var(--accent-bright); }
+.floor-twin-readouts .twin-row-conj span { color: #ffc575; }
+.floor-twin-readouts .twin-row-null span { color: #ff82be; }
+.floor-twin-readouts .twin-row-obs span,
+.floor-twin-readouts .twin-row-obs b { color: #7affad; }

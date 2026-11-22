@@ -511,22 +511,26 @@
     if (bwFeed && typeof bwFeed.isActive === 'function' && bwFeed.isActive()) {
       var fd = bwFeed.getFeed();
       if (fd && fd.active && fd.activeNibbles && fd.activeNibbles.length >= 2) {
+        var twinDec = typeof bwFeed.decompileForState === 'function'
+          ? bwFeed.decompileForState(state, state.playT)
+          : null;
         return {
           bpm: bpm,
           windowBeats: beats,
           windowSec: windowSec,
           hasLookahead: false,
-          sourceLabel: 'BITWAVE ' + fd.width + 'b' + (fd.liveTransport === 'broadcast' ? ' LIVE' : ''),
+          sourceLabel: 'BITWAVE ' + fd.width + 'b' + (twinDec ? ' TWIN' : (fd.liveTransport === 'broadcast' ? ' LIVE' : '')),
           bitwave: {
-            nibblesA: fd.nibblesA,
-            nibblesB: fd.nibblesB,
-            nibblesZ: fd.nibblesZ,
-            activeNibbles: fd.activeNibbles,
-            label: fd.label,
+            nibblesA: twinDec ? twinDec.P.nibbles : fd.nibblesA,
+            nibblesB: twinDec ? twinDec.nullTwin.nibbles : fd.nibblesB,
+            nibblesZ: twinDec ? twinDec.observed.nibbles : fd.nibblesZ,
+            activeNibbles: twinDec ? twinDec.observed.nibbles : fd.activeNibbles,
+            label: twinDec ? twinDec.observed.label : fd.label,
             widthBits: fd.width,
             opSymbol: fd.opSymbol,
             lane: fd.lane,
-            frame: fd.frame
+            frame: fd.frame,
+            twinDec: twinDec
           }
         };
       }
@@ -740,28 +744,55 @@
     ctx.fillText('v=' + (field.floorVelocity || 1).toFixed(2) + ' Ø/s', w - padR - 2, 3);
   }
 
-  // ---- BitWave 2D Luminous Emerald Monotone-Cubic Register View (Read-Only Feed Sink) ----
+  // ---- BitWave 2D Luminous Emerald Monotone-Cubic Register & Spherical Twin Decompiler View ----
   function drawBitWaveScope(state, field, w, h, harmor) {
     var bwMod = Harmony.BitWaveFeed;
     var fd = (bwMod && typeof bwMod.getFeed === 'function') ? bwMod.getFeed() : null;
     var isLiveFeed = !!(fd && fd.active && fd.activeNibbles && fd.activeNibbles.length >= 2);
-    var nibA = isLiveFeed ? fd.nibblesA : (bwMod ? bwMod.DEFAULT_LFO_NIBBLES : [8, 10, 13, 14, 15, 14, 13, 10, 8, 5, 2, 1, 0, 1, 2, 5]);
-    var nibB = isLiveFeed ? fd.nibblesB : null;
-    var nibAct = isLiveFeed ? fd.activeNibbles : nibA;
+    var twinDec = (field && field.bitwave && field.bitwave.twinDec)
+      ? field.bitwave.twinDec
+      : (isLiveFeed && bwMod && typeof bwMod.decompileForState === 'function' ? bwMod.decompileForState(state, state.playT) : null);
+
+    var nibA = twinDec ? twinDec.P.nibbles : (isLiveFeed ? fd.nibblesA : (bwMod ? bwMod.DEFAULT_LFO_NIBBLES : [8, 10, 13, 14, 15, 14, 13, 10, 8, 5, 2, 1, 0, 1, 2, 5]));
+    var nibB = twinDec ? twinDec.nullTwin.nibbles : (isLiveFeed ? fd.nibblesB : null);
+    var nibConj = twinDec ? twinDec.conj.nibbles : null;
+    var nibAct = twinDec ? twinDec.observed.nibbles : (isLiveFeed ? fd.activeNibbles : nibA);
     var nLen = nibAct.length;
 
-    var padL = 22, padR = 10, padT = 16, padB = 20;
+    var padL = 22, padR = 10, padT = 17, padB = 20;
     var plotW = Math.max(20, w - padL - padR);
     var plotH = Math.max(20, h - padT - padB);
 
     ctx.fillStyle = harmor ? '#000000' : '#050a0d';
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle Inner Cavity proportion band centered on the register
+    // Subtle Inner Cavity vertical proportion band centered on the register
     if (field && field.rIn > 0.01) {
       var cavW = plotW * field.eta;
-      ctx.fillStyle = 'rgba(74, 242, 138, 0.055)';
+      ctx.fillStyle = 'rgba(74, 242, 138, 0.045)';
       ctx.fillRect(padL + (plotW - cavW) * 0.5, padT, cavW, plotH);
+    }
+
+    // Horizontal Cavity Amplitude Gate band (|y - 8| <= 8 * eta) when Twin Decompiler is active
+    if (twinDec && twinDec.eta > 0.01) {
+      var hiN = Math.min(15, 8 + 8 * twinDec.eta);
+      var loN = Math.max(0, 8 - 8 * twinDec.eta);
+      var yTopC = padT + (1 - hiN / 15) * plotH;
+      var yBotC = padT + (1 - loN / 15) * plotH;
+      var isCavRule = twinDec.rule === 'cavity';
+      ctx.fillStyle = isCavRule ? 'rgba(54, 214, 200, 0.11)' : 'rgba(54, 214, 200, 0.04)';
+      ctx.fillRect(padL, yTopC, plotW, Math.max(1, yBotC - yTopC));
+      if (isCavRule) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(54, 214, 200, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(padL, yTopC); ctx.lineTo(padL + plotW, yTopC);
+        ctx.moveTo(padL, yBotC); ctx.lineTo(padL + plotW, yBotC);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // Horizontal nibble grid lines: F (15), C (12), 8 (0x8 zero-crossing midline), 4, 0
@@ -822,16 +853,40 @@
       ctx.restore();
     }
 
-    // Draw background companion frames A (solid teal) and B (dashed teal)
-    if (isLiveFeed && fd.nibblesA && fd.frame !== 'a') {
-      traceSpline(fd.nibblesA, 'rgba(46, 194, 126, 0.45)', 1.2, false, null);
-    }
-    if (isLiveFeed && nibB && fd.frame !== 'b') {
-      traceSpline(nibB, 'rgba(54, 214, 200, 0.48)', 1.2, true, null);
+    if (twinDec) {
+      // Spatial Twin overlays matching top TWIN toolbar palette:
+      //   P Primary (cyan-teal), P̄ Conj (amber dashed), −P Null (magenta dashed), Observed Z (glowing emerald)
+      traceSpline(nibA, 'rgba(54, 214, 200, 0.52)', 1.25, false, null);
+      if (nibConj) traceSpline(nibConj, 'rgba(255, 184, 77, 0.44)', 1.15, true, null);
+      if (nibB) traceSpline(nibB, 'rgba(255, 92, 168, 0.48)', 1.2, true, null);
+    } else {
+      // Raw BitWave lane mode: A (solid emerald-teal), B (dashed cyan)
+      if (isLiveFeed && fd.nibblesA && fd.frame !== 'a') {
+        traceSpline(fd.nibblesA, 'rgba(46, 194, 126, 0.45)', 1.2, false, null);
+      }
+      if (isLiveFeed && nibB && fd.frame !== 'b') {
+        traceSpline(nibB, 'rgba(54, 214, 200, 0.48)', 1.2, true, null);
+      }
     }
 
-    // Draw glowing primary active BitWave register spline
+    // Draw glowing primary active / observed BitWave register spline
     traceSpline(nibAct, isLiveFeed ? '#4af28a' : 'rgba(74, 242, 138, 0.72)', 2.1, false, isLiveFeed ? 'rgba(74, 242, 138, 0.22)' : 'rgba(74, 242, 138, 0.10)');
+
+    // Crisp nibble knot markers for compact widths (e.g. 8-bit A5 dipole, 16-bit Quadray, 32-bit)
+    if (nLen <= 16) {
+      for (var ki = 0; ki < nLen; ki++) {
+        var kx = padL + (nLen > 1 ? (ki / (nLen - 1)) * plotW : 0);
+        var ky = padT + (1 - nibAct[ki] / 15) * plotH;
+        var inCavKnot = twinDec && twinDec.cavityMask && twinDec.cavityMask[ki];
+        ctx.fillStyle = (twinDec && twinDec.rule === 'cavity' && !inCavKnot) ? '#ffb84d' : '#b7ffd0';
+        ctx.beginPath();
+        ctx.arc(kx, ky, nLen <= 4 ? 4.2 : 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#050a0d';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    }
 
     // Live playhead cursor synced to state.playT
     var pT = ((state.playT || 0) % 1 + 1) % 1;
@@ -865,27 +920,42 @@
     for (var ni = 0; ni < nLen; ni += stepLbl) {
       var nx = padL + (nLen > 1 ? (ni / (nLen - 1)) * plotW : 0);
       var isHit = Math.abs(ni - activeIdx) < stepLbl;
-      ctx.fillStyle = isHit ? '#ffb84d' : (nibAct[ni] > 0 ? '#6ee7a0' : '#4a605a');
+      var flipCol = (twinDec && twinDec.rule === 'cavity' && twinDec.cavityMask && !twinDec.cavityMask[ni]);
+      ctx.fillStyle = isHit ? '#ffb84d' : (flipCol ? '#ffc575' : (nibAct[ni] > 0 ? '#6ee7a0' : '#4a605a'));
       ctx.fillText(nibAct[ni].toString(16).toUpperCase(), nx, h - 3);
     }
 
-    // Top-left feed provenance caption + top-right active register badge
+    // Top-left decompiler / provenance caption + top-right live HEX/DEC/BIN readout
     ctx.font = '600 9.5px "Cascadia Code", Consolas, monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    if (isLiveFeed) {
+    if (twinDec) {
+      ctx.fillStyle = '#4af28a';
+      var syzTag = twinDec.isNull ? ' · NULL 0' : (twinDec.balanced ? ' · 50% SYZYGY ★' : '');
+      var decHdr = 'TWIN DECOMPILER [' + twinDec.ruleLabel + '] · θ=' + twinDec.thetaDeg.toFixed(0) + '° (k=' + twinDec.stepK + '/' + twinDec.width + ' · Q' + twinDec.quadrant + ')' + syzTag;
+      ctx.fillText(decHdr, padL + 2, 2);
+    } else if (isLiveFeed) {
       ctx.fillStyle = '#4af28a';
       var laneInfo = 'LANE ' + fd.lane + ' · ' + fd.labels.a + ' ' + fd.opSymbol + ' ' + fd.labels.b + ' → ' + fd.labels.z +
         '  [' + fd.width + 'b · ' + fd.nibbleCount + ' nibbles · POP ' + fd.popcount + ']';
       ctx.fillText(laneInfo, padL + 2, 2);
     } else {
       ctx.fillStyle = '#6ee7a0';
-      ctx.fillText('PREVIEW · Click "BW Feed" to paste #bw=/hex, drop .bitwave, or stream via BroadcastChannel', padL + 2, 2);
+      ctx.fillText('PREVIEW · Click "8b / 64b / 256b" or paste a BitWave #bw= link / hex register', padL + 2, 2);
     }
 
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffb84d';
-    ctx.fillText('0x' + nibAct[activeIdx].toString(16).toUpperCase() + ' @ #' + activeIdx, w - padR, 2);
+    if (twinDec) {
+      ctx.fillStyle = '#b7ffd0';
+      var hexDisp = twinDec.observed.hex.length > 16 ? (twinDec.observed.hex.slice(0, 12) + '…') : twinDec.observed.hex;
+      var rightTxt = twinDec.width <= 16
+        ? ('Z=0x' + hexDisp + ' (' + twinDec.observed.dec + ') · ' + twinDec.observed.bin)
+        : ('Z=0x' + hexDisp + ' · POP ' + twinDec.observed.popcount + '/' + twinDec.width);
+      ctx.fillText(rightTxt, w - padR, 2);
+    } else {
+      ctx.fillStyle = '#ffb84d';
+      ctx.fillText('0x' + nibAct[activeIdx].toString(16).toUpperCase() + ' @ #' + activeIdx, w - padR, 2);
+    }
   }
 
   function update(state, field) {

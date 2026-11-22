@@ -36,10 +36,10 @@
     { id: 'tap_bitwave', label: 'BitWave Reg',   short: 'bw',   color: '#4af28a' }
   ];
 
-  function evalBitWaveTap(phase) {
+  function evalBitWaveTap(phase, state, playT) {
     var feed = Harmony.BitWaveFeed;
     if (feed && typeof feed.getLfoNibbles === 'function' && typeof feed.sampleMonotone === 'function') {
-      return clamp(feed.sampleMonotone(feed.getLfoNibbles(), phase), -1, 1);
+      return clamp(feed.sampleMonotone(feed.getLfoNibbles(state, playT), phase), -1, 1);
     }
     var u = ((phase % 1) + 1) % 1;
     var nib = Math.round((Math.sin(u * Math.PI * 2) * 0.5 + 0.5) * 15);
@@ -271,7 +271,7 @@
       srcValues.tap_eta2 = (curEta * curEta) * 2 - 1;
       srcValues.tap_phase = clamp(effValues.phaseDeg / 180, -1, 1);
       srcValues.tap_nibble = (nibble - 8) / 8;
-      srcValues.tap_bitwave = evalBitWaveTap(phi);
+      srcValues.tap_bitwave = evalBitWaveTap(phi, state, playT);
 
       var ctx = {
         nibble: nibble,
@@ -769,7 +769,7 @@
 
     function evalPreview(p) {
       if (lfo) return evalWave(lfo.wave, p * lfo.ratio + lfo.phaseOff);
-      if (srcId === 'tap_bitwave') return evalBitWaveTap(p);
+      if (srcId === 'tap_bitwave') return evalBitWaveTap(p, state, state ? state.playT : 0);
       if (srcId === 'tap_sliceZ') return Math.sin(p * Math.PI * 2);
       if (srcId === 'tap_nibble') return (Math.round(((Math.sin(p * Math.PI * 2) + 1) * 0.5) * 15) - 8) / 8;
       if (srcId === 'tap_phase')  return Math.sin(p * Math.PI * 2);

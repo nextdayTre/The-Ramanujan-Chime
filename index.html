@@ -898,6 +898,15 @@
             <button type="button" class="seg-btn floor-bw-frame-btn" data-bwframe="b" title="Show Frame B">B</button>
             <button type="button" class="seg-btn floor-bw-frame-btn active" data-bwframe="z" title="Show Derived Frame Z">Z</button>
           </div>
+          <button type="button" id="btnFloorBwTwin" class="mini-btn floor-bw-twin" title="Spherical Twin Decompiler: treat this static BitWave slice algebraically through P, P̄ Conj, −P Null &amp; Cavity r">Twin</button>
+          <select id="floorBwRule" class="mod-mini-sel mono" aria-label="Twin decompiler rule" title="Modular 360° algebraic rule producing deterministic HEX / Base-10 / BIN">
+            <option value="twin" selected>Follow TWIN</option>
+            <option value="cavity">Cavity r Gate</option>
+            <option value="quadrant">360&deg; Quad</option>
+            <option value="banti_xor">b-anti &oplus;</option>
+            <option value="null_add">2s-Comp Null</option>
+          </select>
+          <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="dipole8" title="Load minimal 8-bit dipole (A5 ⊕ FF = 5A)">8b</button>
           <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="canonical64" title="Load canonical 64-bit A ⊕ B → Z1 register">64b</button>
           <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="pulse256" title="Load 256-bit edge-pulse register">256b</button>
           <button type="button" id="btnFloorBwClear" class="mini-btn" title="Disconnect BitWave feed &amp; return to synth">Clear</button>
@@ -920,18 +929,25 @@
             <canvas id="floorViewCanvas" class="mini-canvas floor-canvas"></canvas>
           </div>
 
-          <!-- Cavity Proportion & Quick Showcase Card -->
+          <!-- Cavity Proportion / Live Spherical Twin Decompiler Card -->
           <div class="panel2d floor-col-info">
             <div class="panel2d-head">
-              <span class="kicker">Cavity &amp; Time Window T</span>
+              <span class="kicker" id="floorInfoTitle">Cavity &amp; Time Window T</span>
               <span id="floorModeTag" class="mini-tag mono">WAVETABLE</span>
             </div>
-            <div class="floor-readouts mono">
+            <div id="floorCavityReadouts" class="floor-readouts mono">
               <div><span>Window T / Cav</span> <b id="floorWinOut">2.00s &middot; Cav 0.90s</b></div>
               <div><span>Floor Velocity</span> <b id="floorVelOut">1.00 &Oslash;/s</b></div>
               <div><span>RMS / Crest</span> <b id="floorDynOut">&mdash; (synth)</b></div>
               <div><span>Chromatic Pitch</span> <b id="floorPitchOut">G2 (+0&cent;)</b></div>
               <div><span>Modal Interval</span> <b id="floorIntOut">20:9 beat</b></div>
+            </div>
+            <div id="floorTwinReadouts" class="floor-readouts floor-twin-readouts mono" hidden>
+              <div class="twin-row-p"><span>P (ROL)</span> <b id="bwTwinPOut">&mdash;</b></div>
+              <div class="twin-row-conj"><span>P&#772; Conj (~P)</span> <b id="bwTwinConjOut">&mdash;</b></div>
+              <div class="twin-row-null"><span>&minus;P Null</span> <b id="bwTwinNullOut">&mdash;</b></div>
+              <div class="twin-row-obs"><span id="bwTwinObsLbl">Z Observed</span> <b id="bwTwinObsOut">&mdash;</b></div>
+              <div><span>&theta; / Gate</span> <b id="bwTwinMetaOut">0&deg; &middot; k=0</b></div>
             </div>
             <div class="floor-preset-row">
               <button type="button" class="mini-btn floor-demo-btn" data-fdemo="wavetable">Cutaway WT</button>

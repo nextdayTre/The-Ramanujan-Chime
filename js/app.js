@@ -1606,6 +1606,13 @@
     if ($('floorBeatsSelect')) $('floorBeatsSelect').value = String(state.floorBeats || 4);
   }
 
+  function fmtTwinVal(reg, width) {
+    if (!reg) return '—';
+    var h = reg.hex.length > 10 ? (reg.hex.slice(0, 8) + '…') : reg.hex;
+    if (width <= 32) return '0x' + h + ' (' + reg.dec + ')';
+    return '0x' + h + ' · p' + reg.popcount;
+  }
+
   function updateFloorReadouts(field) {
     if (!field) return;
     if ($('floorPitchBadge')) $('floorPitchBadge').textContent = field.pitch ? field.pitch.label : '—';
@@ -1614,6 +1621,44 @@
         ? field.sourceLabel
         : (field.mode === 'spectrogram' ? 'MINIMETERS 3D' : 'WAVETABLE');
     }
+
+    var twinDec = (state.floorScopeView === 'bitwave' && field.bitwave && field.bitwave.twinDec)
+      ? field.bitwave.twinDec
+      : null;
+    if ($('floorCavityReadouts') && $('floorTwinReadouts')) {
+      $('floorCavityReadouts').hidden = !!twinDec;
+      $('floorTwinReadouts').hidden = !twinDec;
+    }
+    if ($('floorInfoTitle')) {
+      $('floorInfoTitle').textContent = twinDec ? 'Spherical Twin Decompiler' : 'Cavity & Time Window T';
+    }
+    if (twinDec) {
+      if ($('bwTwinPOut')) {
+        $('bwTwinPOut').textContent = fmtTwinVal(twinDec.P, twinDec.width);
+        $('bwTwinPOut').title = '0x' + twinDec.P.hex + ' | dec ' + twinDec.P.decFull + ' | bin ' + twinDec.P.bin;
+      }
+      if ($('bwTwinConjOut')) {
+        $('bwTwinConjOut').textContent = fmtTwinVal(twinDec.conj, twinDec.width);
+        $('bwTwinConjOut').title = '0x' + twinDec.conj.hex + ' | dec ' + twinDec.conj.decFull + ' | bin ' + twinDec.conj.bin;
+      }
+      if ($('bwTwinNullOut')) {
+        $('bwTwinNullOut').textContent = fmtTwinVal(twinDec.nullTwin, twinDec.width);
+        $('bwTwinNullOut').title = '(' + twinDec.nullTwin.kind + ') 0x' + twinDec.nullTwin.hex + ' | dec ' + twinDec.nullTwin.decFull;
+      }
+      if ($('bwTwinObsLbl')) $('bwTwinObsLbl').textContent = 'Z · ' + twinDec.observed.label;
+      if ($('bwTwinObsOut')) {
+        $('bwTwinObsOut').textContent = fmtTwinVal(twinDec.observed, twinDec.width);
+        $('bwTwinObsOut').title = '0x' + twinDec.observed.hex + ' | dec ' + twinDec.observed.decFull + ' | bin ' + twinDec.observed.bin;
+      }
+      if ($('bwTwinMetaOut')) {
+        var meta = twinDec.thetaDeg.toFixed(0) + '° · k=' + twinDec.stepK + ' · Q' + twinDec.quadrant;
+        if (twinDec.isNull) meta += ' · NULL';
+        else if (twinDec.balanced) meta += ' · 50%★';
+        $('bwTwinMetaOut').textContent = meta;
+      }
+      return;
+    }
+
     if ($('floorWinOut')) {
       var wFmt = Engine.fmtZoomSec ? Engine.fmtZoomSec(field.windowSec) : (field.windowSec.toFixed(2) + 's');
       var cFmt = Engine.fmtZoomSec ? Engine.fmtZoomSec(field.cavityWindowSec) : (field.cavityWindowSec.toFixed(2) + 's');
@@ -1803,6 +1848,13 @@
       var fr = b.getAttribute('data-bwframe');
       b.classList.toggle('active', fr === (active ? fd.frame : 'z'));
     });
+    var twinCfg = (BitWaveFeed && typeof BitWaveFeed.getTwinConfig === 'function') ? BitWaveFeed.getTwinConfig() : null;
+    if (twinCfg) {
+      if ($('btnFloorBwTwin')) $('btnFloorBwTwin').classList.toggle('active', !!twinCfg.enabled);
+      if ($('floorBwRule')) {
+        $('floorBwRule').value = twinCfg.rule || 'twin';
+      }
+    }
   }
 
   function activateFloorForBitWave(switchScope) {
@@ -1941,10 +1993,29 @@
       if (BitWaveFeed) BitWaveFeed.setFrame(btn.getAttribute('data-bwframe'));
     });
   });
+  if ($('btnFloorBwTwin')) {
+    $('btnFloorBwTwin').addEventListener('click', function () {
+      if (!BitWaveFeed || !BitWaveFeed.getTwinConfig) return;
+      var cur = BitWaveFeed.getTwinConfig();
+      BitWaveFeed.setTwinConfig({ enabled: !cur.enabled });
+      syncFloorUI();
+    });
+  }
+  if ($('floorBwRule')) {
+    $('floorBwRule').addEventListener('change', function () {
+      if (!BitWaveFeed || !BitWaveFeed.setTwinConfig) return;
+      BitWaveFeed.setTwinConfig({ enabled: true, rule: $('floorBwRule').value });
+      syncFloorUI();
+    });
+  }
   document.querySelectorAll('.floor-bw-preset[data-bwpreset]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       if (!BitWaveFeed) return;
-      BitWaveFeed.loadPreset(btn.getAttribute('data-bwpreset'));
+      var pid = btn.getAttribute('data-bwpreset');
+      BitWaveFeed.loadPreset(pid);
+      if (pid === 'dipole8' && BitWaveFeed.setTwinConfig) {
+        BitWaveFeed.setTwinConfig({ enabled: true });
+      }
       activateFloorForBitWave(true);
     });
   });

@@ -46,6 +46,7 @@ function makeState(overrides = {}) {
 describe('Harmony.BitWaveFeed — read-only register feed & monotone-cubic spline', () => {
   beforeEach(() => {
     BitWaveFeed.clear();
+    BitWaveFeed.setTwinConfig({ enabled: false, rule: 'twin' });
     ModMatrix.clearRoutes();
   });
 
@@ -218,5 +219,55 @@ describe('Harmony.BitWaveFeed — read-only register feed & monotone-cubic splin
     ModMatrix.clearRoutes();
     ModMatrix.evaluate(state, 0.25, 0.016);
     assert.ok(Math.abs(state.phaseRad) < 1e-6);
+  });
+
+  it('Spherical Twin Decompiler produces exact BigInt HEX/DEC/BIN for 8b A5 dipole, Cavity r Gate & 360° Quadrant rules', () => {
+    BitWaveFeed.loadPreset('dipole8');
+    const fd = BitWaveFeed.getFeed();
+    assert.equal(fd.width, 8);
+    assert.equal(fd.activeHex, 'A5');
+
+    // At theta=0 deg, 2s-Comp Null: P=0xA5 (165), Conj=0x5A (90), -P=0x5B (91), P + (-P) = 0x00 (Null!)
+    const dNull = BitWaveFeed.decompileTwins([0xA, 0x5], { thetaDeg: 0, rule: 'null_add' });
+    assert.equal(dNull.P.hex, 'A5');
+    assert.equal(dNull.P.dec, '165');
+    assert.equal(dNull.P.bin, '1010 0101');
+    assert.equal(dNull.conj.hex, '5A');
+    assert.equal(dNull.conj.dec, '90');
+    assert.equal(dNull.nullTwin.hex, '5B');
+    assert.equal(dNull.nullTwin.dec, '91');
+    assert.equal(dNull.observed.hex, '00');
+    assert.equal(dNull.isNull, true);
+
+    // At theta=180 deg (k = 4 bits on 8-bit width): ROL(0xA5, 4) === 0x5A
+    const d180 = BitWaveFeed.decompileTwins([0xA, 0x5], { thetaDeg: 180, twinMode: 'off', rule: 'twin' });
+    assert.equal(d180.stepK, 4);
+    assert.equal(d180.P.hex, '5A');
+    assert.equal(d180.observed.hex, '5A');
+
+    // Cavity r Gate: 0xF8 at eta=0.5 -> 0xF is IN SHELL (flips to 0x0), 0x8 is IN CAVITY (stays 0x8) -> 0x08!
+    const dCav = BitWaveFeed.decompileTwins([0xF, 0x8], { thetaDeg: 0, eta: 0.5, rule: 'cavity' });
+    assert.deepEqual(dCav.cavityMask, [0, 1]);
+    assert.equal(dCav.observed.hex, '08');
+    assert.equal(dCav.observed.dec, '8');
+
+    // 360° Quadrant Gate across Q1, Q2, Q3, Q4
+    const q1 = BitWaveFeed.decompileTwins([0xA, 0x5], { thetaDeg: 0, rule: 'quadrant' });
+    const q2 = BitWaveFeed.decompileTwins([0xA, 0x5], { thetaDeg: 90, rule: 'quadrant' });
+    const q3 = BitWaveFeed.decompileTwins([0xA, 0x5], { thetaDeg: 180, rule: 'quadrant' });
+    const q4 = BitWaveFeed.decompileTwins([0xA, 0x5], { thetaDeg: 270, rule: 'quadrant' });
+    assert.equal(q1.observed.hex, q1.P.hex);
+    assert.equal(q2.observed.hex, q2.conj.hex);
+    assert.equal(q3.observed.hex, q3.nullTwin.hex);
+    assert.equal(q4.quadrant, 4);
+
+    // Follow TWIN toolbar mode on 256-bit register (BigInt exact!)
+    BitWaveFeed.loadPreset('pulse256');
+    const st = makeState({ twinMode: 'conjugate', phaseRad: 0, playT: 0 });
+    BitWaveFeed.setTwinConfig({ enabled: true, rule: 'twin' });
+    const d256 = BitWaveFeed.decompileForState(st, 0);
+    assert.equal(d256.width, 256);
+    assert.equal(d256.observed.hex, d256.conj.hex);
+    assert.equal(d256.observed.hex.length, 64);
   });
 });
