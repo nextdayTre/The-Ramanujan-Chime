@@ -1648,12 +1648,29 @@
       bump();
     });
   }
+  function exitBitWaveDisplay(opts) {
+    opts = opts || {};
+    if (opts.disableSync !== false) bwAutoSync = false;
+    if (opts.clearFeed && BitWaveFeed) {
+      BitWaveFeed.clear();
+      if ($('floorBwInput')) $('floorBwInput').value = '';
+    }
+    if (opts.hideBar && $('floorBwBar')) $('floorBwBar').hidden = true;
+    if (state.floorScopeView === 'bitwave') {
+      state.floorScopeView = 'eq';
+    }
+  }
+
   document.querySelectorAll('.floor-mode-btn[data-fmode]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       state.floorMode = btn.getAttribute('data-fmode') || 'wavetable';
       if (!state.toggles.floorWt) {
         state.toggles.floorWt = true;
         if (!state.toggles.cutaway) state.toggles.cutaway = true;
+      }
+      // Clicking MiniMeters 3D (or switching modes when BitWave has no loaded feed) shows the 2D EQ / Active Slice
+      if (state.floorMode === 'spectrogram' || !(BitWaveFeed && BitWaveFeed.isActive && BitWaveFeed.isActive())) {
+        if (state.floorScopeView === 'bitwave') state.floorScopeView = 'eq';
       }
       syncHudToggles();
       syncFloorUI();
@@ -1678,29 +1695,27 @@
       syncFloorUI();
     });
   }
+  function prepareFloorForAudio() {
+    exitBitWaveDisplay({ disableSync: true, hideBar: true });
+    state.toggles.floorWt = true;
+    state.toggles.cutaway = true;
+    state.toggles.fourBitOrbit = false;
+    state.floorMode = 'spectrogram';
+    syncHudToggles();
+    syncFloorUI();
+  }
   if ($('btnFloorTone')) {
     $('btnFloorTone').addEventListener('click', function () {
       if (!FloorView) return;
-      if (!state.toggles.floorWt) {
-        state.toggles.floorWt = true;
-        state.toggles.cutaway = true;
-        state.floorMode = 'spectrogram';
-        syncHudToggles();
-        syncFloorUI();
-      }
+      if (FloorView.getAudioMode && FloorView.getAudioMode() !== 'tone') prepareFloorForAudio();
       FloorView.toggleTone(state);
+      syncFloorUI();
     });
   }
   if ($('btnFloorMic')) {
     $('btnFloorMic').addEventListener('click', function () {
       if (!FloorView) return;
-      if (!state.toggles.floorWt) {
-        state.toggles.floorWt = true;
-        state.toggles.cutaway = true;
-        state.floorMode = 'spectrogram';
-        syncHudToggles();
-        syncFloorUI();
-      }
+      if (FloorView.getAudioMode && FloorView.getAudioMode() !== 'mic') prepareFloorForAudio();
       FloorView.toggleMic(function (msg) {
         if ($('floorModeTag')) $('floorModeTag').textContent = msg.toUpperCase();
       });
@@ -1709,13 +1724,7 @@
   if ($('btnFloorSys')) {
     $('btnFloorSys').addEventListener('click', function () {
       if (!FloorView) return;
-      if (!state.toggles.floorWt) {
-        state.toggles.floorWt = true;
-        state.toggles.cutaway = true;
-        state.floorMode = 'spectrogram';
-        syncHudToggles();
-        syncFloorUI();
-      }
+      if (FloorView.getAudioMode && FloorView.getAudioMode() !== 'sys') prepareFloorForAudio();
       FloorView.toggleSystemAudio(function (msg) {
         if ($('floorModeTag')) $('floorModeTag').textContent = msg.toUpperCase();
       });
@@ -1723,12 +1732,7 @@
   }
   function handleFloorAudioFile(file) {
     if (!file || !FloorView) return;
-    state.toggles.floorWt = true;
-    state.toggles.cutaway = true;
-    state.toggles.fourBitOrbit = false;
-    state.floorMode = 'spectrogram';
-    syncHudToggles();
-    syncFloorUI();
+    prepareFloorForAudio();
     FloorView.loadAudioFile(file, {
       onStatus: function (msg) {
         if ($('floorModeTag')) $('floorModeTag').textContent = msg.toUpperCase();
@@ -1832,8 +1836,14 @@
 
   if ($('btnFloorBwToggle') && $('floorBwBar')) {
     $('btnFloorBwToggle').addEventListener('click', function () {
-      $('floorBwBar').hidden = !$('floorBwBar').hidden;
-      if (!$('floorBwBar').hidden && $('floorBwInput')) {
+      var nextHidden = !$('floorBwBar').hidden;
+      $('floorBwBar').hidden = nextHidden;
+      if (nextHidden) {
+        if (!(BitWaveFeed && BitWaveFeed.isActive && BitWaveFeed.isActive()) && state.floorScopeView === 'bitwave') {
+          state.floorScopeView = 'eq';
+          syncFloorUI();
+        }
+      } else if ($('floorBwInput')) {
         $('floorBwInput').focus();
       }
     });
@@ -1940,9 +1950,9 @@
   });
   if ($('btnFloorBwClear')) {
     $('btnFloorBwClear').addEventListener('click', function () {
-      if (BitWaveFeed) BitWaveFeed.clear();
-      if ($('floorBwInput')) $('floorBwInput').value = '';
+      exitBitWaveDisplay({ disableSync: true, clearFeed: true, hideBar: true });
       syncFloorUI();
+      bump();
     });
   }
   if (BitWaveFeed && typeof BitWaveFeed.subscribe === 'function') {
@@ -1960,6 +1970,9 @@
 
   if ($('btnFloorUpload') && $('floorFileInput')) {
     $('btnFloorUpload').addEventListener('click', function () {
+      // Pause clipboard Auto-Sync before opening OS file picker so closing the dialog doesn't re-pull an old BitWave link
+      bwAutoSync = false;
+      syncBitWaveUI();
       $('floorFileInput').value = '';
       $('floorFileInput').click();
     });
@@ -2021,8 +2034,12 @@
   document.querySelectorAll('.floor-scope-btn[data-fscope]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       state.floorScopeView = btn.getAttribute('data-fscope') || 'eq';
-      if (state.floorScopeView === 'bitwave' && $('floorBwBar')) {
-        $('floorBwBar').hidden = false;
+      if ($('floorBwBar')) {
+        if (state.floorScopeView === 'bitwave') {
+          $('floorBwBar').hidden = false;
+        } else if (!(BitWaveFeed && BitWaveFeed.isActive && BitWaveFeed.isActive()) && !bwAutoSync) {
+          $('floorBwBar').hidden = true;
+        }
       }
       syncFloorUI();
     });
@@ -2052,6 +2069,7 @@
         setActiveTab('modlogic');
         return;
       }
+      exitBitWaveDisplay({ disableSync: true, hideBar: true });
       state.toggles.cutaway = true;
       state.toggles.floorWt = true;
       state.toggles.fourBitOrbit = false;
