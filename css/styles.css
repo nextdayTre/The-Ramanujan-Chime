@@ -2900,3 +2900,386 @@ body.mod-dragging .floor-zoom-ctl[data-mod-target].drop-hover {
 .floor-twin-readouts .twin-row-null span { color: #ff82be; }
 .floor-twin-readouts .twin-row-obs span,
 .floor-twin-readouts .twin-row-obs b { color: #7affad; }
+
+/* =========================================================================
+   SECTION 11: MULTI-CHIME FRONT f(x) RACK & VISUAL "ALL CHIMES" CARD MENU
+   ========================================================================= */
+
+.stage-mode-seg {
+  background: rgba(11, 16, 24, 0.84) !important;
+  border: 1px solid var(--line-2) !important;
+}
+.stage-view-btn {
+  padding: 2px 7px !important;
+  font-size: 10.5px !important;
+  font-weight: 600;
+}
+
+body[data-stage-view="rack"] #viewport3d .hud,
+body[data-stage-view="rack"] #viewport3d .fourbit-widget,
+body[data-stage-view="rack"] #viewport3d .resonance-widget,
+body[data-stage-view="rack"] #viewport3d .mag-widget,
+body[data-stage-view="menu"] #viewport3d .hud,
+body[data-stage-view="menu"] #viewport3d .fourbit-widget,
+body[data-stage-view="menu"] #viewport3d .resonance-widget,
+body[data-stage-view="menu"] #viewport3d .mag-widget {
+  display: none !important;
+}
+
+.chime-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+.chime-overlay[hidden] { display: none !important; }
+body.harmor-void .chime-overlay { background: #000000; }
+
+.chime-ov-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(12, 18, 28, 0.92);
+  border-bottom: 1px solid var(--line);
+}
+.chime-ov-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.chime-ov-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.chime-ov-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chime-ov-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* ---- Side-by-Side Front f(x) Chime Rack ---- */
+.chime-rack-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+.chime-rack-cards {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.chime-rack-cards::-webkit-scrollbar { height: 6px; }
+.chime-rack-cards::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
+
+.chime-card {
+  flex: 1 1 280px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+  cursor: pointer;
+}
+.chime-card:hover {
+  border-color: rgba(54, 214, 200, 0.45);
+}
+.chime-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(54, 214, 200, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.chime-card-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 9px;
+  background: rgba(16, 24, 36, 0.85);
+  border-bottom: 1px solid var(--line);
+}
+.chime-card-id {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.chime-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3d4e63;
+  flex: 0 0 auto;
+}
+.chime-dot.active {
+  background: var(--accent-2);
+  box-shadow: 0 0 7px rgba(110, 231, 160, 0.7);
+}
+.chime-slot-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent-bright);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.chime-patch-name {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chime-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.chime-ico-btn {
+  background: var(--panel2);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+.chime-ico-btn:hover { color: var(--text); border-color: var(--accent); }
+.chime-del-btn:hover { color: #ff8a96; border-color: rgba(255, 107, 122, 0.6); }
+.chime-stage-btn {
+  background: rgba(54, 214, 200, 0.12);
+  border: 1px solid rgba(54, 214, 200, 0.42);
+  border-radius: 4px;
+  color: var(--accent-bright);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.chime-stage-btn:hover {
+  background: rgba(54, 214, 200, 0.24);
+  border-color: var(--accent-bright);
+}
+
+.chime-canvas-wrap {
+  flex: 1 1 auto;
+  min-height: 140px;
+  position: relative;
+  background: #060a10;
+}
+.chime-front-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.chime-card-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 6px 9px;
+  background: rgba(12, 18, 28, 0.9);
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+}
+.chime-mini-ctl {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.chime-mini-ctl input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 36px;
+  height: 14px;
+}
+.chime-mini-ctl b {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 28px;
+  text-align: right;
+}
+.chime-twin-btn {
+  flex: 0 0 auto;
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+}
+
+/* Right-hand vertical "+ ADD CHIME" rail (Screenshot 4 structural motif) */
+.chime-add-rail {
+  flex: 0 0 42px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(12, 18, 28, 0.72);
+  border: 1px dashed rgba(54, 214, 200, 0.35);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+}
+.chime-add-rail:hover:not(:disabled) {
+  border-color: var(--accent-bright);
+  color: var(--accent-bright);
+  background: rgba(54, 214, 200, 0.08);
+}
+.chime-add-rail:disabled { opacity: 0.35; cursor: not-allowed; }
+.car-plus { font-size: 18px; line-height: 1; }
+.car-lbl {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  font-weight: 600;
+}
+
+/* ---- Visual "All Chimes" Browser Menu (Screenshots 1 & 2) ---- */
+.chime-menu-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+}
+.chime-menu-sec[hidden] { display: none !important; }
+.chime-menu-sec-head {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.chime-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 10px;
+}
+.chime-menu-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.12s ease, box-shadow 0.14s ease;
+}
+.chime-menu-card:hover {
+  border-color: rgba(54, 214, 200, 0.55);
+  transform: translateY(-1px);
+}
+.chime-menu-card.active {
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 1px rgba(110, 231, 160, 0.36);
+  background: rgba(16, 30, 32, 0.92);
+}
+.cmc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  font-size: 9.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.cmc-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent-bright);
+  font-weight: 700;
+}
+.cmc-acts { display: inline-flex; gap: 3px; }
+.cmc-canvas {
+  display: block;
+  width: 100%;
+  height: 112px;
+  background: #060a10;
+}
+.cmc-meta {
+  padding: 6px 8px 7px;
+  border-top: 1px solid var(--line);
+}
+.cmc-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmc-sub {
+  font-size: 9.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.chime-menu-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 174px;
+  background: rgba(12, 18, 28, 0.5);
+  border: 1px dashed rgba(54, 214, 200, 0.36);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+}
+.chime-menu-add:hover {
+  border-color: var(--accent-bright);
+  color: var(--accent-bright);
+  background: rgba(54, 214, 200, 0.08);
+}
+.cmc-plus {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+}

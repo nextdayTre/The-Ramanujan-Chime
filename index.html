@@ -392,6 +392,12 @@
           <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" data-agent-toggle="magnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
         </div>
         <div class="hud-row">
+          <span class="hud-label">Mode:</span>
+          <div class="segmented compact-seg stage-mode-seg" role="group" aria-label="Chime display mode">
+            <button type="button" class="seg-btn stage-view-btn active" data-sview="stage" title="Single-sphere full 3D WebGL Stage">Stage</button>
+            <button type="button" class="seg-btn stage-view-btn" data-sview="rack" title="Multi-Chime Front f(x) Rack — side-by-side live spheres (M key)">Rack</button>
+            <button type="button" class="seg-btn stage-view-btn" data-sview="menu" title="All Chimes visual browser &amp; preset cards">All Chimes</button>
+          </div>
           <span class="hud-label">View:</span>
           <span class="popout-sync-badge" id="popoutSyncBadge" hidden>&#9679; Live Sync</span>
           <button type="button" class="hud-pill" id="btnTheatre" title="Theatre pop-out display inside this window (T key · Esc to exit)">&#9635; Theatre</button>
@@ -516,6 +522,62 @@
             <button type="button" class="mag-chip" data-focus="playhead" data-agent-focus="playhead">Playhead</button>
             <button type="button" class="mag-chip" data-focus="origin" data-agent-focus="origin">x=0</button>
             <button type="button" class="mag-chip active" data-focus="trough" data-agent-focus="trough" title="Weierstrass x = +1 trough">Trough</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Chime Front f(x) Rack View Overlay (hidden by default; Stage is untouched on mount) -->
+      <div id="chimeRackOverlay" class="chime-overlay chime-rack-overlay" hidden>
+        <div class="chime-ov-bar">
+          <div class="chime-ov-left">
+            <span class="chime-ov-title">CHIME RACK</span>
+            <span class="chime-ov-sub mono">Front f(x) orthographic view &middot; shared master clock &middot; click to focus, double-click for 3D Stage</span>
+          </div>
+          <div class="chime-ov-right">
+            <div class="segmented compact-seg stage-mode-seg" role="group" aria-label="Switch Chime view">
+              <button type="button" class="seg-btn stage-view-btn" data-sview="stage">Stage</button>
+              <button type="button" class="seg-btn stage-view-btn active" data-sview="rack">Rack</button>
+              <button type="button" class="seg-btn stage-view-btn" data-sview="menu">All Chimes</button>
+            </div>
+          </div>
+        </div>
+        <div class="chime-rack-body">
+          <div id="chimeRackCards" class="chime-rack-cards"></div>
+          <button type="button" id="btnRackAddChime" class="chime-add-rail" title="Spawn a new Chime sphere">
+            <span class="car-plus">+</span>
+            <span class="car-lbl mono">ADD CHIME</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Visual "All Chimes" Browser Menu Overlay (hidden by default) -->
+      <div id="chimeMenuOverlay" class="chime-overlay chime-menu-overlay" hidden>
+        <div class="chime-ov-bar">
+          <div class="chime-ov-left">
+            <span class="chime-ov-title">All Chimes</span>
+            <span id="chimeMenuCount" class="chime-ov-sub mono">3 active chimes &middot; click to focus &middot; double-click for 3D Stage</span>
+          </div>
+          <div class="chime-ov-right">
+            <div class="segmented compact-seg" role="group" aria-label="Filter chimes">
+              <button type="button" class="seg-btn chime-menu-filter active" data-mfilter="all">All</button>
+              <button type="button" class="seg-btn chime-menu-filter" data-mfilter="active">Active</button>
+              <button type="button" class="seg-btn chime-menu-filter" data-mfilter="presets">Presets</button>
+            </div>
+            <div class="segmented compact-seg stage-mode-seg" role="group" aria-label="Switch Chime view">
+              <button type="button" class="seg-btn stage-view-btn" data-sview="stage">Stage</button>
+              <button type="button" class="seg-btn stage-view-btn" data-sview="rack">Rack</button>
+              <button type="button" class="seg-btn stage-view-btn active" data-sview="menu">All Chimes</button>
+            </div>
+          </div>
+        </div>
+        <div class="chime-menu-scroll">
+          <div id="chimeMenuActiveSec" class="chime-menu-sec">
+            <div class="chime-menu-sec-head mono">ACTIVE CHIMES &mdash; LIVE RACK SLOTS</div>
+            <div id="chimeMenuActiveGrid" class="chime-menu-grid"></div>
+          </div>
+          <div id="chimeMenuPresetSec" class="chime-menu-sec">
+            <div class="chime-menu-sec-head mono">CHIME PRESET LIBRARY &mdash; CLICK TO LOAD &middot; (+) TO SPAWN</div>
+            <div id="chimeMenuPresetGrid" class="chime-menu-grid"></div>
           </div>
         </div>
       </div>
@@ -1042,6 +1104,7 @@
 <script src="js/bitwave-feed.js"></script>
 <script src="js/floor-view.js"></script>
 <script src="js/mod-matrix.js"></script>
+<script src="js/chime-rack.js"></script>
 <script src="js/app.js"></script>
 <script src="js/agent-bridge.js"></script>
 </body>

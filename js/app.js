@@ -21,6 +21,7 @@
       BitWaveFeed = Harmony.BitWaveFeed,
       FloorView = Harmony.FloorView,
       ModMatrix = Harmony.ModMatrix,
+      ChimeRack = Harmony.ChimeRack,
       AgentCore = Harmony.AgentCore;   // js/agent-core.js — the ONE shared agent layer
 
   var SAMPLES = 3200;
@@ -329,6 +330,10 @@
     syncParamUI();
     syncHudToggles();
     syncMagChips();
+    if (slots && state.activeSlot && !isRestoringSlot) {
+      slots[state.activeSlot] = captureSnapshot();
+    }
+    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
     bump();
   }
 
@@ -2239,6 +2244,10 @@
     if (ModMatrix && typeof ModMatrix.captureBase === 'function') ModMatrix.captureBase(state);
     syncHudToggles();
     syncMagChips();
+    if (slots && state.activeSlot && !isRestoringSlot) {
+      slots[state.activeSlot] = captureSnapshot();
+    }
+    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
     bump();
   }
 
@@ -2404,12 +2413,91 @@
     Lissajous2D.clearTrail();
     applySnapshot(slots[targetSlot]);
     syncSlotUI();
+    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
   }
 
   function cycleSlot(dir) {
     var idx = SLOT_ORDER.indexOf(state.activeSlot);
     var next = SLOT_ORDER[(idx + dir + SLOT_ORDER.length) % SLOT_ORDER.length];
     selectSlot(next);
+  }
+
+  var SPAWN_PRESET_CYCLE = [4, 2, 7, 1, 6, 8, 3, 12];
+
+  function spawnChime(opts) {
+    opts = opts || {};
+    var maxChimes = (ChimeRack && ChimeRack.MAX_CHIMES) ? ChimeRack.MAX_CHIMES : 8;
+    var allKeys = (ChimeRack && ChimeRack.ALL_KEYS) ? ChimeRack.ALL_KEYS : ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    if (SLOT_ORDER.length >= maxChimes) return null;
+
+    var nextKey = null;
+    for (var i = 0; i < allKeys.length; i++) {
+      if (SLOT_ORDER.indexOf(allKeys[i]) < 0) { nextKey = allKeys[i]; break; }
+    }
+    if (!nextKey) return null;
+
+    // Ensure current active slot is freshly snapshotted before spawning/cloning
+    if (slots && state.activeSlot) {
+      slots[state.activeSlot] = captureSnapshot();
+    }
+
+    var snap = null;
+    if (opts.fromSlot && slots && slots[opts.fromSlot]) {
+      snap = JSON.parse(JSON.stringify(slots[opts.fromSlot]));
+    } else if (typeof opts.presetIndex === 'number' && Presets.list[opts.presetIndex]) {
+      snap = snapshotFromPreset(opts.presetIndex);
+    } else {
+      var pickIdx = SPAWN_PRESET_CYCLE[(SLOT_ORDER.length - 3) % SPAWN_PRESET_CYCLE.length];
+      snap = snapshotFromPreset(pickIdx);
+    }
+    if (!snap) snap = JSON.parse(JSON.stringify(captureSnapshot()));
+
+    SLOT_ORDER.push(nextKey);
+    slots[nextKey] = snap;
+    selectSlot(nextKey);
+    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
+    return nextKey;
+  }
+
+  function removeChime(slotKey) {
+    if (!slotKey || slotKey === 'A' || slotKey === 'B' || slotKey === 'C') return false;
+    var idx = SLOT_ORDER.indexOf(slotKey);
+    if (idx < 0) return false;
+    SLOT_ORDER.splice(idx, 1);
+    delete slots[slotKey];
+    if (state.activeSlot === slotKey) {
+      var fallback = SLOT_ORDER[Math.max(0, idx - 1)] || 'A';
+      state.activeSlot = fallback;
+      applySnapshot(slots[fallback]);
+      syncSlotUI();
+    }
+    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
+    return true;
+  }
+
+  function updateSlotParam(slotKey, paramKey, val) {
+    if (!slots || !slots[slotKey]) return;
+    if (slotKey === state.activeSlot) {
+      if (paramKey === 'ph') {
+        setPhaseFromDeg(val);
+      } else if (paramKey === 'rIn') {
+        state.rIn = Engine.clamp(val, 0, Math.min(2.4, state.r));
+        updateShellReadout('rIn');
+        syncParamUI();
+        if (ModMatrix && ModMatrix.captureBase) {
+          ModMatrix.captureBase(state, 'r');
+          ModMatrix.captureBase(state, 'rIn');
+        }
+        bump();
+      } else if (paramKey === 'tw') {
+        setTwinMode(val);
+      }
+      slots[slotKey] = captureSnapshot();
+    } else {
+      if (paramKey === 'ph') slots[slotKey].ph = Engine.clamp(Math.round(val), -180, 180);
+      else if (paramKey === 'rIn') slots[slotKey].rIn = Engine.clamp(val, 0, Math.min(2.4, slots[slotKey].r || 1));
+      else if (paramKey === 'tw') slots[slotKey].tw = val;
+    }
   }
 
   function toggleCopyArmed() {
@@ -3074,6 +3162,10 @@
   // ---- Keyboard Studio Shortcuts ----
   window.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape') {
+      if (ChimeRack && ChimeRack.getView && ChimeRack.getView() !== 'stage') {
+        ChimeRack.setView('stage');
+        return;
+      }
       if (theatreMode && !IS_POPOUT && !isFullscreenNow()) { setTheatreMode(false); return; }
       if (hudHidden) { setHudHidden(false); return; }
     }
@@ -3143,6 +3235,10 @@
       state.toggles.harmorVoid = !state.toggles.harmorVoid;
       syncHudToggles();
       bump();
+    } else if (ev.key === 'm' || ev.key === 'M') {
+      if (ChimeRack && ChimeRack.getView && ChimeRack.setView) {
+        ChimeRack.setView(ChimeRack.getView() === 'rack' ? 'stage' : 'rack');
+      }
     }
   });
 
@@ -3173,6 +3269,21 @@
       publishAgent();
     }
     initSlots();
+    if (ChimeRack && typeof ChimeRack.init === 'function') {
+      ChimeRack.init({
+        getSlots: function () { return slots; },
+        getSlotOrder: function () { return SLOT_ORDER; },
+        getActiveSlot: function () { return state.activeSlot; },
+        selectSlot: selectSlot,
+        spawnChime: spawnChime,
+        removeChime: removeChime,
+        updateSlotParam: updateSlotParam,
+        loadPresetIntoActive: function (idx) {
+          applyPreset(idx);
+          if (slots && state.activeSlot) slots[state.activeSlot] = captureSnapshot();
+        }
+      });
+    }
     if (ModMatrix && typeof ModMatrix.init === 'function') {
       ModMatrix.init({
         getState: function () { return state; },
@@ -3264,9 +3375,12 @@
       floorFieldData = Engine.floorField(state, state.playT, audioOpts || undefined);
     }
 
-    // Always render Hero 3D Sphere + Zoom Lens (when open)
+    // Always render Hero 3D Sphere + Zoom Lens (when open) + Multi-Chime Front f(x) Rack/Menu (when active)
     Scene3D.update(state, state.playT, state.points, lastRendered, floorFieldData);
     Magnifier2D.update(state, state.playT);
+    if (ChimeRack && typeof ChimeRack.update === 'function') {
+      ChimeRack.update(state, state.points, state.playT, floorFieldData);
+    }
 
     // Update active dock tab views (plus Lissajous Crosshair for agreement hook)
     Lissajous2D.update(state, state.playT, state.points, lastRendered);
