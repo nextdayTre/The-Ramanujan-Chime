@@ -499,6 +499,94 @@ BowFiltrationState = {
 7. **Two-Stage Agent Contract (Conflict 5):** Iterate visually inside the real GUI first while keeping the existing 9-tool agent contract and `selftest.mjs` green; promote finalized fields later.
 
 ### 8.2 Chronological Progress
-- [x] **Step 1 (§§1–3): Active Dual-Sphere Resonance, `Lock V` Time-Stretch Modulators, Coupled Radial Ladders & Archimedes Constant-Area Slice** — Integrated into `js/engine.js`, `js/scene3d.js`, `js/app.js`, `index.html`, and `css/styles.css`.
-- [ ] **Step 2 (§5.5 & §5.6): Euler Circle vs. Hamilton Sphere + Resonant Attraction ($\kappa \in [-1, +1]$) & Gentle Cavity Collapse ($\lambda: 0 \to 1$) in Harmor Green Void**
-- [ ] **Step 3 (§5.7): Temporal Filtration — 4-Bit Orbit "Violin Bow" Lock-In Scanner & Top-Down (`Top XZ`) Richter-Yaw BitWave Seismogram**
+- [x] **Step 1 (§§1–3): Active Dual-Sphere Resonance, `Lock V` Time-Stretch Modulators, Coupled Radial Ladders & Archimedes Constant-Area Slice** — Integrated into `js/engine.js`, `js/scene3d.js`, `js/app.js`, `index.html`, and `css/styles.css` (committed in `f2ce6e4`).
+- [~] **Step 2 (§5.5 & §5.6): Euler Circle vs. Hamilton Sphere + Resonant Attraction ($\kappa \in [-1, +1]$) & Gentle Cavity Collapse ($\lambda: 0 \to 1$) in Harmor Green Void** — *Deferred / Shelved after UI prototype review:* the first GUI attempt added too many extra sidebar controls and simultaneous 3D wireframe overlays, cluttering the instrument. Reverted back to Step 1 (`f2ce6e4`); math is preserved in §9.2 below to be reintroduced only after the GUI & typography cleanup.
+- [ ] **Step 3 (§5.7): Temporal Filtration — 4-Bit Orbit "Violin Bow" Lock-In Scanner & Top-Down (`Top XZ`) Richter-Yaw BitWave Seismogram** — *Planned / Pending GUI cleanup.*
+
+---
+
+## 9. State of the Instrument, UX Post-Mortem & Next-Session Handoff
+
+> **Purpose of this section:** A candid snapshot of what we have on `main`, what works beautifully, what has become cluttered in the GUI, and the preserved Step 2 math so the next session can focus squarely on **GUI/Typography Cleanup** and **potential Backend Swap**.
+
+### 9.1 Current Inventory (`main` @ `f2ce6e4`)
+
+#### A. What Works Well (Anchor Around These)
+1. **Bottom Viewport Scopes (`1 · Scopes & Slice`):**
+   - **2D Slice & Quadrature (`js/lissajous2d.js`)** and **Dual Oscilloscope (`js/timeseries.js`)** look crisp, balanced, and purposeful. Their visual restraint and signal legibility set the quality bar the rest of the UI should match.
+   - **Harmonics & Ramanujan (`js/harmonics2d.js`)**, **Frobenius & Hasse (`js/frobenius.js`)**, and **Float32 Bit Lab** provide clean analytical views in the bottom dock.
+2. **Hero 3D Hollow Sphere & 4-Bit Orbit (`js/scene3d.js`):**
+   - Outer sphere `OSC A` ($R$), inner cavity `OSC B` ($r$), cutaway shell mode, inscribed $z = 0$ Cartesian $f(x)/x$ slice plane, `1000 (8) ↔ 0001 (1)` binary palindrome orbiters, `1111/F` and `0000` poles, and inscribed Quadray tetrahedron.
+   - **`◐ Harmor Void` toggle (`V` key):** Pure `#000000` black void background with luminous Harmor green cavity and trajectory.
+3. **Step 1 (§§1–3) Dual-Sphere Resonance & Archimedes Slice (`js/engine.js` $\to$ `sphereResonance`):**
+   - Constant-volume time-stretch law $R(r) = (r^3 + R_0^3)^{1/3}$ (`solveConstantVolumeR`, `solveConstantVolumeRIn`, `solveConstantVolumePairForEta`) with `🔒 Lock V` toggle.
+   - Radial Jacobian $\eta^2 = dR/dr\big|_V$ and the four normalized modulators ($\eta = r/R$, $\eta^2$, $1 - \eta^3$, $\alpha = R/r$ octaves) + `eta`, `alpha`, `ringArea` formula primitives.
+   - Three coupled $\ell = 0$ radial breathing mode ladders ($k_q^{\text{out}} = q\pi/R$, $k_q^{\text{in}} = q\pi/r$, $k_q^{\text{shell}} = q\pi/(R-r)$) and Triple Harmonic Syzygy lock detection (`1:2:2` at $\eta=0.50$, `2:3:6` at $\eta=2/3$, `3:4:12` at $\eta=0.75$, $-3\text{ dB}$ bow tangency at $\eta = 1/\sqrt{2} \approx 0.7071$).
+   - Archimedes' Constant-Area Slice Theorem ($A_{\text{ring}}(z) = \pi(R^2 - r^2) = \text{const}$ across $|z| \le r$) rendered as an axial 3D ring + 2D plateau profile curve.
+4. **Single Float32 Math Core & Agent/MCP Layer (`js/engine.js`, `js/agent-core.js`, `agent/*`):**
+   - Zero-drift shared math engine (`90/90` unit tests in `tests/*.test.mjs` and `34/34` transport checks in `agent/selftest.mjs`).
+
+#### B. What Needs Fixing (Why Step 2 Exposed a UX Ceiling)
+1. **The Vertical Left Side Menu (`aside.panel`, `306px` rack) Is Overcrowded:**
+   - Incremental additions (`A/B/C` slot bar, `Lock V`, 6 `.snap-chip` buttons, 3-item shell meter, 4 `.mod-cell` progress boxes, `syzygyBadge`, 4 `Stretch Mod` route chips, `Order N` Ping/Repeat automation bar, `Phase` Ping/Repeat automation bar, `K / a / b / n / m / k` sliders, and `Patch Bay Equations` drawer) have turned the left sidebar into a wall of tiny boxes and text.
+2. **Typography & Visual Hierarchy Look Cheap in the Sidebar:**
+   - Generic system UI / monospace fallback text at `9px–11px` with too many borders, badges, and inline symbols (`★`, `🔒`, `⇄`, `↻`) makes the vertical menu feel cramped and noisy rather than like a refined hardware/studio instrument.
+3. **3D Viewport HUD & Overlay Clutter:**
+   - Top-left HUD (12 pills across 2 rows) + Top-right HUD (11 pills across 2 rows) + Bottom-left `#fourBitWidget` + Bottom-right `#resonanceWidget` + `#magWidget` leave too little breathing room around the 3D sphere.
+   - When Step 2 tried to add another sidebar card plus 6 simultaneous 3D line/lattice objects (`dualCollapseWire`, `dualBitwaveLine`, `dualCollapsedLine`, `dualAttractLines`, `dualAntipodalChords`, `dualQuatAxisLine`), the 3D sphere and sidebar became visual spaghetti.
+
+---
+
+### 9.2 Preserved Step 2 Pure Math Reference (§5.5 & §5.6 `cavityVectorDual`)
+
+When we re-introduce §§5.5–5.6 after the GUI overhaul, here is the verified, self-contained pure math implementation (unit-tested for quaternion non-commutativity, 16/16 single-bit Gray-code Hamiltonian traversal on $Q_4$ anchored at `1000₂ = 8`, bipolar attraction $\kappa \in [-1, +1]$, and cavity collapse $\lambda: 0 \to 1$):
+
+```js
+// 16-nibble Eulerian wave cycle vs. 16-state Hamiltonian 4-bit Gray code on Q_4
+// Both start at nibble 8 (1000_2) = exact zero-crossing midpoint pivot (v = 0).
+var EULER_SINE_16    = [8, 10, 13, 14, 15, 14, 13, 10, 8, 5, 2, 1, 0, 1, 2, 5];
+var HAMILTON_GRAY_16 = [8,  9, 11, 10, 14, 15, 13, 12, 4, 5, 7, 6, 2, 3, 1, 0]; // ((i ^ (i >> 1)) ^ 8)
+
+function quatMul(a, b) {
+  return {
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w
+  };
+}
+
+function quatRotateVec(q, v) {
+  var ux = q.x, uy = q.y, uz = q.z, w = q.w;
+  var tx = 2 * (uy * v.z - uz * v.y);
+  var ty = 2 * (uz * v.x - ux * v.z);
+  var tz = 2 * (ux * v.y - uy * v.x);
+  return {
+    x: v.x + w * tx + (uy * tz - uz * ty),
+    y: v.y + w * ty + (uz * tx - ux * tz),
+    z: v.z + w * tz + (ux * ty - uy * tx)
+  };
+}
+```
+
+- **Bipolar Resonant Attraction ($\kappa \in [-1, +1]$):**
+  - Normalized nibble elevation: $v_{\text{raw}}(n) = (n - 8) / 8 \in [-1, +0.875]$ (`8` = `1000₂` $\mapsto 0.0$).
+  - $\kappa \ge 0$ (`Sphere → BitWave`): $v_{\text{attr}} = (1 - \kappa)\,v_{\text{raw}} + \kappa\,s_{\text{carrier}}$.
+  - $\kappa < 0$ (`BitWave 8 → Sphere`): $s_{\text{attr}} = (1 - |\kappa|)\,s_{\text{carrier}} + |\kappa|\,v_{\text{raw}}$ (pinching antipodal shell nodes $P + (-P) = 0$ at `1000₂` zero-crossings).
+- **Gentle Cavity Collapse ($\lambda \in [0, 1]$) & Infinite Nested Sphere Series ($S_k \subset S_{k+1}$):**
+  - $P(u, v; \lambda) = (1 - \lambda)\,P_{\text{sphere}}(u, v) + \lambda\,P_{\text{bitwave}}(u)$, with $\Delta(\lambda) = (1 - \lambda)(R - r) \to 0$ and $z(\lambda) = (1 - \lambda)z \to 0$.
+  - Register width at shell $S_k$: $M = 16 \cdot 2^k$ nibbles ($4M \in \{64, 128, 256, 512, \dots\}$ bits), where each collapsed register $S_k$ sits as the inner cavity (`OSC B`) inside the next outer shell $S_{k+1}$ (`OSC A`).
+
+---
+
+### 9.3 Next-Session Agenda: GUI Cleanup, Typography & Potential Backend Swap
+
+1. **Redesign the Left Vertical Menu & Typography:**
+   - Replace the cluttered multi-card vertical stack with a clean, intentional studio layout and upgraded typography (matching the visual clarity of the bottom **2D Slice & Quadrature** and **Dual Oscilloscope** panes).
+   - Strip redundant micro-badges, excess borders, and crowded pill rows; group controls so only the active context is visible.
+2. **Declutter the 3D Viewport HUD:**
+   - Consolidate floating top HUD pills and bottom overlay cards so the 3D hollow sphere has clean negative space.
+3. **Evaluate Backend / Architecture Swap:**
+   - Decide whether to keep `js/engine.js` as a classic script or migrate the math/DSP backend (e.g., modular ES modules, worker/WASM pipeline, or cleaner state store) while preserving the core math primitives and tests.
+4. **Re-introduce Step 2 (§§5.5–5.6) & Step 3 (§5.7) Harmoniously:**
+   - Once the UI shell and typography are clean, bring in Cavity Collapse / BitWave Attraction and the 4-Bit Violin-Bow Richter-Yaw scanner as focused, uncluttered visual modes.
