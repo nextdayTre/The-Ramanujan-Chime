@@ -2811,3 +2811,69 @@ body.mod-dragging .floor-zoom-ctl[data-mod-target].drop-hover {
   padding: 2px 6px !important;
   font-size: 10px !important;
 }
+
+/* ---- Read-Only BitWave Register Feed Strip (Section 10.6) ---- */
+.floor-bw-btn.active {
+  background: rgba(74, 242, 138, 0.16) !important;
+  border-color: rgba(74, 242, 138, 0.62) !important;
+  color: #7affad !important;
+}
+.floor-bw-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(7, 16, 13, 0.88);
+  border: 1px solid rgba(74, 242, 138, 0.34);
+  border-radius: 5px;
+  font-size: 10px;
+}
+.floor-bw-bar[hidden] { display: none !important; }
+.floor-bw-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(74, 242, 138, 0.1);
+  border: 1px solid rgba(74, 242, 138, 0.32);
+  color: #6ee7a0;
+  font-size: 9.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.floor-bw-badge.live {
+  background: rgba(74, 242, 138, 0.24);
+  border-color: rgba(74, 242, 138, 0.8);
+  color: #b7ffd0;
+  box-shadow: 0 0 8px rgba(74, 242, 138, 0.28);
+}
+.floor-bw-badge.err {
+  background: rgba(255, 107, 122, 0.16);
+  border-color: rgba(255, 107, 122, 0.55);
+  color: #ffb0b8;
+}
+.floor-bw-input {
+  flex: 1 1 180px;
+  min-width: 110px;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  color: #b7ffd0;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  outline: none;
+}
+.floor-bw-input:focus {
+  border-color: rgba(74, 242, 138, 0.65);
+}
+.floor-bw-apply {
+  color: #7affad !important;
+  border-color: rgba(74, 242, 138, 0.48) !important;
+}
+.floor-bw-frame-btn {
+  padding: 1px 6px !important;
+  font-size: 10px !important;
+}
+.floor-scope-btn[data-fscope="bitwave"].active {
+  color: #7affad !important;
+}

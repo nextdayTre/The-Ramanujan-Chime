@@ -862,10 +862,12 @@
               <option value="8">2 Bars</option>
             </select>
             <input type="file" id="floorFileInput" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a" hidden />
+            <input type="file" id="floorBwFileInput" accept=".bitwave,.json,application/json,text/plain" hidden />
             <button type="button" id="btnFloorUpload" class="mini-btn floor-audio-btn" title="Load a local MP3 / WAV / OGG file — z=0 is Present needle, +z Incoming Future, −z Fading Past">&#8679; MP3</button>
             <button type="button" id="btnFloorSys" class="mini-btn floor-audio-btn" title="Capture live browser tab or system audio loopback into the MiniMeters 3D floor">Sys</button>
             <button type="button" id="btnFloorTone" class="mini-btn floor-audio-btn" title="Audition soft Web Audio harmonic chime tuned to Outer R : Inner r : Wall modes">&#9834;</button>
             <button type="button" id="btnFloorMic" class="mini-btn floor-audio-btn" title="Feed live microphone audio into the MiniMeters 3D Spectrogram floor">Mic</button>
+            <button type="button" id="btnFloorBwToggle" class="mini-btn floor-bw-btn" title="Read-only BitWave register feed (#bw= share link, .bitwave JSON, hex register, or 2nd-tab BroadcastChannel)">BW Feed</button>
           </div>
         </div>
 
@@ -878,8 +880,29 @@
           <button type="button" id="btnFloorStop" class="mini-btn" title="Stop audio &amp; return to synth spectrum">Stop</button>
         </div>
 
+        <!-- Inline Read-Only BitWave Feed Strip (hidden until toggled or live feed arrives) -->
+        <div id="floorBwBar" class="floor-bw-bar mono" hidden>
+          <span id="floorBwStatus" class="floor-bw-badge" title="Listens passively on BroadcastChannel('bitwave-feed') &amp; postMessage from a 2nd BitWave tab">BC Ready</span>
+          <input type="text" id="floorBwInput" class="floor-bw-input mono" spellcheck="false" placeholder="Paste #bw= link, .bitwave JSON, or hex (e.g. 8ADEFEDA85210125)…" aria-label="BitWave register or share link" />
+          <button type="button" id="btnFloorBwApply" class="mini-btn floor-bw-apply" title="Load BitWave register into Floor WT &amp; ModMatrix">Load</button>
+          <button type="button" id="btnFloorBwFile" class="mini-btn" title="Open a .bitwave or .json file">File</button>
+          <select id="floorBwLane" class="mod-mini-sel mono" aria-label="BitWave lane" title="Select BitWave lane">
+            <option value="1">L1</option>
+            <option value="2">L2</option>
+            <option value="3">L3</option>
+          </select>
+          <div class="segmented compact-seg" role="group" aria-label="BitWave frame">
+            <button type="button" class="seg-btn floor-bw-frame-btn" data-bwframe="a" title="Show Frame A">A</button>
+            <button type="button" class="seg-btn floor-bw-frame-btn" data-bwframe="b" title="Show Frame B">B</button>
+            <button type="button" class="seg-btn floor-bw-frame-btn active" data-bwframe="z" title="Show Derived Frame Z">Z</button>
+          </div>
+          <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="canonical64" title="Load canonical 64-bit A ⊕ B → Z1 register">64b</button>
+          <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="pulse256" title="Load 256-bit edge-pulse register">256b</button>
+          <button type="button" id="btnFloorBwClear" class="mini-btn" title="Disconnect BitWave feed &amp; return to synth">Clear</button>
+        </div>
+
         <div class="floor-grid-2">
-          <!-- Main 2D Paired Scope (Active Slice / MiniMeters 2D EQ / RX 11 PCM Needle Groove) -->
+          <!-- Main 2D Paired Scope (Active Slice / MiniMeters 2D EQ / RX 11 PCM Needle Groove / BitWave 2D) -->
           <div class="panel2d floor-col-scope">
             <div class="panel2d-head">
               <span class="kicker" id="floorScopeTitle">2D Active Slice &mdash; Synced to Auto z(t) &amp; Cutaway Floor</span>
@@ -887,6 +910,7 @@
                 <div class="segmented compact-seg" role="group" aria-label="2D floor scope view">
                   <button type="button" class="seg-btn floor-scope-btn active" data-fscope="eq" title="MiniMeters 2D Equalizer / Active Wavetable Slice">EQ / Slice</button>
                   <button type="button" class="seg-btn floor-scope-btn" data-fscope="pcm" title="RX 11-style 2D PCM Needle Groove (auto-shows sample dots at micro Zoom T)">PCM Groove</button>
+                  <button type="button" class="seg-btn floor-scope-btn" data-fscope="bitwave" title="BitWave 2D monotone-cubic register view (read-only feed sink)">BitWave</button>
                 </div>
                 <span id="floorPitchBadge" class="mini-tag mono">98.00Hz | G2 + 0 Cents</span>
               </div>
@@ -996,6 +1020,8 @@
 <script src="js/harmonics2d.js"></script>
 <script src="js/frobenius.js"></script>
 <script src="js/views.js"></script>
+<script src="js/bitwave-import.js"></script>
+<script src="js/bitwave-feed.js"></script>
 <script src="js/floor-view.js"></script>
 <script src="js/mod-matrix.js"></script>
 <script src="js/app.js"></script>

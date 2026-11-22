@@ -28,12 +28,23 @@
   ];
 
   var TAPS = [
-    { id: 'tap_sliceZ', label: 'Slice z(t)',    short: 'z(t)', color: '#6ee7a0' },
-    { id: 'tap_eta',    label: 'eta = r/R',     short: 'eta',  color: '#36d6c8' },
-    { id: 'tap_eta2',   label: 'eta^2 Jacobian',short: 'eta2', color: '#4df3dd' },
-    { id: 'tap_phase',  label: 'Phase phi',     short: 'phi',  color: '#9d8cff' },
-    { id: 'tap_nibble', label: '4-Bit Nibble',  short: '4b',   color: '#ffb04d' }
+    { id: 'tap_sliceZ',  label: 'Slice z(t)',    short: 'z(t)', color: '#6ee7a0' },
+    { id: 'tap_eta',     label: 'eta = r/R',     short: 'eta',  color: '#36d6c8' },
+    { id: 'tap_eta2',    label: 'eta^2 Jacobian',short: 'eta2', color: '#4df3dd' },
+    { id: 'tap_phase',   label: 'Phase phi',     short: 'phi',  color: '#9d8cff' },
+    { id: 'tap_nibble',  label: '4-Bit Nibble',  short: '4b',   color: '#ffb04d' },
+    { id: 'tap_bitwave', label: 'BitWave Reg',   short: 'bw',   color: '#4af28a' }
   ];
+
+  function evalBitWaveTap(phase) {
+    var feed = Harmony.BitWaveFeed;
+    if (feed && typeof feed.getLfoNibbles === 'function' && typeof feed.sampleMonotone === 'function') {
+      return clamp(feed.sampleMonotone(feed.getLfoNibbles(), phase), -1, 1);
+    }
+    var u = ((phase % 1) + 1) % 1;
+    var nib = Math.round((Math.sin(u * Math.PI * 2) * 0.5 + 0.5) * 15);
+    return (nib - 8) / 8;
+  }
 
   // Routable target parameters mapped directly onto Harmony.App live state
   var TARGETS = {
@@ -260,6 +271,7 @@
       srcValues.tap_eta2 = (curEta * curEta) * 2 - 1;
       srcValues.tap_phase = clamp(effValues.phaseDeg / 180, -1, 1);
       srcValues.tap_nibble = (nibble - 8) / 8;
+      srcValues.tap_bitwave = evalBitWaveTap(phi);
 
       var ctx = {
         nibble: nibble,
@@ -757,6 +769,7 @@
 
     function evalPreview(p) {
       if (lfo) return evalWave(lfo.wave, p * lfo.ratio + lfo.phaseOff);
+      if (srcId === 'tap_bitwave') return evalBitWaveTap(p);
       if (srcId === 'tap_sliceZ') return Math.sin(p * Math.PI * 2);
       if (srcId === 'tap_nibble') return (Math.round(((Math.sin(p * Math.PI * 2) + 1) * 0.5) * 15) - 8) / 8;
       if (srcId === 'tap_phase')  return Math.sin(p * Math.PI * 2);

@@ -18,6 +18,7 @@
       TimeSeries = Harmony.TimeSeries,
       Harmonics2D = Harmony.Harmonics2D,
       Frobenius = Harmony.Frobenius,
+      BitWaveFeed = Harmony.BitWaveFeed,
       FloorView = Harmony.FloorView,
       ModMatrix = Harmony.ModMatrix,
       AgentCore = Harmony.AgentCore;   // js/agent-core.js — the ONE shared agent layer
@@ -1573,10 +1574,17 @@
     if ($('floorSmoothLbl')) $('floorSmoothLbl').textContent = isSpec ? 'Disp' : 'Smooth';
     if ($('floorModeTag')) $('floorModeTag').textContent = isSpec ? 'MINIMETERS 3D' : 'WAVETABLE';
     if ($('floorScopeTitle')) {
-      $('floorScopeTitle').innerHTML = isSpec
-        ? '2D MiniMeters Equalizer &mdash; Center 2D f(x) Slice &amp; 3D Cavity Dispersion'
-        : '2D Active Slice &mdash; Synced to Auto z(t) &amp; Cutaway Floor';
+      if (state.floorScopeView === 'bitwave') {
+        $('floorScopeTitle').innerHTML = 'BitWave 2D Register &mdash; Monotone-Cubic Spline (0x8 Zero-Crossing)';
+      } else if (state.floorScopeView === 'pcm') {
+        $('floorScopeTitle').innerHTML = 'RX 11-Style 2D PCM Needle Groove &mdash; Constant Cavity &amp; Zoom T';
+      } else {
+        $('floorScopeTitle').innerHTML = isSpec
+          ? '2D MiniMeters Equalizer &mdash; Center 2D f(x) Slice &amp; 3D Cavity Dispersion'
+          : '2D Active Slice &mdash; Synced to Auto z(t) &amp; Cutaway Floor';
+      }
     }
+    syncBitWaveUI();
     if ($('floorDepthSlider')) $('floorDepthSlider').value = String(state.floorDepth);
     if ($('floorDepthOut')) $('floorDepthOut').textContent = Math.round(state.floorDepth * 100) + '%';
     if ($('floorSmoothSlider')) $('floorSmoothSlider').value = String(state.floorSmooth);
@@ -1731,6 +1739,151 @@
       }
     });
   }
+  function syncBitWaveUI(errMsg) {
+    var fd = (BitWaveFeed && typeof BitWaveFeed.getFeed === 'function') ? BitWaveFeed.getFeed() : null;
+    var active = !!(fd && fd.active);
+    var toggleBtn = $('btnFloorBwToggle');
+    if (toggleBtn) toggleBtn.classList.toggle('active', active);
+
+    var badge = $('floorBwStatus');
+    if (badge) {
+      badge.classList.remove('live', 'err');
+      if (errMsg) {
+        badge.textContent = errMsg;
+        badge.classList.add('err');
+      } else if (active) {
+        var tag = fd.liveTransport === 'broadcast'
+          ? ('BC LIVE · ' + fd.width + 'b')
+          : (fd.liveTransport === 'postMessage' ? ('MSG · ' + fd.width + 'b') : (fd.width + 'b · ' + fd.label));
+        badge.textContent = tag;
+        if (fd.liveTransport === 'broadcast' || fd.liveTransport === 'postMessage') {
+          badge.classList.add('live');
+        }
+      } else {
+        badge.textContent = 'BC Ready';
+      }
+    }
+
+    var laneSel = $('floorBwLane');
+    if (laneSel && active) {
+      for (var i = 0; i < laneSel.options.length; i++) {
+        var opt = laneSel.options[i];
+        opt.disabled = fd.laneKeys.indexOf(opt.value) < 0;
+      }
+      laneSel.value = fd.lane || '1';
+    }
+    document.querySelectorAll('.floor-bw-frame-btn[data-bwframe]').forEach(function (b) {
+      var fr = b.getAttribute('data-bwframe');
+      b.classList.toggle('active', fr === (active ? fd.frame : 'z'));
+    });
+  }
+
+  function activateFloorForBitWave(switchScope) {
+    if (FloorView && FloorView.getAudioMode && FloorView.getAudioMode() !== 'synth') {
+      FloorView.stopAudio();
+    }
+    state.toggles.floorWt = true;
+    state.toggles.cutaway = true;
+    state.toggles.fourBitOrbit = false;
+    if (switchScope !== false) state.floorScopeView = 'bitwave';
+    syncHudToggles();
+    syncFloorUI();
+    bump();
+  }
+
+  function handleFloorBitWaveFile(file) {
+    if (!file || !BitWaveFeed) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var res = BitWaveFeed.ingest(String(reader.result || ''), { transport: 'file', name: file.name || 'project.bitwave' });
+      if (!res.ok) {
+        if ($('floorBwBar')) $('floorBwBar').hidden = false;
+        syncBitWaveUI('Parse error');
+        return;
+      }
+      if ($('floorBwBar')) $('floorBwBar').hidden = false;
+      activateFloorForBitWave(true);
+    };
+    reader.readAsText(file);
+  }
+
+  if ($('btnFloorBwToggle') && $('floorBwBar')) {
+    $('btnFloorBwToggle').addEventListener('click', function () {
+      $('floorBwBar').hidden = !$('floorBwBar').hidden;
+      if (!$('floorBwBar').hidden && $('floorBwInput')) {
+        $('floorBwInput').focus();
+      }
+    });
+  }
+  function applyFloorBwInput() {
+    if (!BitWaveFeed || !$('floorBwInput')) return;
+    var raw = $('floorBwInput').value.trim();
+    if (!raw) { syncBitWaveUI('Paste hex/#bw='); return; }
+    var res = BitWaveFeed.ingest(raw, { transport: 'paste' });
+    if (!res.ok) {
+      syncBitWaveUI('Invalid feed');
+      return;
+    }
+    activateFloorForBitWave(true);
+  }
+  if ($('btnFloorBwApply')) {
+    $('btnFloorBwApply').addEventListener('click', applyFloorBwInput);
+  }
+  if ($('floorBwInput')) {
+    $('floorBwInput').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        applyFloorBwInput();
+      }
+    });
+  }
+  if ($('btnFloorBwFile') && $('floorBwFileInput')) {
+    $('btnFloorBwFile').addEventListener('click', function () {
+      $('floorBwFileInput').value = '';
+      $('floorBwFileInput').click();
+    });
+    $('floorBwFileInput').addEventListener('change', function () {
+      var f = $('floorBwFileInput').files && $('floorBwFileInput').files[0];
+      if (f) handleFloorBitWaveFile(f);
+    });
+  }
+  if ($('floorBwLane')) {
+    $('floorBwLane').addEventListener('change', function () {
+      if (BitWaveFeed) BitWaveFeed.setLane($('floorBwLane').value);
+    });
+  }
+  document.querySelectorAll('.floor-bw-frame-btn[data-bwframe]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (BitWaveFeed) BitWaveFeed.setFrame(btn.getAttribute('data-bwframe'));
+    });
+  });
+  document.querySelectorAll('.floor-bw-preset[data-bwpreset]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (!BitWaveFeed) return;
+      BitWaveFeed.loadPreset(btn.getAttribute('data-bwpreset'));
+      activateFloorForBitWave(true);
+    });
+  });
+  if ($('btnFloorBwClear')) {
+    $('btnFloorBwClear').addEventListener('click', function () {
+      if (BitWaveFeed) BitWaveFeed.clear();
+      if ($('floorBwInput')) $('floorBwInput').value = '';
+      syncFloorUI();
+    });
+  }
+  if (BitWaveFeed && typeof BitWaveFeed.subscribe === 'function') {
+    BitWaveFeed.subscribe(function (fd) {
+      if (fd && fd.active && (fd.liveTransport === 'broadcast' || fd.liveTransport === 'postMessage' || fd.liveTransport === 'api')) {
+        if ($('floorBwBar')) $('floorBwBar').hidden = false;
+        if (!state.toggles.floorWt) {
+          activateFloorForBitWave(true);
+          return;
+        }
+      }
+      syncBitWaveUI();
+    });
+  }
+
   if ($('btnFloorUpload') && $('floorFileInput')) {
     $('btnFloorUpload').addEventListener('click', function () {
       $('floorFileInput').value = '';
@@ -1753,7 +1906,13 @@
       ev.preventDefault();
       $('tab-floorwt').classList.remove('drag-over');
       var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-      if (f) handleFloorAudioFile(f);
+      if (!f) return;
+      var nm = (f.name || '').toLowerCase();
+      if (nm.endsWith('.bitwave') || nm.endsWith('.json')) {
+        handleFloorBitWaveFile(f);
+      } else {
+        handleFloorAudioFile(f);
+      }
     });
   }
   if ($('btnFloorFilePlay')) {
@@ -1788,6 +1947,9 @@
   document.querySelectorAll('.floor-scope-btn[data-fscope]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       state.floorScopeView = btn.getAttribute('data-fscope') || 'eq';
+      if (state.floorScopeView === 'bitwave' && $('floorBwBar')) {
+        $('floorBwBar').hidden = false;
+      }
       syncFloorUI();
     });
   });

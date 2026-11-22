@@ -1070,6 +1070,39 @@
     return sec.toFixed(2) + 's';
   }
 
+  // Self-contained cyclic Fritsch-Carlson monotone-cubic sampler for BitWave nibble registers [0..15]
+  // Centered on 0x8 (1000_2 = 0.0) to align with the Ramanujan Chime 4-bit zero crossing.
+  function nibbleCyclicSlopes(y) {
+    var n = y.length;
+    var m = new Float64Array(n);
+    if (n < 2) return m;
+    var d = new Float64Array(n);
+    for (var i = 0; i < n; i++) d[i] = y[(i + 1) % n] - y[i];
+    for (var j = 0; j < n; j++) {
+      var dp = d[(j - 1 + n) % n];
+      var dn = d[j];
+      m[j] = (dp * dn <= 0) ? 0 : ((2 * dp * dn) / (dp + dn));
+    }
+    return m;
+  }
+
+  function sampleNibbleCyclic(y, slopes, u) {
+    var n = y.length;
+    if (n < 2) return n === 1 ? (y[0] - 8) / 8 : 0;
+    var uu = ((u % 1) + 1) % 1;
+    var pos = uu * n;
+    var i0 = Math.floor(pos) % n;
+    var i1 = (i0 + 1) % n;
+    var tf = pos - Math.floor(pos);
+    var t2 = tf * tf;
+    var t3 = t2 * tf;
+    var raw = (2 * t3 - 3 * t2 + 1) * y[i0] +
+              (t3 - 2 * t2 + tf) * slopes[i0] +
+              (-2 * t3 + 3 * t2) * y[i1] +
+              (t3 - t2) * slopes[i1];
+    return (clamp(raw, 0, 15) - 8) / 8;
+  }
+
   function floorField(state, playT, opts) {
     opts = opts || {};
     var res = sphereResonance(state, playT || 0);
@@ -1117,6 +1150,9 @@
       return minHz * Math.exp((b / (bins - 1)) * logRatio);
     }
 
+    var bw = (opts.bitwave && opts.bitwave.activeNibbles && opts.bitwave.activeNibbles.length >= 2) ? opts.bitwave : null;
+    var bwDyn = null;
+
     if (mode === 'spectrogram') {
       // ---- Mode 2: MiniMeters-Style 2D Animated Equalizer (z = 0) + 3D Cavity Dispersion / BPM Timeline ----
       var temporalRows = opts.temporalRows; // Optional [slices][bins]: index 0 = fading past (-z), mid = present (0), last = incoming future (+z)
@@ -1142,6 +1178,46 @@
           var valA = Math.pow(clamp(rawA, 0, 1), 1.15);
           eqCenter[bi] = Math.fround(valA);
           if (valA > peakMag) { peakMag = valA; peakBin = bi; peakFreqHz = fHz; }
+        }
+      } else if (bw) {
+        // Real FFT spectrum of the cyclic BitWave register anchored to the Chime chromatic pitch Z_12
+        var bwSemi = (ph / PI) * 6;
+        var bwBaseHz = 98.0 * f * Math.pow(2, bwSemi / 12);
+        var bwNib = bw.activeNibbles;
+        var bwSlopes = nibbleCyclicSlopes(bwNib);
+        var bwPcmLen = 512;
+        var bwCycles = 4;
+        var bwPcm = new Float32Array(bwPcmLen);
+        var bwShift = t * 0.25;
+        for (var ps = 0; ps < bwPcmLen; ps++) {
+          bwPcm[ps] = sampleNibbleCyclic(bwNib, bwSlopes, (ps / bwPcmLen) * bwCycles + bwShift);
+        }
+        bwDyn = audioDynamics(bwPcm, 0, bwPcmLen);
+        var bwFft = fftMag(bwPcm, 0, bwPcmLen);
+        var bwPeaks = [];
+        var maxH = Math.min(48, Math.floor((bwFft.length - 1) / bwCycles));
+        for (var bh = 1; bh <= maxH; bh++) {
+          var hHz = bwBaseHz * bh;
+          if (hHz > maxHz * 1.15) break;
+          var hMag = bwFft[bh * bwCycles] || 0;
+          if (hMag > 0.015) {
+            bwPeaks.push({ hz: hHz, w: 0.036 + 0.002 * Math.min(bh, 16), a: hMag * (0.85 + 0.35 * amp) });
+          }
+        }
+        if (!bwPeaks.length) {
+          bwPeaks.push({ hz: bwBaseHz, w: 0.05, a: 0.25 });
+        }
+        for (var bwi = 0; bwi < bins; bwi++) {
+          var bHz = binToHz(bwi);
+          var bLog = Math.log(bHz);
+          var bSum = 0;
+          for (var bp = 0; bp < bwPeaks.length; bp++) {
+            var bd = (bLog - Math.log(Math.max(16, bwPeaks[bp].hz))) / bwPeaks[bp].w;
+            if (Math.abs(bd) < 4.2) bSum += bwPeaks[bp].a * Math.exp(-0.5 * bd * bd);
+          }
+          var bMag = clamp(Math.tanh(bSum * 1.35), 0, 1);
+          eqCenter[bwi] = Math.fround(bMag);
+          if (bMag > peakMag) { peakMag = bMag; peakBin = bwi; peakFreqHz = bHz; }
         }
       } else {
         // Deterministic harmonic synth spectrum aligned to chromatic Z_12 & dual-sphere radial modes
@@ -1234,6 +1310,17 @@
       var smoothPasses = Math.round(smooth * 5);
       var waveTime = TAU * t;
       var activeRowIdxF = ((activeZNorm + 1) * 0.5) * (slices - 1);
+      var bwA = bw ? (bw.nibblesA || bw.activeNibbles) : null;
+      var bwMid = bw ? bw.activeNibbles : null;
+      var bwB = bw ? (bw.nibblesB || bw.activeNibbles) : null;
+      var bwSlA = bwA ? nibbleCyclicSlopes(bwA) : null;
+      var bwSlM = bwMid ? nibbleCyclicSlopes(bwMid) : null;
+      var bwSlB = bwB ? nibbleCyclicSlopes(bwB) : null;
+      if (bwMid) {
+        var bwWTpcm = new Float32Array(128);
+        for (var bwp = 0; bwp < 128; bwp++) bwWTpcm[bwp] = sampleNibbleCyclic(bwMid, bwSlM, bwp / 128);
+        bwDyn = audioDynamics(bwWTpcm, 0, 128);
+      }
 
       for (var si = 0; si < slices; si++) {
         var vz = slices > 1 ? (si / (slices - 1)) * 2 - 1 : 0;
@@ -1245,19 +1332,39 @@
         rowInCavity[si] = inC ? 1 : 0;
 
         var rawRow = new Float32Array(bins);
-        var sliceMorph = vz * PI * (0.65 + 0.35 * eta);
-        var fmIdx = 0.35 + 0.55 * (K / 14) + (inC ? 0.25 : 0);
+        if (bwMid) {
+          // BitWave Register Stack sculpted onto the 3D Cutaway Floor: A (-z) -> Active/Z (z=0) -> B (+z)
+          var bwPhase = t * 0.5 + ph / TAU + vz * 0.08 * eta;
+          var cyclesX = Math.max(1, Math.min(3, Math.round(f)));
+          for (var bbi = 0; bbi < bins; bbi++) {
+            var ub = bbi / (bins - 1);
+            var phaseU = ub * cyclesX + bwPhase;
+            var yBw;
+            if (vz < 0) {
+              var wA = -vz;
+              yBw = sampleNibbleCyclic(bwA, bwSlA, phaseU) * wA + sampleNibbleCyclic(bwMid, bwSlM, phaseU) * (1 - wA);
+            } else {
+              var wB = vz;
+              yBw = sampleNibbleCyclic(bwMid, bwSlM, phaseU) * (1 - wB) + sampleNibbleCyclic(bwB, bwSlB, phaseU) * wB;
+            }
+            var bellBw = Math.pow(Math.sin(ub * PI), 0.24);
+            rawRow[bbi] = Math.fround(clamp(yBw * bellBw, -1, 1));
+          }
+        } else {
+          var sliceMorph = vz * PI * (0.65 + 0.35 * eta);
+          var fmIdx = 0.35 + 0.55 * (K / 14) + (inC ? 0.25 : 0);
 
-        for (var bi2 = 0; bi2 < bins; bi2++) {
-          var u2 = bi2 / (bins - 1);
-          var theta = u2 * TAU * Math.max(1, Math.min(4, f)) + ph + sliceMorph;
-          var modOsc = Math.sin(theta * Math.max(1, alpha * 0.75) - waveTime + vz * 2.4);
-          var carrier = Math.sin(theta + fmIdx * modOsc + waveTime * 0.5);
-          var oddHarm = Math.sin(theta * 3 - sliceMorph * 1.4) * (0.28 * (K / 14));
-          var fifthHarm = Math.sin(theta * 1.5 + waveTime) * (inC ? 0.32 : 0.12);
-          var bell = Math.pow(Math.sin(u2 * PI), 0.32); // Clean pinned edges along circular sphere rim
-          var yVal = (carrier * 0.68 + oddHarm + fifthHarm) * bell;
-          rawRow[bi2] = Math.fround(clamp(yVal, -1, 1));
+          for (var bi2 = 0; bi2 < bins; bi2++) {
+            var u2 = bi2 / (bins - 1);
+            var theta = u2 * TAU * Math.max(1, Math.min(4, f)) + ph + sliceMorph;
+            var modOsc = Math.sin(theta * Math.max(1, alpha * 0.75) - waveTime + vz * 2.4);
+            var carrier = Math.sin(theta + fmIdx * modOsc + waveTime * 0.5);
+            var oddHarm = Math.sin(theta * 3 - sliceMorph * 1.4) * (0.28 * (K / 14));
+            var fifthHarm = Math.sin(theta * 1.5 + waveTime) * (inC ? 0.32 : 0.12);
+            var bell = Math.pow(Math.sin(u2 * PI), 0.32); // Clean pinned edges along circular sphere rim
+            var yVal = (carrier * 0.68 + oddHarm + fifthHarm) * bell;
+            rawRow[bi2] = Math.fround(clamp(yVal, -1, 1));
+          }
         }
 
         var smRow = smoothPasses > 0 ? smoothArr1D(rawRow, smoothPasses) : rawRow;
@@ -1319,9 +1426,10 @@
       windowSec: Math.fround(windowSec),
       cavityWindowSec: Math.fround(cavityWindowSec),
       floorVelocity: Math.fround(floorVelocity),
-      dynamics: opts.dynamics || null,
+      dynamics: opts.dynamics || bwDyn || null,
       hasLookahead: !!opts.hasLookahead,
-      sourceLabel: opts.sourceLabel || 'SYNTH'
+      sourceLabel: opts.sourceLabel || (bw ? ('BITWAVE ' + (bw.widthBits || (bw.activeNibbles.length * 4)) + 'b') : 'SYNTH'),
+      bitwave: bw || null
     };
   }
 

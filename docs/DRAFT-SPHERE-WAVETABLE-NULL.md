@@ -622,7 +622,7 @@ This section captures the exact mathematical-musical identity behind the instrum
 
 ## 10. Next-Session Feature Spec: The Cutaway Floor 3D Wavetable & MiniMeters Spectrogram
 
-> **Status:** `NEXT-SESSION DEDICATED SLICE (BRAINSTORM & HANDOFF SPEC)`
+> **Status:** `IMPLEMENTED (SECTIONS 10.1–10.6 VERIFIED)`
 >
 > **Priority & Reference Boundary:** **The Ramanujan Chime** is always the sole architectural priority. Visual inspiration for the volumetric 3D wavetable ribbon comes from the sibling project **`GitWave`** (`C:\Users\trevor\Documents\GitWave\`, specifically its volumetric surface aesthetic in `src/render/depth.js` and `src/core/wavetable.ts`), referenced strictly for visual/shader inspiration—zero cross-repo dependency or GitWave rules apply.
 
@@ -668,3 +668,12 @@ The audio file (or any continuous synth evolution) forms an **infinite 2D time-d
 - **Continuous Logarithmic Time Zoom ($T_{\text{zoom}} \in [16\text{ ms}, 12\text{ s}]$):** Dilation $a = T_{\text{zoom}}$ controlling the apparent velocity of the floor through the invariant cavity:
   $$\tau(z) = t_{\text{now}} + \frac{z}{2R}\,T_{\text{zoom}}, \qquad v_{\text{floor}} = \frac{2R}{T_{\text{zoom}}} \;\;(\text{sphere diameters / sec})$$
 - **Constant Cavity, Modulated Floor:** Because `Floor Zoom` (`floorZoomLog`) is registered as a first-class modulation target in **`5 · Mod & Logic`**, holding $(R, r)$ constant while modulating `Zoom T` elastically accelerates and decelerates the infinite floor through the needle—matching the Morlet translation–dilation frame $\psi_{a,b}(t) = a^{-1/2}\psi((t-b)/a)$ and transitioning seamlessly from macro 3D spectrogram terrain (`12 s`) down to RX 11-style micro-PCM discrete sample dots (`16 ms`).
+
+### 10.6 Read-Only BitWave Register Feed (`js/bitwave-feed.js`)
+
+Keeping **BitWave** cleanly independent as its own tool, *The Ramanujan Chime* exposes a lightweight, read-only display and modulation sink (`Harmony.BitWaveFeed`) reusing the frozen parser `js/bitwave-import.js`:
+
+- **Zero-Coupling Feed Inputs:** Paste a `#bw=` share link, `.bitwave` JSON, or bare hex register (`8ADEFEDA85210125`, 256-bit `A000…000A`) in **`6 · Floor WT → BW Feed`**, drag-and-drop a `.bitwave` / `.json` file onto `#tab-floorwt`, click `64b` / `256b` canonical starter registers, or stream live from a second BitWave browser tab via `BroadcastChannel('bitwave-feed')`, `window.postMessage({ type: 'bitwave-feed', ... })`, or `window.ramanujanSphereFeed(...)`.
+- **Bottom Rail `BitWave` View (`EQ / Slice | PCM Groove | BitWave`):** Draws the luminous emerald Fritsch–Carlson monotone-cubic register spline (`A`, dashed `B`, glowing `Z`, `0x8` zero-crossing midline, live playhead dot, and bottom hex nibble strip) directly inside the `6 · Floor WT` rail.
+- **3D Floor & MiniMeters Coupling (`Engine.floorField`):** In **`3D Wavetable`** mode, the register stack (`A` back → active/`Z` center `2D f(x)` slice → `B` front) sculpts the translucent 3D Cutaway Floor. In **`MiniMeters 3D`** mode, `Engine.fftMag()` extracts the real harmonic spectrum and RMS/Crest Factor of the cyclic register on the center `2D f(x)` slice with 3D cavity dispersion.
+- **Custom Arbitrary LFO (`5 · Mod & Logic → BitWave Reg`):** Exposes `tap_bitwave` (`#4af28a`) as a draggable modulation source scanning the active BitWave register's monotone-cubic spline centered on `0x8 = 0.0`, so any BitWave register can modulate `Phase φ`, `Order N`, `Slice z/R`, `Cavity r`, `Partials K`, or `Floor Zoom` deterministically.

@@ -506,6 +506,32 @@
       };
     }
 
+    // 3. Read-Only BitWave Register Feed (when active and no live audio stream overrides it)
+    var bwFeed = Harmony.BitWaveFeed;
+    if (bwFeed && typeof bwFeed.isActive === 'function' && bwFeed.isActive()) {
+      var fd = bwFeed.getFeed();
+      if (fd && fd.active && fd.activeNibbles && fd.activeNibbles.length >= 2) {
+        return {
+          bpm: bpm,
+          windowBeats: beats,
+          windowSec: windowSec,
+          hasLookahead: false,
+          sourceLabel: 'BITWAVE ' + fd.width + 'b' + (fd.liveTransport === 'broadcast' ? ' LIVE' : ''),
+          bitwave: {
+            nibblesA: fd.nibblesA,
+            nibblesB: fd.nibblesB,
+            nibblesZ: fd.nibblesZ,
+            activeNibbles: fd.activeNibbles,
+            label: fd.label,
+            widthBits: fd.width,
+            opSymbol: fd.opSymbol,
+            lane: fd.lane,
+            frame: fd.frame
+          }
+        };
+      }
+    }
+
     return {
       bpm: bpm,
       windowBeats: beats,
@@ -714,6 +740,154 @@
     ctx.fillText('v=' + (field.floorVelocity || 1).toFixed(2) + ' Ø/s', w - padR - 2, 3);
   }
 
+  // ---- BitWave 2D Luminous Emerald Monotone-Cubic Register View (Read-Only Feed Sink) ----
+  function drawBitWaveScope(state, field, w, h, harmor) {
+    var bwMod = Harmony.BitWaveFeed;
+    var fd = (bwMod && typeof bwMod.getFeed === 'function') ? bwMod.getFeed() : null;
+    var isLiveFeed = !!(fd && fd.active && fd.activeNibbles && fd.activeNibbles.length >= 2);
+    var nibA = isLiveFeed ? fd.nibblesA : (bwMod ? bwMod.DEFAULT_LFO_NIBBLES : [8, 10, 13, 14, 15, 14, 13, 10, 8, 5, 2, 1, 0, 1, 2, 5]);
+    var nibB = isLiveFeed ? fd.nibblesB : null;
+    var nibAct = isLiveFeed ? fd.activeNibbles : nibA;
+    var nLen = nibAct.length;
+
+    var padL = 22, padR = 10, padT = 16, padB = 20;
+    var plotW = Math.max(20, w - padL - padR);
+    var plotH = Math.max(20, h - padT - padB);
+
+    ctx.fillStyle = harmor ? '#000000' : '#050a0d';
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle Inner Cavity proportion band centered on the register
+    if (field && field.rIn > 0.01) {
+      var cavW = plotW * field.eta;
+      ctx.fillStyle = 'rgba(74, 242, 138, 0.055)';
+      ctx.fillRect(padL + (plotW - cavW) * 0.5, padT, cavW, plotH);
+    }
+
+    // Horizontal nibble grid lines: F (15), C (12), 8 (0x8 zero-crossing midline), 4, 0
+    var levels = [
+      { v: 15, lbl: 'F', dash: false },
+      { v: 12, lbl: 'C', dash: false },
+      { v: 8,  lbl: '8', dash: true  },
+      { v: 4,  lbl: '4', dash: false },
+      { v: 0,  lbl: '0', dash: false }
+    ];
+    ctx.font = '600 9px "Cascadia Code", Consolas, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var li = 0; li < levels.length; li++) {
+      var lv = levels[li];
+      var ly = padT + (1 - lv.v / 15) * plotH;
+      ctx.strokeStyle = lv.dash ? 'rgba(255, 184, 77, 0.24)' : 'rgba(74, 242, 138, 0.09)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash(lv.dash ? [4, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(padL, ly);
+      ctx.lineTo(padL + plotW, ly);
+      ctx.stroke();
+      ctx.fillStyle = lv.dash ? '#ffb84d' : '#58706a';
+      ctx.fillText(lv.lbl, padL - 5, ly);
+    }
+    ctx.setLineDash([]);
+
+    // Vertical center meridian x = 0.5
+    ctx.strokeStyle = 'rgba(74, 242, 138, 0.09)';
+    ctx.beginPath();
+    ctx.moveTo(padL + plotW * 0.5, padT);
+    ctx.lineTo(padL + plotW * 0.5, padT + plotH);
+    ctx.stroke();
+
+    function traceSpline(nibbles, strokeStyle, widthPx, dashed, glowStyle) {
+      if (!nibbles || nibbles.length < 2 || !bwMod) return;
+      var sl = bwMod.computeCyclicSlopes(nibbles);
+      var steps = Math.max(120, Math.min(360, nibbles.length * 8));
+      ctx.save();
+      if (dashed) ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      for (var i = 0; i <= steps; i++) {
+        var u = i / steps;
+        var raw = bwMod.sampleMonotoneRaw(nibbles, u * ((nibbles.length - 1) / nibbles.length), sl);
+        var x = padL + u * plotW;
+        var y = padT + (1 - raw / 15) * plotH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      if (glowStyle) {
+        ctx.strokeStyle = glowStyle;
+        ctx.lineWidth = widthPx + 4.5;
+        ctx.stroke();
+      }
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = widthPx;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Draw background companion frames A (solid teal) and B (dashed teal)
+    if (isLiveFeed && fd.nibblesA && fd.frame !== 'a') {
+      traceSpline(fd.nibblesA, 'rgba(46, 194, 126, 0.45)', 1.2, false, null);
+    }
+    if (isLiveFeed && nibB && fd.frame !== 'b') {
+      traceSpline(nibB, 'rgba(54, 214, 200, 0.48)', 1.2, true, null);
+    }
+
+    // Draw glowing primary active BitWave register spline
+    traceSpline(nibAct, isLiveFeed ? '#4af28a' : 'rgba(74, 242, 138, 0.72)', 2.1, false, isLiveFeed ? 'rgba(74, 242, 138, 0.22)' : 'rgba(74, 242, 138, 0.10)');
+
+    // Live playhead cursor synced to state.playT
+    var pT = ((state.playT || 0) % 1 + 1) % 1;
+    var activeIdx = Math.min(nLen - 1, Math.floor(pT * nLen));
+    if (bwMod) {
+      var slAct = bwMod.computeCyclicSlopes(nibAct);
+      var rawPh = bwMod.sampleMonotoneRaw(nibAct, pT * ((nLen - 1) / Math.max(1, nLen)), slAct);
+      var phX = padL + pT * plotW;
+      var phY = padT + (1 - rawPh / 15) * plotH;
+      ctx.strokeStyle = 'rgba(255, 184, 77, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(phX, padT);
+      ctx.lineTo(phX, padT + plotH);
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffb84d';
+      ctx.beginPath();
+      ctx.arc(phX, phY, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#050a0d';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    // Bottom hex nibble ruler (auto-thins labels cleanly for 64-nibble 256-bit registers)
+    var stepLbl = nLen > 32 ? 2 : 1;
+    ctx.font = (nLen > 32 ? '500 8.5px' : '600 9.5px') + ' "Cascadia Code", Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (var ni = 0; ni < nLen; ni += stepLbl) {
+      var nx = padL + (nLen > 1 ? (ni / (nLen - 1)) * plotW : 0);
+      var isHit = Math.abs(ni - activeIdx) < stepLbl;
+      ctx.fillStyle = isHit ? '#ffb84d' : (nibAct[ni] > 0 ? '#6ee7a0' : '#4a605a');
+      ctx.fillText(nibAct[ni].toString(16).toUpperCase(), nx, h - 3);
+    }
+
+    // Top-left feed provenance caption + top-right active register badge
+    ctx.font = '600 9.5px "Cascadia Code", Consolas, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    if (isLiveFeed) {
+      ctx.fillStyle = '#4af28a';
+      var laneInfo = 'LANE ' + fd.lane + ' · ' + fd.labels.a + ' ' + fd.opSymbol + ' ' + fd.labels.b + ' → ' + fd.labels.z +
+        '  [' + fd.width + 'b · ' + fd.nibbleCount + ' nibbles · POP ' + fd.popcount + ']';
+      ctx.fillText(laneInfo, padL + 2, 2);
+    } else {
+      ctx.fillStyle = '#6ee7a0';
+      ctx.fillText('PREVIEW · Click "BW Feed" to paste #bw=/hex, drop .bitwave, or stream via BroadcastChannel', padL + 2, 2);
+    }
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffb84d';
+    ctx.fillText('0x' + nibAct[activeIdx].toString(16).toUpperCase() + ' @ #' + activeIdx, w - padR, 2);
+  }
+
   function update(state, field) {
     if (!canvas || !ctx || !field) return;
     var w = canvas.clientWidth, h = canvas.clientHeight;
@@ -728,6 +902,10 @@
     var harmor = !!(state.toggles && state.toggles.harmorVoid);
     if (state.floorScopeView === 'pcm') {
       drawPcmGroove(state, field, w, h, harmor);
+      return;
+    }
+    if (state.floorScopeView === 'bitwave') {
+      drawBitWaveScope(state, field, w, h, harmor);
       return;
     }
 
