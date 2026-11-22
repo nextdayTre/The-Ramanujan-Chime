@@ -2870,6 +2870,12 @@ body.mod-dragging .floor-zoom-ctl[data-mod-target].drop-hover {
   color: #7affad !important;
   border-color: rgba(74, 242, 138, 0.48) !important;
 }
+.floor-bw-sync.active {
+  background: rgba(74, 242, 138, 0.22) !important;
+  border-color: rgba(74, 242, 138, 0.78) !important;
+  color: #b7ffd0 !important;
+  box-shadow: 0 0 8px rgba(74, 242, 138, 0.24);
+}
 .floor-bw-frame-btn {
   padding: 1px 6px !important;
   font-size: 10px !important;

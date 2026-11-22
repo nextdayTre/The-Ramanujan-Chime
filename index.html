@@ -882,11 +882,13 @@
 
         <!-- Inline Read-Only BitWave Feed Strip (hidden until toggled or live feed arrives) -->
         <div id="floorBwBar" class="floor-bw-bar mono" hidden>
-          <span id="floorBwStatus" class="floor-bw-badge" title="Listens passively on BroadcastChannel('bitwave-feed') &amp; postMessage from a 2nd BitWave tab">BC Ready</span>
-          <input type="text" id="floorBwInput" class="floor-bw-input mono" spellcheck="false" placeholder="Paste #bw= link, .bitwave JSON, or hex (e.g. 8ADEFEDA85210125)…" aria-label="BitWave register or share link" />
-          <button type="button" id="btnFloorBwApply" class="mini-btn floor-bw-apply" title="Load BitWave register into Floor WT &amp; ModMatrix">Load</button>
+          <span id="floorBwStatus" class="floor-bw-badge" title="Paste a BitWave #bw= share link, .bitwave JSON, or hex register — or enable Sync to auto-pull copied links whenever you switch back from BitWave">BW Ready</span>
+          <input type="text" id="floorBwInput" class="floor-bw-input mono" spellcheck="false" placeholder="Paste BitWave #bw= link (auto-loads on Ctrl+V), .bitwave JSON, or hex…" aria-label="BitWave register or share link" />
+          <button type="button" id="btnFloorBwPaste" class="mini-btn floor-bw-apply" title="Read a BitWave #bw= link or hex register straight from your clipboard">Paste</button>
+          <button type="button" id="btnFloorBwSync" class="mini-btn floor-bw-sync" title="Auto-Sync: whenever you click Copy Link in BitWave and switch back to this tab, auto-load the new waveform!">Sync</button>
+          <button type="button" id="btnFloorBwApply" class="mini-btn" title="Load text from the input box">Load</button>
           <button type="button" id="btnFloorBwFile" class="mini-btn" title="Open a .bitwave or .json file">File</button>
-          <select id="floorBwLane" class="mod-mini-sel mono" aria-label="BitWave lane" title="Select BitWave lane">
+          <select id="floorBwLane" class="mod-mini-sel mono" aria-label="BitWave lane" title="Select BitWave lane (1–8)">
             <option value="1">L1</option>
             <option value="2">L2</option>
             <option value="3">L3</option>

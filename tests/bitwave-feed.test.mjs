@@ -104,6 +104,40 @@ describe('Harmony.BitWaveFeed — read-only register feed & monotone-cubic splin
     assert.equal(BitWaveFeed.getFeed().hexZ, '7521012585210125');
   });
 
+  it('decodes real BitWave v1.5 compact D45 schema-4 #bw= share links (including file:// URLs & 8 lanes)', () => {
+    const compactLink = 'file:///C:/Users/trevor/Documents/BitWave/bitwave-v2.html#bw=WzQsNjQsWzEsMCwxLDIsMF0sW1sxLCJBQUpFUW9FaEFTVSIsIl9fX19fd0FBQUFBIiwwLDIsMCwwLCIwIiwtMSwtMSwyXSxbMiwiX18yN3ZZRWhBU1UiLCJBa2FLenV5b1pDQSIsMCwyLDAsMSwiMCIsLTEsLTFdLFszLCJBU05GWjRtcnplOCIsIml0Ny0yb1VoQVNVIiwwLDAsMCwxLCIwIiwtMSwtMSwxLDJdXSxbWzMsMiwxLDAsMF0sWzEsMiwyLDAsMF1dLFtbMSwwLCJpdDctMm9VaEFTVSJdLFsyLDAsIl90cUZJUUVsZXQ0Il1dLFtbImlkIiwic2luZSIsInNxdWFyZSJdLFtbIjEiLCI4QURFRkVEQTg1MjEwMTI1IiwiRkZGRkZGRkYwMDAwMDAwMCJdLFsiMiIsIjg1MjEwMTI1OEFERUZFREEiLCJGRkZGMDAwMEZGRkYwMDAwIl0sWyIzIiwiRkVEQTg1MjEwMTI1N0FERSIsIjBGMEYwRjBGMEYwRjBGMEYiXV0sMV1d';
+    const res = BitWaveFeed.ingest(compactLink, { transport: 'paste' });
+    assert.equal(res.ok, true);
+    const fd = BitWaveFeed.getFeed();
+    assert.equal(fd.width, 64);
+    assert.equal(fd.lane, '1');
+    assert.equal(fd.frame, 'z');
+    assert.equal(fd.hexA, '0002444281210125');
+    assert.equal(fd.hexB, 'FFFFFFFF00000000');
+    assert.equal(fd.hexZ, 'FFFDbbbd81210125'.toUpperCase());
+    assert.deepEqual(fd.laneKeys, ['1', '2', '3']);
+
+    // Schema-4 dynamic 8-lane document (lane 8 -> O / P / Z8)
+    const doc8 = {
+      schema: 4,
+      app: 'bitwave',
+      N: 32,
+      view: { lane: '8' },
+      lanes: {
+        '1': { a: '8ADEFEDA', b: 'FFFF0000', binop: 'xor', focus: 'z' },
+        '8': { a: 'A000000A', b: '5000000A', binop: 'xor', focus: 'z' }
+      }
+    };
+    const r8 = BitWaveFeed.ingest(JSON.stringify(doc8));
+    assert.equal(r8.ok, true);
+    const fd8 = BitWaveFeed.getFeed();
+    assert.equal(fd8.lane, '8');
+    assert.equal(fd8.labels.a, 'O');
+    assert.equal(fd8.labels.b, 'P');
+    assert.equal(fd8.labels.z, 'Z8');
+    assert.equal(fd8.hexZ, 'F0000000');
+  });
+
   it('ingests structured live payloads (hexA/hexB/op) and computes derived Z', () => {
     const res = BitWaveFeed.ingest({
       type: 'bitwave-feed',

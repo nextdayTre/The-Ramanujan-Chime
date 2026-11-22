@@ -277,6 +277,180 @@
     };
   }
 
+  var BINOP_ORDER = ['and', 'or', 'xor', 'add', 'sub'];
+  var FRAME_ORDER = ['a', 'b', 'z'];
+  var B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+  function laneLabelsFor(laneNum) {
+    var k = Math.max(1, Math.min(13, laneNum | 0));
+    return {
+      a: String.fromCharCode(65 + (k - 1) * 2),
+      b: String.fromCharCode(66 + (k - 1) * 2),
+      z: 'Z' + k
+    };
+  }
+
+  function decodeBase64UrlBytes(str) {
+    if (typeof str !== 'string' || !str.length || str.length % 4 === 1) return null;
+    var out = new Uint8Array(Math.floor((str.length * 3) / 4));
+    var acc = 0, bits = 0, written = 0;
+    for (var i = 0; i < str.length; i++) {
+      var v = B64URL.indexOf(str.charAt(i));
+      if (v < 0) return null;
+      acc = (acc << 6) | v;
+      bits += 6;
+      if (bits >= 8) {
+        bits -= 8;
+        out[written++] = (acc >> bits) & 0xff;
+      }
+    }
+    return out;
+  }
+
+  function decodeUtf8Bytes(bytes) {
+    if (!bytes) return null;
+    if (typeof TextDecoder === 'function') {
+      try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (e) { return null; }
+    }
+    var out = '';
+    for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+    return out;
+  }
+
+  function hexFromCompactWord(b64Word, N) {
+    var bytes = decodeBase64UrlBytes(b64Word);
+    if (!bytes || bytes.length !== N / 8) return null;
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, '0');
+    }
+    return hex.toUpperCase();
+  }
+
+  function fitHexToWidth(hexStr, N) {
+    var nibs = N / 4;
+    var clean = String(hexStr || '').trim().replace(/^0[xX]/, '').replace(/[\s_-]+/g, '').toUpperCase();
+    if (!/^[0-9A-F]*$/.test(clean)) return null;
+    if (clean.length > nibs) clean = clean.slice(clean.length - nibs);
+    while (clean.length < nibs) clean = '0' + clean;
+    var arr = new Array(nibs);
+    for (var i = 0; i < nibs; i++) arr[i] = parseInt(clean.charAt(i), 16);
+    return { hex: clean, nibbles: arr };
+  }
+
+  // Decode BitWave schema-4 compact D45 share array: [tag, N, view, lanes, routes, parked, dataset?, x?]
+  function expandCompactShareArray(arr) {
+    if (!Array.isArray(arr) || arr.length < 4) return null;
+    var tag = arr[0];
+    var N = arr[1];
+    if (typeof tag !== 'number' || typeof N !== 'number' || N < 8 || N > 256 || N % 8 !== 0) return null;
+    var rawView = Array.isArray(arr[2]) ? arr[2] : [1];
+    var rawLanes = arr[3];
+    if (!Array.isArray(rawLanes) || !rawLanes.length) return null;
+
+    var lanesObj = {};
+    for (var i = 0; i < rawLanes.length; i++) {
+      var tuple = rawLanes[i];
+      if (!Array.isArray(tuple) || tuple.length < 5) return null;
+      var laneNum = tuple[0];
+      if (typeof laneNum !== 'number' || laneNum < 1 || laneNum > 13) return null;
+      var hexA = hexFromCompactWord(tuple[1], N);
+      var hexB = hexFromCompactWord(tuple[2], N);
+      if (!hexA || !hexB) return null;
+      var opIdx = tuple[4];
+      var binop = (typeof opIdx === 'number' && BINOP_ORDER[opIdx]) ? BINOP_ORDER[opIdx] : 'xor';
+      var focusIdx = tuple.length > 10 ? tuple[10] : 0;
+      var focus = (typeof focusIdx === 'number' && FRAME_ORDER[focusIdx]) ? FRAME_ORDER[focusIdx] : 'a';
+      lanesObj[String(laneNum)] = {
+        a: hexA,
+        b: hexB,
+        binop: binop,
+        focus: focus
+      };
+    }
+    return {
+      schema: tag,
+      app: 'bitwave',
+      N: N,
+      view: { lane: String(rawView[0] || 1) },
+      lanes: lanesObj
+    };
+  }
+
+  // Convert any BitWave schema 1-4 document object (including 1..8 dynamic lanes) to a normalized feed snapshot
+  function snapshotFromProjectDoc(doc, transport, labelOverride) {
+    if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return null;
+    var N = doc.N;
+    if (typeof N !== 'number' || N < 8 || N > 256 || N % 8 !== 0) return null;
+    if (!doc.lanes || typeof doc.lanes !== 'object') return null;
+
+    var rawKeys = Object.keys(doc.lanes)
+      .filter(function (k) { var n = Number(k); return Number.isInteger(n) && n >= 1 && n <= 13; })
+      .sort(function (a, b) { return Number(a) - Number(b); });
+    if (!rawKeys.length) return null;
+
+    var lanes = {};
+    for (var i = 0; i < rawKeys.length; i++) {
+      var key = rawKeys[i];
+      var raw = doc.lanes[key];
+      if (!raw || typeof raw !== 'object') continue;
+      var fa = fitHexToWidth(raw.a, N);
+      var fb = fitHexToWidth(raw.b, N);
+      if (!fa || !fb) return null;
+      var op = BINOP_ORDER.indexOf(raw.binop) >= 0 ? raw.binop : 'xor';
+      var zNib = combineNibbles(fa.nibbles, fb.nibbles, op);
+      var labels = laneLabelsFor(Number(key));
+      var focus = (raw.focus === 'a' || raw.focus === 'b' || raw.focus === 'z') ? raw.focus : 'z';
+      lanes[key] = {
+        id: key,
+        op: op,
+        opSymbol: OP_SYMBOLS[op] || '\u2295',
+        labels: labels,
+        focus: focus,
+        frames: {
+          a: { label: labels.a, hex: fa.hex, nibbles: fa.nibbles, popcount: popcountNibbles(fa.nibbles) },
+          b: { label: labels.b, hex: fb.hex, nibbles: fb.nibbles, popcount: popcountNibbles(fb.nibbles) },
+          z: { label: labels.z, hex: hexFromNibbles(zNib), nibbles: zNib, popcount: popcountNibbles(zNib) }
+        }
+      };
+    }
+
+    var laneKeys = Object.keys(lanes).sort(function (a, b) { return Number(a) - Number(b); });
+    if (!laneKeys.length) return null;
+    var viewLane = (doc.view && doc.view.lane != null) ? String(doc.view.lane) : laneKeys[0];
+    if (!lanes[viewLane]) viewLane = laneKeys[0];
+    var focusFrame = lanes[viewLane].focus || 'z';
+    return {
+      width: N,
+      nibbleCount: N / 4,
+      lanes: lanes,
+      laneKeys: laneKeys,
+      defaultLane: viewLane,
+      defaultFrame: focusFrame,
+      source: transport || 'link',
+      name: labelOverride || ('BitWave ' + N + 'b'),
+      warnings: []
+    };
+  }
+
+  function extractSharePayload(text) {
+    var t = String(text || '').trim().replace(/^["'<]+|["'>]+$/g, '').trim();
+    var payload = '';
+    var hashAt = t.indexOf('#bw=');
+    if (hashAt >= 0) {
+      payload = t.slice(hashAt + 4);
+    } else if (t.slice(0, 3) === 'bw=') {
+      payload = t.slice(3);
+    } else if (/^[A-Za-z0-9_-]{12,}$/.test(t) && !isBareHexString(t)) {
+      payload = t;
+    } else {
+      return null;
+    }
+    // Strip any trailing whitespace or secondary fragment/query noise
+    payload = payload.split(/[\s&#?]/)[0];
+    return payload || null;
+  }
+
   function isBareHexString(text) {
     if (typeof text !== 'string') return false;
     var t = text.trim();
@@ -346,21 +520,50 @@
       }
     }
 
-    // 3. Full .bitwave JSON document, text, or #bw= share link via frozen BitWaveImport
-    if (!BitWaveImport || typeof BitWaveImport.bitwaveImport !== 'function') {
-      return { ok: false, error: 'BitWaveImport parser unavailable' };
+    // 3. BitWave compact #bw= share link (schema 4 D45 array) or legacy #bw= JSON object
+    if (typeof input === 'string') {
+      var trimmed = input.trim();
+      if (trimmed.charAt(0) === '{' || trimmed.charAt(0) === '[') {
+        var parsedJson = null;
+        try { parsedJson = JSON.parse(trimmed); } catch (e) {
+          return { ok: false, error: 'BitWave JSON could not be parsed' };
+        }
+        var docFromJson = Array.isArray(parsedJson) ? expandCompactShareArray(parsedJson) : parsedJson;
+        var snapJson = snapshotFromProjectDoc(docFromJson, transport, name);
+        if (snapJson) return { ok: true, snapshot: snapJson };
+      } else {
+        var sharePayload = extractSharePayload(trimmed);
+        if (sharePayload) {
+          var rawBytes = decodeBase64UrlBytes(sharePayload);
+          var rawText = decodeUtf8Bytes(rawBytes);
+          if (rawText) {
+            var decoded = null;
+            try { decoded = JSON.parse(rawText); } catch (e) { decoded = null; }
+            if (decoded) {
+              var docFromShare = Array.isArray(decoded) ? expandCompactShareArray(decoded) : decoded;
+              var snapShare = snapshotFromProjectDoc(docFromShare, transport, name);
+              if (snapShare) return { ok: true, snapshot: snapShare };
+            }
+          }
+        }
+      }
+    } else if (typeof input === 'object' && input !== null) {
+      var docFromObj = Array.isArray(input) ? expandCompactShareArray(input) : input;
+      var snapObj = snapshotFromProjectDoc(docFromObj, transport, name);
+      if (snapObj) return { ok: true, snapshot: snapObj };
     }
-    var imp = BitWaveImport.bitwaveImport(input, name ? { name: name } : undefined);
-    if (!imp || !imp.ok) {
-      return {
-        ok: false,
-        error: (imp && imp.error && imp.error.message) ? imp.error.message : 'Could not parse BitWave input'
-      };
+
+    // 4. Fallback to frozen BitWaveImport for strict schema 1-3 error diagnostics
+    if (BitWaveImport && typeof BitWaveImport.bitwaveImport === 'function') {
+      var imp = BitWaveImport.bitwaveImport(input, name ? { name: name } : undefined);
+      if (imp && imp.ok) {
+        return { ok: true, snapshot: snapshotFromImport(imp, transport, name) };
+      }
+      if (imp && imp.error && imp.error.message) {
+        return { ok: false, error: imp.error.message };
+      }
     }
-    return {
-      ok: true,
-      snapshot: snapshotFromImport(imp, transport, name)
-    };
+    return { ok: false, error: 'Paste a BitWave #bw= link, .bitwave JSON, or hex register' };
   }
 
   // ---- Stateful Read-Only Feed Store (dormant on mount!) ----

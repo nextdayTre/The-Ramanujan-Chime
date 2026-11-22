@@ -1739,38 +1739,61 @@
       }
     });
   }
-  function syncBitWaveUI(errMsg) {
+  var bwAutoSync = false;
+  var bwLastClip = '';
+
+  function syncBitWaveUI(errMsg, errDetail) {
     var fd = (BitWaveFeed && typeof BitWaveFeed.getFeed === 'function') ? BitWaveFeed.getFeed() : null;
     var active = !!(fd && fd.active);
     var toggleBtn = $('btnFloorBwToggle');
-    if (toggleBtn) toggleBtn.classList.toggle('active', active);
+    if (toggleBtn) toggleBtn.classList.toggle('active', active || bwAutoSync);
+    var syncBtn = $('btnFloorBwSync');
+    if (syncBtn) {
+      syncBtn.classList.toggle('active', bwAutoSync);
+      syncBtn.textContent = bwAutoSync ? 'Sync On' : 'Sync';
+    }
 
     var badge = $('floorBwStatus');
     if (badge) {
       badge.classList.remove('live', 'err');
       if (errMsg) {
         badge.textContent = errMsg;
+        badge.title = errDetail || errMsg;
         badge.classList.add('err');
       } else if (active) {
         var tag = fd.liveTransport === 'broadcast'
           ? ('BC LIVE · ' + fd.width + 'b')
-          : (fd.liveTransport === 'postMessage' ? ('MSG · ' + fd.width + 'b') : (fd.width + 'b · ' + fd.label));
+          : (fd.liveTransport === 'sync'
+            ? ('SYNC · ' + fd.width + 'b')
+            : (fd.liveTransport === 'postMessage' ? ('MSG · ' + fd.width + 'b') : (fd.width + 'b · ' + fd.label)));
         badge.textContent = tag;
-        if (fd.liveTransport === 'broadcast' || fd.liveTransport === 'postMessage') {
+        badge.title = 'Loaded ' + fd.name + ' (' + fd.width + ' bits, Lane ' + fd.lane + ' ' + fd.label + ')';
+        if (fd.liveTransport === 'broadcast' || fd.liveTransport === 'postMessage' || fd.liveTransport === 'sync' || bwAutoSync) {
           badge.classList.add('live');
         }
       } else {
-        badge.textContent = 'BC Ready';
+        badge.textContent = bwAutoSync ? 'Sync Ready' : 'BW Ready';
+        badge.title = bwAutoSync
+          ? 'Auto-Sync active: copy a link in BitWave and switch back to this tab to update automatically'
+          : 'Paste a BitWave #bw= share link, .bitwave JSON, or hex register — or enable Sync';
+        if (bwAutoSync) badge.classList.add('live');
       }
     }
 
     var laneSel = $('floorBwLane');
     if (laneSel && active) {
-      for (var i = 0; i < laneSel.options.length; i++) {
-        var opt = laneSel.options[i];
-        opt.disabled = fd.laneKeys.indexOf(opt.value) < 0;
+      var wantKeys = fd.laneKeys && fd.laneKeys.length ? fd.laneKeys : ['1'];
+      var curKeys = Array.from(laneSel.options).map(function (o) { return o.value; }).join(',');
+      if (curKeys !== wantKeys.join(',')) {
+        laneSel.innerHTML = '';
+        for (var i = 0; i < wantKeys.length; i++) {
+          var opt = document.createElement('option');
+          opt.value = wantKeys[i];
+          opt.textContent = 'L' + wantKeys[i];
+          laneSel.appendChild(opt);
+        }
       }
-      laneSel.value = fd.lane || '1';
+      laneSel.value = fd.lane || wantKeys[0];
     }
     document.querySelectorAll('.floor-bw-frame-btn[data-bwframe]').forEach(function (b) {
       var fr = b.getAttribute('data-bwframe');
@@ -1798,7 +1821,7 @@
       var res = BitWaveFeed.ingest(String(reader.result || ''), { transport: 'file', name: file.name || 'project.bitwave' });
       if (!res.ok) {
         if ($('floorBwBar')) $('floorBwBar').hidden = false;
-        syncBitWaveUI('Parse error');
+        syncBitWaveUI('Parse error', res.error);
         return;
       }
       if ($('floorBwBar')) $('floorBwBar').hidden = false;
@@ -1815,19 +1838,67 @@
       }
     });
   }
-  function applyFloorBwInput() {
-    if (!BitWaveFeed || !$('floorBwInput')) return;
-    var raw = $('floorBwInput').value.trim();
-    if (!raw) { syncBitWaveUI('Paste hex/#bw='); return; }
-    var res = BitWaveFeed.ingest(raw, { transport: 'paste' });
+  function applyFloorBwInput(overrideRaw, transportMode, quietOnNoMatch) {
+    if (!BitWaveFeed) return false;
+    var raw = (overrideRaw != null ? String(overrideRaw) : ($('floorBwInput') ? $('floorBwInput').value : '')).trim();
+    if (!raw) {
+      if (!quietOnNoMatch) syncBitWaveUI('Paste #bw=/hex');
+      return false;
+    }
+    var res = BitWaveFeed.ingest(raw, { transport: transportMode || 'paste' });
     if (!res.ok) {
-      syncBitWaveUI('Invalid feed');
-      return;
+      if (!quietOnNoMatch) syncBitWaveUI('Invalid link', res.error);
+      return false;
+    }
+    if ($('floorBwInput') && overrideRaw != null) {
+      $('floorBwInput').value = raw.length > 96 ? (raw.slice(0, 96) + '…') : raw;
     }
     activateFloorForBitWave(true);
+    return true;
   }
+  function pullBitWaveFromClipboard(transportMode, quietOnNoMatch) {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      if (!quietOnNoMatch) syncBitWaveUI('Use Ctrl+V', 'Clipboard API blocked on this origin — click the box and press Ctrl+V');
+      if ($('floorBwInput') && !quietOnNoMatch) $('floorBwInput').focus();
+      return;
+    }
+    navigator.clipboard.readText().then(function (txt) {
+      var clean = String(txt || '').trim();
+      if (!clean) {
+        if (!quietOnNoMatch) syncBitWaveUI('Clip empty');
+        return;
+      }
+      if (quietOnNoMatch && clean === bwLastClip) return;
+      if (applyFloorBwInput(clean, transportMode, quietOnNoMatch)) {
+        bwLastClip = clean;
+      }
+    }).catch(function () {
+      if (!quietOnNoMatch) {
+        syncBitWaveUI('Use Ctrl+V', 'Browser blocked clipboard read — paste directly into the box (auto-loads on Ctrl+V)');
+        if ($('floorBwInput')) $('floorBwInput').focus();
+      }
+    });
+  }
+  if ($('btnFloorBwPaste')) {
+    $('btnFloorBwPaste').addEventListener('click', function () {
+      pullBitWaveFromClipboard('paste', false);
+    });
+  }
+  if ($('btnFloorBwSync')) {
+    $('btnFloorBwSync').addEventListener('click', function () {
+      bwAutoSync = !bwAutoSync;
+      syncBitWaveUI();
+      if (bwAutoSync) pullBitWaveFromClipboard('sync', true);
+    });
+  }
+  window.addEventListener('focus', function () {
+    if (bwAutoSync) pullBitWaveFromClipboard('sync', true);
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (bwAutoSync && !document.hidden) pullBitWaveFromClipboard('sync', true);
+  });
   if ($('btnFloorBwApply')) {
-    $('btnFloorBwApply').addEventListener('click', applyFloorBwInput);
+    $('btnFloorBwApply').addEventListener('click', function () { applyFloorBwInput(); });
   }
   if ($('floorBwInput')) {
     $('floorBwInput').addEventListener('keydown', function (ev) {
@@ -1835,6 +1906,9 @@
         ev.preventDefault();
         applyFloorBwInput();
       }
+    });
+    $('floorBwInput').addEventListener('paste', function () {
+      setTimeout(function () { applyFloorBwInput(); }, 0);
     });
   }
   if ($('btnFloorBwFile') && $('floorBwFileInput')) {
