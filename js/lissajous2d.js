@@ -204,7 +204,11 @@
   function update(state, playT, points, dirty) {
     if (!ctx) return;
     var sz = ensureSize();
-    if (!sz) return;
+    if (!sz) {
+      var hiddenPh = Harmony.engine.playhead(state, points, playT);
+      if (hiddenPh && hiddenPh.point) window.__lissCross = hiddenPh.point;
+      return;
+    }
     var w = sz[0], h = sz[1], dpr = sz[2];
 
     var sig = [dirty, w, h, dpr, state.twinMode, !!state.toggles.strobeN, !!state.toggles.ghostRef, state.ghostRev || 0, state.orderN, (state.rIn || 0).toFixed(3)].join('|');

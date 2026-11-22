@@ -1,4 +1,4 @@
-# Ecosystem map — Ramanujan's Gift
+# Ecosystem map — The Ramanujan Chime
 
 This is the honest map of the tools that surround this instrument and the data that could
 cross between them. It is deliberately conservative: **status `available` means the thing

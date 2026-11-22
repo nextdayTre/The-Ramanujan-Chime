@@ -24,6 +24,15 @@
   var resSliceMesh, resSliceOuterRim, resSliceInnerRim, resSliceSpokes;
   var resModeOuterRing, resModeInnerRing, resModeWallRing, resHalfPowerRing;
 
+  // §10 Cutaway Floor 3D Wavetable & MiniMeters 3D Spectrogram objects
+  var FLOOR_SLICES = 28;
+  var FLOOR_BINS = 72;
+  var floorWtGroup;
+  var floorSurfaceMesh, floorWireLines, floorFrontLine, floorActiveLine;
+  var floorEqCurtain, floorTiltLine;
+  var floorSurfPos, floorSurfCol, floorWirePos, floorWireCol;
+  var floorFrontPos, floorActivePos, floorEqPos, floorEqCol, floorTiltPos;
+
   var lastRendered = -1;
   var lastSphereSig = '';
   var lastResSliceKey = '';
@@ -136,7 +145,7 @@
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h);
-    el.appendChild(renderer.domElement);
+    el.insertBefore(renderer.domElement, el.firstChild);
 
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -254,6 +263,8 @@
       new THREE.LineBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.55 })
     );
     scene.add(conjugateChordLine);
+
+    initFloorWt();
 
     if (window.ResizeObserver) {
       resizeObs = new ResizeObserver(onResize);
@@ -507,6 +518,290 @@
       new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.72 })
     );
     resonanceGroup.add(resSliceSpokes);
+  }
+
+  // ---- §10 Cutaway Floor 3D Wavetable (GitWave Aesthetic) & MiniMeters 3D Spectrogram ----
+  function initFloorWt() {
+    floorWtGroup = new THREE.Group();
+    floorWtGroup.visible = false;
+    scene.add(floorWtGroup);
+
+    var S = FLOOR_SLICES, B = FLOOR_BINS;
+    var vCount = S * B;
+    floorSurfPos = new Float32Array(vCount * 3);
+    floorSurfCol = new Float32Array(vCount * 3);
+    var indices = new Uint16Array((S - 1) * (B - 1) * 6);
+    var ptr = 0;
+    for (var s = 0; s < S - 1; s++) {
+      for (var b = 0; b < B - 1; b++) {
+        var i0 = s * B + b;
+        var i1 = i0 + 1;
+        var i2 = (s + 1) * B + b;
+        var i3 = i2 + 1;
+        indices[ptr++] = i0; indices[ptr++] = i2; indices[ptr++] = i1;
+        indices[ptr++] = i1; indices[ptr++] = i2; indices[ptr++] = i3;
+      }
+    }
+    var surfGeom = new THREE.BufferGeometry();
+    surfGeom.setAttribute('position', new THREE.BufferAttribute(floorSurfPos, 3));
+    surfGeom.setAttribute('color', new THREE.BufferAttribute(floorSurfCol, 3));
+    surfGeom.setIndex(new THREE.BufferAttribute(indices, 1));
+    floorSurfaceMesh = new THREE.Mesh(
+      surfGeom,
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.62,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      })
+    );
+    floorWtGroup.add(floorSurfaceMesh);
+
+    // Delicate wireframe ribs (every depth slice + every 6th spine)
+    var ribSegs = S * (B - 1);
+    var spineCount = Math.floor((B - 1) / 6) + 1;
+    var spineSegs = spineCount * (S - 1);
+    var totalWireVerts = (ribSegs + spineSegs) * 2;
+    floorWirePos = new Float32Array(totalWireVerts * 3);
+    floorWireCol = new Float32Array(totalWireVerts * 3);
+    var wireGeom = new THREE.BufferGeometry();
+    wireGeom.setAttribute('position', new THREE.BufferAttribute(floorWirePos, 3));
+    wireGeom.setAttribute('color', new THREE.BufferAttribute(floorWireCol, 3));
+    floorWireLines = new THREE.LineSegments(
+      wireGeom,
+      new THREE.LineBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false
+      })
+    );
+    floorWtGroup.add(floorWireLines);
+
+    // Luminous front rim edge (z = +zSpan)
+    floorFrontPos = new Float32Array(B * 3);
+    var frontGeom = new THREE.BufferGeometry();
+    frontGeom.setAttribute('position', new THREE.BufferAttribute(floorFrontPos, 3));
+    floorFrontLine = new THREE.Line(
+      frontGeom,
+      new THREE.LineBasicMaterial({ color: 0xb8e8ff, transparent: true, opacity: 0.96 })
+    );
+    floorWtGroup.add(floorFrontLine);
+
+    // Travelling golden WT POS slice (Wavetable) or 2D EQ Peak Contour at z = 0 (Spectrogram)
+    floorActivePos = new Float32Array(B * 3);
+    var actGeom = new THREE.BufferGeometry();
+    actGeom.setAttribute('position', new THREE.BufferAttribute(floorActivePos, 3));
+    floorActiveLine = new THREE.Line(
+      actGeom,
+      new THREE.LineBasicMaterial({ color: 0xffb84d, transparent: true, opacity: 1.0 })
+    );
+    floorWtGroup.add(floorActiveLine);
+
+    // MiniMeters 2D Animated Equalizer Curtain standing vertically on z = 0 (2D f(x) Slice)
+    floorEqPos = new Float32Array(B * 2 * 3);
+    floorEqCol = new Float32Array(B * 2 * 3);
+    var eqIdx = new Uint16Array((B - 1) * 6);
+    var ep = 0;
+    for (var eb = 0; eb < B - 1; eb++) {
+      var bot0 = eb * 2, top0 = bot0 + 1;
+      var bot1 = (eb + 1) * 2, top1 = bot1 + 1;
+      eqIdx[ep++] = bot0; eqIdx[ep++] = top0; eqIdx[ep++] = bot1;
+      eqIdx[ep++] = bot1; eqIdx[ep++] = top0; eqIdx[ep++] = top1;
+    }
+    var eqGeom = new THREE.BufferGeometry();
+    eqGeom.setAttribute('position', new THREE.BufferAttribute(floorEqPos, 3));
+    eqGeom.setAttribute('color', new THREE.BufferAttribute(floorEqCol, 3));
+    eqGeom.setIndex(new THREE.BufferAttribute(eqIdx, 1));
+    floorEqCurtain = new THREE.Mesh(
+      eqGeom,
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.78,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      })
+    );
+    floorEqCurtain.visible = false;
+    floorWtGroup.add(floorEqCurtain);
+
+    // MiniMeters Cyan Spectral Tilt Line across z = 0
+    floorTiltPos = new Float32Array(B * 3);
+    var tiltGeom = new THREE.BufferGeometry();
+    tiltGeom.setAttribute('position', new THREE.BufferAttribute(floorTiltPos, 3));
+    floorTiltLine = new THREE.Line(
+      tiltGeom,
+      new THREE.LineBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.85 })
+    );
+    floorTiltLine.visible = false;
+    floorWtGroup.add(floorTiltLine);
+  }
+
+  // MiniMeters vibrant spectrum ramp: deep violet -> magenta -> hot crimson (low/mid peaks) -> electric cyan (highs)
+  function miniMetersRgb(u, mag, harmor) {
+    if (harmor) {
+      var g = 0.25 + 0.75 * Math.min(1, mag * 1.15);
+      return [0.04 + 0.22 * mag, g, 0.16 + 0.28 * mag];
+    }
+    var e = Math.max(0, Math.min(1, mag));
+    if (u < 0.42) {
+      // Bass & low-mid: deep purple -> vivid magenta -> hot crimson peak
+      if (e > 0.68) {
+        var t1 = (e - 0.68) / 0.32;
+        return [0.92 + 0.08 * t1, 0.09 + 0.14 * (1 - t1), 0.52 * (1 - t1) + 0.24 * t1];
+      }
+      var t0 = e / 0.68;
+      return [0.22 + 0.68 * t0, 0.06 + 0.08 * t0, 0.45 + 0.35 * t0];
+    }
+    // Mid-to-highs: royal indigo -> electric sky blue -> bright cyan shimmer
+    var hi = (u - 0.42) / 0.58;
+    return [
+      0.16 * (1 - hi) + 0.38 * e * hi,
+      0.20 + 0.68 * e * (0.55 + 0.45 * hi),
+      0.56 + 0.42 * e
+    ];
+  }
+
+  // GitWave volumetric wavetable ramp: vivid indigo trough -> luminous violet/cyan body -> ice-cyan crests
+  function wavetableRgb(yNorm, inCavity, depthFade, harmor) {
+    var a = Math.max(0, Math.min(1, 0.5 + 0.5 * yNorm));
+    var f = 0.52 + 0.48 * depthFade;
+    if (harmor) {
+      return [0.06 * f, (0.38 + 0.62 * a) * f, (0.18 + 0.30 * a) * f];
+    }
+    var cr = (0.34 + 0.28 * a + (inCavity ? 0.08 : 0)) * f;
+    var cg = (0.24 + 0.64 * a + (inCavity ? 0.14 : 0)) * f;
+    var cb = (0.82 + 0.18 * a) * f;
+    return [Math.min(1, cr), Math.min(1, cg), Math.min(1, cb)];
+  }
+
+  function updateFloorWt(playT, state, field) {
+    if (!floorWtGroup) return;
+    var on = !!(state.toggles && state.toggles.floorWt);
+    floorWtGroup.visible = on;
+    if (!on) return;
+
+    if (!field && Harmony.engine && Harmony.engine.floorField) {
+      field = Harmony.engine.floorField(state, playT, { slices: FLOOR_SLICES, bins: FLOOR_BINS });
+    }
+    if (!field) return;
+
+    var S = field.slices, B = field.bins;
+    var R = field.R;
+    var isSpec = field.mode === 'spectrogram';
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
+    var yScale = isSpec ? (R * 0.68) : (R * 0.36);
+
+    floorSurfaceMesh.material.opacity = isSpec ? 0.74 : 0.66;
+    floorWireLines.material.opacity = isSpec ? 0.38 : 0.54;
+
+    // 1. Update 3D Floor Surface vertices & vertex colors
+    for (var s = 0; s < S; s++) {
+      var z = field.rowZ[s];
+      var halfW = field.rowHalfW[s];
+      var inCav = field.rowInCavity[s] === 1;
+      var row = field.rows[s];
+      var depthFade = S > 1 ? (s / (S - 1)) : 1;
+
+      for (var b = 0; b < B; b++) {
+        var u = B > 1 ? (b / (B - 1)) : 0.5;
+        var x = (u * 2 - 1) * halfW;
+        var y = row[b] * yScale;
+        var vi = (s * B + b) * 3;
+        floorSurfPos[vi]     = x;
+        floorSurfPos[vi + 1] = y;
+        floorSurfPos[vi + 2] = z;
+
+        var rgb = isSpec
+          ? miniMetersRgb(u, row[b] / Math.max(0.25, field.depth), harmor)
+          : wavetableRgb(row[b] / Math.max(0.25, field.depth), inCav, depthFade, harmor);
+        floorSurfCol[vi]     = rgb[0];
+        floorSurfCol[vi + 1] = rgb[1];
+        floorSurfCol[vi + 2] = rgb[2];
+      }
+    }
+    floorSurfaceMesh.geometry.attributes.position.needsUpdate = true;
+    floorSurfaceMesh.geometry.attributes.color.needsUpdate = true;
+
+    // 2. Update wireframe ribs & spines
+    var wp = 0;
+    for (var rs = 0; rs < S; rs++) {
+      for (var rb = 0; rb < B - 1; rb++) {
+        var a0 = (rs * B + rb) * 3;
+        var a1 = a0 + 3;
+        floorWirePos[wp] = floorSurfPos[a0]; floorWirePos[wp + 1] = floorSurfPos[a0 + 1] + 0.002; floorWirePos[wp + 2] = floorSurfPos[a0 + 2];
+        floorWireCol[wp] = Math.min(1, floorSurfCol[a0] * 1.25); floorWireCol[wp + 1] = Math.min(1, floorSurfCol[a0 + 1] * 1.25); floorWireCol[wp + 2] = Math.min(1, floorSurfCol[a0 + 2] * 1.25);
+        wp += 3;
+        floorWirePos[wp] = floorSurfPos[a1]; floorWirePos[wp + 1] = floorSurfPos[a1 + 1] + 0.002; floorWirePos[wp + 2] = floorSurfPos[a1 + 2];
+        floorWireCol[wp] = Math.min(1, floorSurfCol[a1] * 1.25); floorWireCol[wp + 1] = Math.min(1, floorSurfCol[a1 + 1] * 1.25); floorWireCol[wp + 2] = Math.min(1, floorSurfCol[a1 + 2] * 1.25);
+        wp += 3;
+      }
+    }
+    for (var sb = 0; sb < B; sb += 6) {
+      for (var ss = 0; ss < S - 1; ss++) {
+        var c0 = (ss * B + sb) * 3;
+        var c1 = ((ss + 1) * B + sb) * 3;
+        floorWirePos[wp] = floorSurfPos[c0]; floorWirePos[wp + 1] = floorSurfPos[c0 + 1] + 0.002; floorWirePos[wp + 2] = floorSurfPos[c0 + 2];
+        floorWireCol[wp] = floorSurfCol[c0]; floorWireCol[wp + 1] = floorSurfCol[c0 + 1]; floorWireCol[wp + 2] = floorSurfCol[c0 + 2];
+        wp += 3;
+        floorWirePos[wp] = floorSurfPos[c1]; floorWirePos[wp + 1] = floorSurfPos[c1 + 1] + 0.002; floorWirePos[wp + 2] = floorSurfPos[c1 + 2];
+        floorWireCol[wp] = floorSurfCol[c1]; floorWireCol[wp + 1] = floorSurfCol[c1 + 1]; floorWireCol[wp + 2] = floorSurfCol[c1 + 2];
+        wp += 3;
+      }
+    }
+    floorWireLines.geometry.attributes.position.needsUpdate = true;
+    floorWireLines.geometry.attributes.color.needsUpdate = true;
+
+    // 3. Front luminous edge (s = S - 1)
+    var frontRowStart = (S - 1) * B * 3;
+    for (var fb = 0; fb < B; fb++) {
+      var fi = frontRowStart + fb * 3;
+      floorFrontPos[fb * 3]     = floorSurfPos[fi];
+      floorFrontPos[fb * 3 + 1] = floorSurfPos[fi + 1] + 0.005;
+      floorFrontPos[fb * 3 + 2] = floorSurfPos[fi + 2];
+    }
+    floorFrontLine.material.color.setHex(harmor ? 0x7affad : (isSpec ? 0x67e8f9 : 0xb8e8ff));
+    floorFrontLine.geometry.attributes.position.needsUpdate = true;
+
+    // 4. Active Slice / 2D EQ Center Plane
+    var actZ = isSpec ? 0 : field.activeZ;
+    var actHalfW = Math.sqrt(Math.max(0.01, field.rEff * field.rEff - actZ * actZ));
+    var eqPeakScale = R * 0.78 * Math.min(1.2, field.depth + 0.25);
+
+    for (var ab = 0; ab < B; ab++) {
+      var au = B > 1 ? (ab / (B - 1)) : 0.5;
+      var ax = (au * 2 - 1) * actHalfW;
+      var ay = isSpec ? (field.eqCenter[ab] * eqPeakScale) : (field.activeSlice[ab] * yScale);
+      floorActivePos[ab * 3]     = ax;
+      floorActivePos[ab * 3 + 1] = ay + 0.008;
+      floorActivePos[ab * 3 + 2] = actZ;
+
+      if (isSpec) {
+        var botVi = (ab * 2) * 3;
+        var topVi = botVi + 3;
+        var er = miniMetersRgb(au, field.eqCenter[ab], harmor);
+        floorEqPos[botVi] = ax; floorEqPos[botVi + 1] = 0;  floorEqPos[botVi + 2] = 0;
+        floorEqPos[topVi] = ax; floorEqPos[topVi + 1] = ay; floorEqPos[topVi + 2] = 0;
+        floorEqCol[botVi] = er[0] * 0.35; floorEqCol[botVi + 1] = er[1] * 0.35; floorEqCol[botVi + 2] = er[2] * 0.45;
+        floorEqCol[topVi] = Math.min(1, er[0] * 1.15); floorEqCol[topVi + 1] = Math.min(1, er[1] * 1.15); floorEqCol[topVi + 2] = Math.min(1, er[2] * 1.15);
+
+        floorTiltPos[ab * 3]     = ax;
+        floorTiltPos[ab * 3 + 1] = field.tiltLine[ab] * eqPeakScale * 0.85;
+        floorTiltPos[ab * 3 + 2] = 0.006;
+      }
+    }
+    floorActiveLine.material.color.setHex(isSpec ? (harmor ? 0x7affad : 0x67e8f9) : 0xffb84d);
+    floorActiveLine.geometry.attributes.position.needsUpdate = true;
+
+    floorEqCurtain.visible = isSpec;
+    floorTiltLine.visible = isSpec;
+    if (isSpec) {
+      floorEqCurtain.geometry.attributes.position.needsUpdate = true;
+      floorEqCurtain.geometry.attributes.color.needsUpdate = true;
+      floorTiltLine.geometry.attributes.position.needsUpdate = true;
+    }
   }
 
   function updateResonance(playT, state) {
@@ -1041,7 +1336,7 @@
     cameraMoved = true;
   }
 
-  function update(state, playT, points, dirty) {
+  function update(state, playT, points, dirty, floorFieldData) {
     if (!renderer) return;
     var rInVal = state.rIn != null ? state.rIn : 0;
     var sphereSig = [
@@ -1074,9 +1369,10 @@
     updatePlayhead(points, playT, state);
     updateFourBit(playT, state);
     updateResonance(playT, state);
+    updateFloorWt(playT, state, floorFieldData);
     controls.update();
 
-    var resActive = !!(state.toggles.resonanceMode);
+    var resActive = !!(state.toggles.resonanceMode || state.toggles.floorWt);
     if (state.toggles.autoRotate || state.toggles.animate || resActive || dirtyDidChange || cameraMoved) {
       renderer.render(scene, camera);
       cameraMoved = false;

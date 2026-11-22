@@ -18,6 +18,8 @@
       TimeSeries = Harmony.TimeSeries,
       Harmonics2D = Harmony.Harmonics2D,
       Frobenius = Harmony.Frobenius,
+      FloorView = Harmony.FloorView,
+      ModMatrix = Harmony.ModMatrix,
       AgentCore = Harmony.AgentCore;   // js/agent-core.js — the ONE shared agent layer
 
   var SAMPLES = 3200;
@@ -57,6 +59,14 @@
     stretchMode: 'off',    // 'off' | 'pitchLock' | 'tape' | 'jacobian' (§2.2 / §2.3)
     archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
     archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
+    floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D)
+    floorDepth: 0.68,      // §10 3D floor height/amplitude
+    floorSmooth: 0.52,     // §10 smoothing (wavetable) or 3D dispersion spread (spectrogram)
+    floorSize: 0.94,       // §10 floor footprint proportion inside outer sphere R
+    floorBpm: 120,         // §10 tempo (BPM) governing BPM beat snaps
+    floorBeats: 4,         // §10 default beat snap (1 Bar = 4 beats)
+    floorZoomLog: 0.7295,  // §10.5 continuous logarithmic RX Time Zoom [0..1] <-> [16ms..12s] (routable in Mod & Logic)
+    floorScopeView: 'eq',  // §10.5 'eq' (MiniMeters EQ / Active Slice) | 'pcm' (RX 11 PCM Needle Groove)
     formulas: {
       x: 'r*cos(TAU*f*t+phase)',
       y: 'r*sin(TAU*f*t+phase)',
@@ -78,6 +88,7 @@
       fourBitOrbit: true,
       quadrayTetra: true,
       resonanceMode: true,
+      floorWt: false,
       harmorVoid: false,
       magnifier: false,
       ghostRef: false,
@@ -383,6 +394,7 @@
 
     if (needsParamSync) syncParamUI();
     if (phaseDeg != null) setPhaseFromDeg(phaseDeg);
+    if (ModMatrix && typeof ModMatrix.captureBase === 'function') ModMatrix.captureBase(state);
     if (needsHudSync) syncHudToggles();
     if (needsMagSync) syncMagChips();
     bump();
@@ -465,11 +477,18 @@
         setAutoMode('orderN', 'off', true);
         setAutoMode('phase', 'off', true);
       }
+      if (ModMatrix && typeof ModMatrix.clearRoutes === 'function') {
+        ModMatrix.clearRoutes();
+      }
+      state.toggles.floorWt = false;
+      if (FloorView && typeof FloorView.stopAudio === 'function') FloorView.stopAudio();
+      if (typeof syncFloorUI === 'function') syncFloorUI();
       if (typeof setTheatreMode === 'function' && !IS_POPOUT) {
         setTheatreMode(false);
       }
       setActiveTab('scopes');
       syncParamUI();
+      if (ModMatrix && typeof ModMatrix.captureBase === 'function') ModMatrix.captureBase(state);
       syncHudToggles();
       syncMagChips();
       if (window.Harmony && Harmony.Lissajous2D && Harmony.Lissajous2D.clearTrail) {
@@ -531,14 +550,20 @@
     var sub = Math.floor(N / g);
     var prime = Engine.isPrimeInt(N);
     if (prime) {
-      badge.textContent = sub + '/' + N + ' · prime N (cofactor 1, stride ' + stride + ')';
-      badge.style.color = '#6ee7a0';
+      badge.textContent = 'prime';
+      badge.title = sub + '/' + N + ' · prime N (cofactor 1, stride ' + stride + ')';
+      badge.style.color = '#ffb04d';
+      badge.style.background = 'rgba(255, 176, 77, 0.14)';
     } else if (g === 1) {
-      badge.textContent = sub + '/' + N + ' · coprime generator (stride ' + stride + ')';
-      badge.style.color = '#ffd166';
+      badge.textContent = 'coprime';
+      badge.title = sub + '/' + N + ' · coprime generator (stride ' + stride + ')';
+      badge.style.color = '#6ee7a0';
+      badge.style.background = 'rgba(110, 231, 160, 0.12)';
     } else {
-      badge.textContent = sub + '/' + N + ' · subgroup! gcd(' + stride + ',' + N + ')=' + g;
+      badge.textContent = 'sub/' + g;
+      badge.title = sub + '/' + N + ' · subgroup! gcd(' + stride + ',' + N + ')=' + g;
       badge.style.color = '#ff8c98';
+      badge.style.background = 'rgba(255, 107, 122, 0.14)';
     }
   }
 
@@ -580,35 +605,30 @@
           ? 'V&#8320; LOCKED &middot; dR/dr=&eta;&sup2;'
           : '4/3&pi;(R&sup3;&minus;r&sup3;)';
       }
-      if ($('modEtaOut')) $('modEtaOut').textContent = res.eta.toFixed(3);
-      if ($('modEtaFill')) $('modEtaFill').style.width = (res.eta * 100).toFixed(1) + '%';
-      if ($('modAreaOut')) $('modAreaOut').textContent = res.jacobian.toFixed(3);
-      if ($('modAreaFill')) $('modAreaFill').style.width = (res.jacobian * 100).toFixed(1) + '%';
-      if ($('modVolOut')) $('modVolOut').textContent = res.volFrac.toFixed(3);
-      if ($('modVolFill')) $('modVolFill').style.width = (res.volFrac * 100).toFixed(1) + '%';
+      if ($('modEtaOut')) $('modEtaOut').textContent = res.eta.toFixed(2);
       if ($('modStretchOut')) {
         $('modStretchOut').textContent = res.cavityActive
-          ? (res.stretchRatio.toFixed(2) + '× (+' + res.stretchOctaves.toFixed(2) + 'o)')
-          : 'OFF (r=0)';
-      }
-      if ($('modStretchFill')) {
-        var octPct = res.cavityActive ? Engine.clamp((res.stretchOctaves / 3.0) * 100, 3, 100) : 0;
-        $('modStretchFill').style.width = octPct.toFixed(1) + '%';
+          ? (res.stretchRatio.toFixed(2) + '×')
+          : '∞';
       }
       var syzEl = $('syzygyBadge');
       if (syzEl) {
         var centsStr = (res.syzygy.detuneCents >= 0 ? '+' : '') + res.syzygy.detuneCents.toFixed(1) + '¢';
         if (!res.cavityActive) {
-          syzEl.textContent = 'OSC A Solid Ball (r = 0) · OSC B Off';
+          syzEl.textContent = 'solid';
+          syzEl.title = 'OSC A Solid Ball (r = 0) · OSC B Off';
           syzEl.classList.remove('locked');
         } else if (res.bowHalfPowerLock) {
-          syzEl.textContent = '★ −3 dB 4-BIT BOW TANGENCY (η = 1/√2 ≈ 0.707 · α = √2)';
+          syzEl.textContent = '−3dB';
+          syzEl.title = '−3 dB 4-Bit Bow Tangency (η = 1/√2 ≈ 0.707 · α = √2)';
           syzEl.classList.add('locked');
         } else if (res.syzygy.tripleLock) {
-          syzEl.textContent = '★ TRIPLE LOCK ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.textContent = res.syzygy.triadText + ' ★';
+          syzEl.title = 'Triple Lock ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
           syzEl.classList.add('locked');
         } else {
-          syzEl.textContent = 'Modes ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.textContent = res.syzygy.locked ? (res.syzygy.ratioText + ' ★') : 'beat';
+          syzEl.title = 'Modes ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
           syzEl.classList.toggle('locked', !!res.syzygy.locked);
         }
       }
@@ -660,6 +680,13 @@
         updateOrderNBadge();
       }
       if (d.key === 'n') updateOrderNBadge();
+      if (ModMatrix && typeof ModMatrix.captureBase === 'function') {
+        ModMatrix.captureBase(state, d.key);
+        if (d.key === 'r' || d.key === 'rIn') {
+          ModMatrix.captureBase(state, 'r');
+          ModMatrix.captureBase(state, 'rIn');
+        }
+      }
       bump();
     });
     // Double-click any slider to reset cleanly to its preset default
@@ -673,16 +700,19 @@
   });
 
   // ---- §§1-3 Lock-V Constant-Volume Time-Stretch, Syzygy Snaps & Stretch Mod Coupling ----
+  function setLockVolumeMode(nextLocked) {
+    state.lockVolume = !!nextLocked;
+    if (state.lockVolume) {
+      var r3 = state.r * state.r * state.r;
+      var rin3 = (state.rIn || 0) * (state.rIn || 0) * (state.rIn || 0);
+      state.lockedR0 = Engine.cbrt(Math.max(0.01, r3 - rin3));
+    }
+    updateShellReadout();
+    bump();
+  }
   if ($('btnLockVol')) {
     $('btnLockVol').addEventListener('click', function () {
-      state.lockVolume = !state.lockVolume;
-      if (state.lockVolume) {
-        var r3 = state.r * state.r * state.r;
-        var rin3 = (state.rIn || 0) * (state.rIn || 0) * (state.rIn || 0);
-        state.lockedR0 = Engine.cbrt(Math.max(0.01, r3 - rin3));
-      }
-      updateShellReadout();
-      bump();
+      setLockVolumeMode(!state.lockVolume);
     });
   }
 
@@ -697,6 +727,10 @@
       } else {
         state.rIn = Engine.clamp(state.r * targetEta, 0, Math.min(2.4, state.r));
       }
+      if (ModMatrix && typeof ModMatrix.captureBase === 'function') {
+        ModMatrix.captureBase(state, 'r');
+        ModMatrix.captureBase(state, 'rIn');
+      }
       syncParamUI();
       bump();
     });
@@ -710,6 +744,21 @@
     });
   });
 
+  function setArchimedesSliceZ(val) {
+    state.archimedesAuto = false;
+    if ($('btnArchAuto')) $('btnArchAuto').classList.remove('active');
+    state.archimedesZNorm = Engine.clamp(parseFloat(val) || 0, -1, 1);
+    if ($('archimedesZSlider')) $('archimedesZSlider').value = state.archimedesZNorm.toFixed(2);
+    if ($('rackSliceZ')) $('rackSliceZ').value = state.archimedesZNorm.toFixed(2);
+    if ($('rackSliceZOut')) {
+      $('rackSliceZOut').textContent = (state.archimedesZNorm >= 0 ? '+' : '') + state.archimedesZNorm.toFixed(2);
+    }
+    if (ModMatrix && typeof ModMatrix.captureBase === 'function') {
+      ModMatrix.captureBase(state, 'archimedesZNorm');
+    }
+    bump();
+  }
+
   if ($('btnArchAuto')) {
     $('btnArchAuto').addEventListener('click', function () {
       state.archimedesAuto = !state.archimedesAuto;
@@ -719,10 +768,15 @@
   }
   if ($('archimedesZSlider')) {
     $('archimedesZSlider').addEventListener('input', function () {
-      state.archimedesAuto = false;
-      if ($('btnArchAuto')) $('btnArchAuto').classList.remove('active');
-      state.archimedesZNorm = Engine.clamp(parseFloat($('archimedesZSlider').value) || 0, -1, 1);
-      bump();
+      setArchimedesSliceZ($('archimedesZSlider').value);
+    });
+  }
+  if ($('rackSliceZ')) {
+    $('rackSliceZ').addEventListener('input', function () {
+      setArchimedesSliceZ($('rackSliceZ').value);
+    });
+    $('rackSliceZ').addEventListener('dblclick', function () {
+      setArchimedesSliceZ(0);
     });
   }
 
@@ -745,6 +799,7 @@
       bumpAnimated();
     } else {
       if (autoLanes && autoLanes.phase) autoLanes.phase.cursor = deg;
+      if (ModMatrix && typeof ModMatrix.captureBase === 'function') ModMatrix.captureBase(state, 'phaseDeg');
       bump();
     }
   }
@@ -1144,6 +1199,7 @@
     if (refBtn) {
       refBtn.classList.toggle('active', !!state.toggles.refWaves);
     }
+    if (typeof syncFloorUI === 'function') syncFloorUI();
   }
 
   document.querySelectorAll('.hud-pill[data-toggle]').forEach(function (btn) {
@@ -1154,6 +1210,9 @@
         return;
       }
       state.toggles[key] = !state.toggles[key];
+      if (key === 'floorWt' && state.toggles.floorWt && !state.toggles.cutaway) {
+        state.toggles.cutaway = true;
+      }
       syncHudToggles();
       bump();
     });
@@ -1214,9 +1273,11 @@
 
   // Dock Tabs
   function setActiveTab(tabId) {
+    if (tabId !== 'guide') lastNonGuideTab = tabId;
     state.activeTab = tabId;
-    // Automation/UX hook: lets CSS give the Agent dock its extra height (additive).
+    // Automation/UX hook: lets CSS give the Agent/Mod/Guide dock its extra height (additive).
     if (document.body) document.body.setAttribute('data-agent-active-tab', tabId);
+    if ($('btnThesis')) $('btnThesis').classList.toggle('active', tabId === 'guide');
     document.querySelectorAll('.dock-tab[data-tab]').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === tabId);
     });
@@ -1241,15 +1302,546 @@
     });
   });
 
-  // Concept Banner & Misc Buttons
-  $('btnThesis').addEventListener('click', function () {
-    $('thesisBanner').hidden = !$('thesisBanner').hidden;
-    setTimeout(Scene3D.resize, 20);
+  // Preset '!' Explainer Toggle (hidden by default; expands unclipped on demand)
+  if ($('btnPatchNote') && $('patchNote')) {
+    $('btnPatchNote').addEventListener('click', function () {
+      var open = $('patchNote').hidden;
+      $('patchNote').hidden = !open;
+      $('btnPatchNote').classList.toggle('active', open);
+      $('btnPatchNote').setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+
+  // Coherent '? Guide' Introduction & 1-Click Live Demo System
+  var lastNonGuideTab = 'scopes';
+  var activeGuideIdx = 0;
+
+  var GUIDE_CHAPTERS = [
+    {
+      num: '01',
+      title: 'The Hollow Vessel & 4-Bit Orbit',
+      sub: 'Invariant carrier V = 4/3·π(R³ − r³) & 1000 ↔ 0001',
+      formula: 'V = 4/3·π(R³ − r³)',
+      body: '<p><b>The Ramanujan Chime</b> treats the outer sphere <code>R</code> (<code>OSC A</code>) and inner cavity <code>r</code> (<code>OSC B</code>) as an invariant 3D wavetable vessel. Trajectories are classified live into four zones: <code>ON SPHERE</code>, <code>IN SHELL</code>, <code>IN CAVITY</code>, and <code>OUTSIDE</code>.</p>' +
+        '<p>On the default <b>Four-Bit Orbit</b> patch, binary palindromes <code>1000₂ (8)</code> and <code>0001₂ (1)</code> orbit in quadrature across the Front <code>f(x)</code> meridian and Top <code>XZ</code> equator around the inscribed Quadray tetrahedron.</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Click <code>Front f(x)</code> or <code>Top XZ</code> in the 4-Bit card, or click the <code>!</code> button beside the preset menu for any patch\'s full note.</div>',
+      run: function () {
+        if (ModMatrix && ModMatrix.clearRoutes) ModMatrix.clearRoutes();
+        setLockVolumeMode(false);
+        applyPreset(12);
+        state.toggles.cutaway = false;
+        state.toggles.fourBitOrbit = true;
+        state.toggles.resonanceMode = true;
+        state.toggles.strobeN = false;
+        state.toggles.animate = true;
+        Scene3D.setCameraView('iso', state);
+        syncHudToggles();
+        bump();
+      }
+    },
+    {
+      num: '02',
+      title: 'Two Twins & Analytic Morlet Helix',
+      sub: 'Polarity null (−P) vs. Conjugate mirror (P̄)',
+      formula: 'P + P̄ = 2·Re(P)',
+      body: '<p>Every signal carries two distinct symmetries in the topbar <b>Twin</b> bar: <b>Antipodal</b> <code>−P = (−x, −y, −z)</code> is a 180° polarity flip (audio null test <code>P + (−P) = 0</code>), while <b>Conjugate</b> <code>P̄ = (x, −y, z)</code> flips the quadrature axis so <code>P + P̄</code> cancels imaginary phase and isolates the real trace.</p>' +
+        '<p>On <b>Analytic Morlet ψ(t)</b>, slicing the cutaway shell reveals the complex Gaussian-windowed carrier spiraling smoothly through the vessel.</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Toggle <code>−P Null</code> vs. <code>P̄ Conj</code> in the topbar, then switch to <b>1 · Scopes</b> to watch the quadrature cancellation live.</div>',
+      run: function () {
+        if (ModMatrix && ModMatrix.clearRoutes) ModMatrix.clearRoutes();
+        setLockVolumeMode(false);
+        applyPreset(5);
+        state.toggles.cutaway = true;
+        state.toggles.fourBitOrbit = false;
+        state.toggles.resonanceMode = true;
+        state.toggles.animate = true;
+        setTwinMode('both');
+        Scene3D.setCameraView('iso', state);
+        syncHudToggles();
+        bump();
+      }
+    },
+    {
+      num: '03',
+      title: 'Dual-Sphere Resonance & Auto z(t)',
+      sub: 'Constant-volume Lock V, 1:2:2 lock & Archimedes slice',
+      formula: 'A_ring(z) = π(R² − r²)',
+      body: '<p>With <b>Lock V</b> active, expanding Cavity <code>r</code> grows Outer <code>R = (r³ + R₀³)^(1/3)</code> with radial Jacobian <code>dR/dr = η²</code>, behaving like a constant-energy DAW time-stretcher. At <code>η = 0.50</code>, outer, inner, and shell-wall modes lock in an exact <code>1 : 2 : 2</code> triple octave.</p>' +
+        '<p>Across <code>|z| ≤ r</code>, Archimedes\' slice theorem guarantees the hollow ring has strictly constant cross-sectional area. Even better: <b>Auto z(t)</b> is now both a <b>drop target</b> and a <b>modulator source</b> inside <code>5 · Mod &amp; Logic</code>!</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Load this demo to let <code>Auto z(t)</code> drive Phase, Order N, and Partials K live—then open <b>5 · Mod &amp; Logic</b> to tweak its depth or drag <code>Slice z(t)</code> to another slider.</div>',
+      run: function () {
+        applyPreset(12);
+        state.r = 1.0;
+        state.rIn = 0.5;
+        syncParamUI();
+        setLockVolumeMode(true);
+        state.toggles.cutaway = true;
+        state.toggles.resonanceMode = true;
+        state.toggles.animate = true;
+        state.archimedesAuto = true;
+        if ($('btnArchAuto')) $('btnArchAuto').classList.add('active');
+        if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state);
+        if (ModMatrix && ModMatrix.applyPreset) ModMatrix.applyPreset('autoZDrive');
+        syncHudToggles();
+        bump();
+      }
+    },
+    {
+      num: '04',
+      title: 'Float32 Precision & tan() Sentinels',
+      sub: 'IEEE-754 24-bit mantissa, 0x40490FDB & Ramanujan k=0',
+      formula: 'π_f32 = 0x40490FDB',
+      body: '<p>All formulas run through <code>Math.fround()</code> so the browser and Node share exact 32-bit DSP float precision (~144.5 dB floor). Ramanujan\'s 1914 <code>1/π</code> series converges ~208 dB per term—locking all 32 bits of <code>π</code> on <code>k = 0</code> alone.</p>' +
+        '<p>On the <b>TANGENT</b> patch, vertical asymptotes escape the sphere (<code>OUTSIDE</code>) toward <code>±∞</code>, letting you inspect live IEEE-754 sign, exponent, and mantissa bits in real time.</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Jump to <b>4 · Bit Lab</b> and switch between <code>Active (P / Twin)</code> and <code>Ramanujan k=0 vs π</code>, or check <b>2 · Harmonics</b> for the convergence curve.</div>',
+      run: function () {
+        if (ModMatrix && ModMatrix.clearRoutes) ModMatrix.clearRoutes();
+        setLockVolumeMode(false);
+        applyPreset(11);
+        state.toggles.cutaway = false;
+        state.toggles.fourBitOrbit = true;
+        state.toggles.animate = true;
+        Scene3D.setCameraView('iso', state);
+        syncHudToggles();
+        bump();
+      }
+    },
+    {
+      num: '05',
+      title: 'Parent-Clock LFO & Entanglement',
+      sub: 'Zero-drift click-and-drag cables & logical gates',
+      formula: 'LFO → φ → cos → z(t)',
+      body: '<p>In <b>5 · Mod &amp; Logic</b>, every LFO and cross-parameter link runs off a single deterministic <b>Parent Clock</b> (synced to <code>playT</code> by default). Because evaluation runs in two topological passes, chains like <code>LFO 1 → Phase φ → cos(π·x) → Slice z/R</code> stay phase-locked forever—even while scrubbing <code>Φ</code> backward.</p>' +
+        '<p>Logical rules like <code>Gate == 0x8</code> and <code>Gate |z|≤r</code> couple discrete 4-bit nibble zero-crossings and Archimedes plateau boundaries straight into synth parameters.</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Open <b>5 · Mod &amp; Logic</b>, drag any glowing <code>(•)</code> handle onto a Left Rack slider or the floating <code>Auto z(t)</code> slider, or collapse panels with <code>«</code> / <code>▾</code> to stretch the 3D stage.</div>',
+      run: function () {
+        setLockVolumeMode(false);
+        applyPreset(12);
+        state.toggles.fourBitOrbit = true;
+        state.toggles.resonanceMode = true;
+        state.toggles.strobeN = true;
+        state.toggles.animate = true;
+        if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state);
+        if (ModMatrix && ModMatrix.applyPreset) ModMatrix.applyPreset('entangled');
+        Scene3D.setCameraView('iso', state);
+        syncHudToggles();
+        bump();
+      }
+    },
+    {
+      num: '06',
+      title: 'Why "The Chime" — Circle of Fifths & Observed State',
+      sub: 'Chromatic Z_12 cavity, Fifths/Fourths conjugation & key changes',
+      formula: 'g = +7 (5ths) ↔ −7 ≡ +5 (4ths)',
+      body: '<p>Think of the hollow cavity as <b>chromatic space</b> (<code>Order N = 12</code>): its four vessel snaps <code>.50</code>, <code>2/3</code>, <code>−3dB</code>, and <code>.75</code> are literally <b>Octave (2:1)</b>, <b>Fifth (3:2)</b>, <b>Tritone (√2:1)</b>, and <b>Fourth (4:3)</b>. Stepping clockwise by <code>+7 mod 12</code> walks the <b>Circle of Fifths</b>; its complex conjugate mirror <code>P̄</code> (<code>−7 ≡ +5 mod 12</code>) is the <b>Circle of Fourths</b> (Negative Harmony), while antipodal <code>−P</code> (<code>+6</code>) is the tritone axis.</p>' +
+        '<p>Locking your eye onto <b>one moving vector</b> (<code>0001</code>) establishes an <b>Observed State</b> (tonic): modulating <code>Phase φ</code> shifts key signatures around the wheel, switching twins acts like a clef/inversion change, and their standing-wave sum <code>P + P̄</code> rings across the hollow shell like a struck <b>Chime</b>.</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Load this demo (<code>N=12</code>, <code>η=2/3</code> Fifth lock, <code>Chime Fifths</code> matrix), fix your eyes on <code>0001</code> as <code>Phase φ</code> steps through the Circle of Fifths, then click <b>Invert</b> in <b>5 · Mod &amp; Logic</b> to flip into the Circle of Fourths!</div>',
+      run: function () {
+        setLockVolumeMode(false);
+        applyPreset(12);
+        state.r = 1.0;
+        state.rIn = 0.67;
+        state.orderN = 12;
+        syncParamUI();
+        setTwinMode('both');
+        state.toggles.fourBitOrbit = true;
+        state.toggles.resonanceMode = true;
+        state.toggles.strobeN = true;
+        state.toggles.animate = true;
+        if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state);
+        if (ModMatrix && ModMatrix.applyPreset) ModMatrix.applyPreset('chimeFifths');
+        Scene3D.setCameraView('iso', state);
+        syncHudToggles();
+        bump();
+      }
+    },
+    {
+      num: '07',
+      title: 'Cutaway Floor Wavetable & MiniMeters 3D',
+      sub: 'Volumetric 3D floor oscillator & 3D spectral dispersion',
+      formula: 'Floor y = 0 · 2D EQ at z = 0',
+      body: '<p>Seated directly along the equatorial <b>Cutaway Floor</b> (<code>y = 0</code>), the volumetric surface scales proportionally inside Outer <code>R</code> and Inner Cavity <code>r</code>—and swaps between two dual roles in one click inside <b>6 · Floor WT</b>:</p>' +
+        '<p><b>1. 3D Wavetable</b> (GitWave aesthetic) sweeps a glowing golden active slice along <code>Auto z(t)</code> / <code>Slice z/R</code>. <b>2. MiniMeters 3D</b> turns the center <code>2D f(x)</code> slice into an animated equalizer with pitch/cents detection while radiating 3D spectral dispersion across the cavity.</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Load this demo, then jump to <b>6 · Floor WT</b> to swap between <code>3D Wavetable</code> and <code>MiniMeters 3D</code>, sculpt <code>Depth / Disp / Size</code>, or click <code>♪ Chime Tone</code> to drive it with live Web Audio!</div>',
+      run: function () {
+        setLockVolumeMode(false);
+        applyPreset(12);
+        state.r = 1.0;
+        state.rIn = 0.5;
+        syncParamUI();
+        state.floorMode = 'spectrogram';
+        state.toggles.cutaway = true;
+        state.toggles.floorWt = true;
+        state.toggles.fourBitOrbit = false;
+        state.toggles.resonanceMode = true;
+        state.toggles.animate = true;
+        Scene3D.setCameraView('iso', state);
+        syncHudToggles();
+        syncFloorUI();
+        bump();
+      }
+    }
+  ];
+
+  function renderGuideUI() {
+    var listEl = $('guideChapterList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    for (var i = 0; i < GUIDE_CHAPTERS.length; i++) {
+      (function (idx, ch) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'guide-ch-btn' + (idx === activeGuideIdx ? ' active' : '');
+        btn.innerHTML =
+          '<span class="guide-ch-num">' + ch.num + '</span>' +
+          '<span class="guide-ch-copy">' +
+            '<span class="guide-ch-title">' + ch.title + '</span>' +
+            '<span class="guide-ch-sub">' + ch.sub + '</span>' +
+          '</span>' +
+          '<span class="guide-ch-play">&#9654;</span>';
+        btn.addEventListener('click', function () {
+          activeGuideIdx = idx;
+          renderGuideUI();
+          ch.run();
+        });
+        listEl.appendChild(btn);
+      })(i, GUIDE_CHAPTERS[i]);
+    }
+
+    var cur = GUIDE_CHAPTERS[activeGuideIdx] || GUIDE_CHAPTERS[0];
+    if ($('guideStoryTitle')) $('guideStoryTitle').textContent = cur.num + ' · ' + cur.title;
+    if ($('guideStoryFormula')) $('guideStoryFormula').textContent = cur.formula;
+    if ($('guideStoryBody')) $('guideStoryBody').innerHTML = cur.body;
+  }
+
+  function toggleGuideTab() {
+    if (state.activeTab === 'guide' && !dockCollapsed) {
+      setActiveTab(lastNonGuideTab || 'scopes');
+    } else {
+      if (state.activeTab !== 'guide') lastNonGuideTab = state.activeTab;
+      setDockCollapsed(false);
+      setActiveTab('guide');
+    }
+  }
+
+  if ($('btnThesis')) {
+    $('btnThesis').addEventListener('click', toggleGuideTab);
+  }
+  if ($('btnGuideRun')) {
+    $('btnGuideRun').addEventListener('click', function () {
+      var ch = GUIDE_CHAPTERS[activeGuideIdx];
+      if (ch && ch.run) ch.run();
+    });
+  }
+  if ($('btnGuidePrev')) {
+    $('btnGuidePrev').addEventListener('click', function () {
+      activeGuideIdx = (activeGuideIdx - 1 + GUIDE_CHAPTERS.length) % GUIDE_CHAPTERS.length;
+      renderGuideUI();
+      GUIDE_CHAPTERS[activeGuideIdx].run();
+    });
+  }
+  if ($('btnGuideNext')) {
+    $('btnGuideNext').addEventListener('click', function () {
+      activeGuideIdx = (activeGuideIdx + 1) % GUIDE_CHAPTERS.length;
+      renderGuideUI();
+      GUIDE_CHAPTERS[activeGuideIdx].run();
+    });
+  }
+  document.querySelectorAll('.guide-jump-btn[data-guide-tab]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      setDockCollapsed(false);
+      setActiveTab(btn.getAttribute('data-guide-tab'));
+    });
   });
-  $('closeThesis').addEventListener('click', function () {
-    $('thesisBanner').hidden = true;
-    setTimeout(Scene3D.resize, 20);
+  renderGuideUI();
+
+  // ---- §10 Cutaway Floor 3D Wavetable & MiniMeters 3D Spectrogram Controls ----
+  function syncFloorUI() {
+    var on = !!(state.toggles && state.toggles.floorWt);
+    var isSpec = state.floorMode === 'spectrogram';
+    var enBtn = $('btnFloorEnable');
+    if (enBtn) {
+      enBtn.classList.toggle('active', on);
+      enBtn.innerHTML = on ? '&#9679; Floor Active' : '&#9679; Floor Off';
+    }
+    var dot = $('floorTabDot');
+    if (dot) dot.classList.toggle('active', on);
+
+    document.querySelectorAll('.floor-mode-btn[data-fmode]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-fmode') === state.floorMode);
+    });
+    if ($('floorSmoothLbl')) $('floorSmoothLbl').textContent = isSpec ? 'Disp' : 'Smooth';
+    if ($('floorModeTag')) $('floorModeTag').textContent = isSpec ? 'MINIMETERS 3D' : 'WAVETABLE';
+    if ($('floorScopeTitle')) {
+      $('floorScopeTitle').innerHTML = isSpec
+        ? '2D MiniMeters Equalizer &mdash; Center 2D f(x) Slice &amp; 3D Cavity Dispersion'
+        : '2D Active Slice &mdash; Synced to Auto z(t) &amp; Cutaway Floor';
+    }
+    if ($('floorDepthSlider')) $('floorDepthSlider').value = String(state.floorDepth);
+    if ($('floorDepthOut')) $('floorDepthOut').textContent = Math.round(state.floorDepth * 100) + '%';
+    if ($('floorSmoothSlider')) $('floorSmoothSlider').value = String(state.floorSmooth);
+    if ($('floorSmoothOut')) $('floorSmoothOut').textContent = Math.round(state.floorSmooth * 100) + '%';
+    if ($('floorSizeSlider')) $('floorSizeSlider').value = String(state.floorSize);
+    if ($('floorSizeOut')) $('floorSizeOut').textContent = Math.round(state.floorSize * 100) + '%';
+    if ($('floorZoomSlider') && document.activeElement !== $('floorZoomSlider')) {
+      $('floorZoomSlider').value = String(state.floorZoomLog);
+    }
+    if ($('floorZoomOut') && Engine.floorZoomSec && Engine.fmtZoomSec) {
+      $('floorZoomOut').textContent = Engine.fmtZoomSec(Engine.floorZoomSec(state.floorZoomLog));
+    }
+    document.querySelectorAll('.floor-scope-btn[data-fscope]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-fscope') === (state.floorScopeView || 'eq'));
+    });
+    if ($('floorBpmInput') && document.activeElement !== $('floorBpmInput')) {
+      $('floorBpmInput').value = String(Math.round(state.floorBpm || 120));
+    }
+    if ($('floorBeatsSelect')) $('floorBeatsSelect').value = String(state.floorBeats || 4);
+  }
+
+  function updateFloorReadouts(field) {
+    if (!field) return;
+    if ($('floorPitchBadge')) $('floorPitchBadge').textContent = field.pitch ? field.pitch.label : '—';
+    if ($('floorModeTag')) {
+      $('floorModeTag').textContent = field.sourceLabel && field.sourceLabel !== 'SYNTH'
+        ? field.sourceLabel
+        : (field.mode === 'spectrogram' ? 'MINIMETERS 3D' : 'WAVETABLE');
+    }
+    if ($('floorWinOut')) {
+      var wFmt = Engine.fmtZoomSec ? Engine.fmtZoomSec(field.windowSec) : (field.windowSec.toFixed(2) + 's');
+      var cFmt = Engine.fmtZoomSec ? Engine.fmtZoomSec(field.cavityWindowSec) : (field.cavityWindowSec.toFixed(2) + 's');
+      $('floorWinOut').textContent = wFmt + ' · Cav ' + cFmt;
+    }
+    if ($('floorVelOut')) {
+      var v = field.floorVelocity || 0;
+      $('floorVelOut').textContent = (v >= 10 ? v.toFixed(1) : v.toFixed(2)) + ' Ø/s';
+    }
+    if ($('floorDynOut')) {
+      if (field.dynamics && isFinite(field.dynamics.rmsDb)) {
+        $('floorDynOut').textContent = field.dynamics.rmsDb.toFixed(1) + ' dB · ' + field.dynamics.crestDb.toFixed(1) + ' dB CF';
+      } else {
+        $('floorDynOut').textContent = '— (' + (field.sourceLabel || 'synth').toLowerCase() + ')';
+      }
+    }
+    if ($('floorPitchOut') && field.pitch) {
+      var cs = (field.pitch.cents >= 0 ? '+' : '−') + Math.abs(field.pitch.cents) + '¢';
+      $('floorPitchOut').textContent = field.pitch.note + ' (' + cs + ')';
+    }
+    if ($('floorIntOut') && field.syzygy) {
+      $('floorIntOut').textContent = field.syzygy.ratioText + ' ' + field.syzygy.intervalName;
+    }
+  }
+
+  if ($('btnFloorEnable')) {
+    $('btnFloorEnable').addEventListener('click', function () {
+      state.toggles.floorWt = !state.toggles.floorWt;
+      if (state.toggles.floorWt && !state.toggles.cutaway) state.toggles.cutaway = true;
+      syncHudToggles();
+      syncFloorUI();
+      bump();
+    });
+  }
+  document.querySelectorAll('.floor-mode-btn[data-fmode]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.floorMode = btn.getAttribute('data-fmode') || 'wavetable';
+      if (!state.toggles.floorWt) {
+        state.toggles.floorWt = true;
+        if (!state.toggles.cutaway) state.toggles.cutaway = true;
+      }
+      syncHudToggles();
+      syncFloorUI();
+      bump();
+    });
   });
+  if ($('floorDepthSlider')) {
+    $('floorDepthSlider').addEventListener('input', function () {
+      state.floorDepth = Engine.clamp(parseFloat($('floorDepthSlider').value) || 0.68, 0.15, 1.25);
+      syncFloorUI();
+    });
+  }
+  if ($('floorSmoothSlider')) {
+    $('floorSmoothSlider').addEventListener('input', function () {
+      state.floorSmooth = Engine.clamp(parseFloat($('floorSmoothSlider').value) || 0.52, 0, 1);
+      syncFloorUI();
+    });
+  }
+  if ($('floorSizeSlider')) {
+    $('floorSizeSlider').addEventListener('input', function () {
+      state.floorSize = Engine.clamp(parseFloat($('floorSizeSlider').value) || 0.94, 0.45, 1);
+      syncFloorUI();
+    });
+  }
+  if ($('btnFloorTone')) {
+    $('btnFloorTone').addEventListener('click', function () {
+      if (!FloorView) return;
+      if (!state.toggles.floorWt) {
+        state.toggles.floorWt = true;
+        state.toggles.cutaway = true;
+        state.floorMode = 'spectrogram';
+        syncHudToggles();
+        syncFloorUI();
+      }
+      FloorView.toggleTone(state);
+    });
+  }
+  if ($('btnFloorMic')) {
+    $('btnFloorMic').addEventListener('click', function () {
+      if (!FloorView) return;
+      if (!state.toggles.floorWt) {
+        state.toggles.floorWt = true;
+        state.toggles.cutaway = true;
+        state.floorMode = 'spectrogram';
+        syncHudToggles();
+        syncFloorUI();
+      }
+      FloorView.toggleMic(function (msg) {
+        if ($('floorModeTag')) $('floorModeTag').textContent = msg.toUpperCase();
+      });
+    });
+  }
+  if ($('btnFloorSys')) {
+    $('btnFloorSys').addEventListener('click', function () {
+      if (!FloorView) return;
+      if (!state.toggles.floorWt) {
+        state.toggles.floorWt = true;
+        state.toggles.cutaway = true;
+        state.floorMode = 'spectrogram';
+        syncHudToggles();
+        syncFloorUI();
+      }
+      FloorView.toggleSystemAudio(function (msg) {
+        if ($('floorModeTag')) $('floorModeTag').textContent = msg.toUpperCase();
+      });
+    });
+  }
+  function handleFloorAudioFile(file) {
+    if (!file || !FloorView) return;
+    state.toggles.floorWt = true;
+    state.toggles.cutaway = true;
+    state.toggles.fourBitOrbit = false;
+    state.floorMode = 'spectrogram';
+    syncHudToggles();
+    syncFloorUI();
+    FloorView.loadAudioFile(file, {
+      onStatus: function (msg) {
+        if ($('floorModeTag')) $('floorModeTag').textContent = msg.toUpperCase();
+      },
+      onLoaded: function (info) {
+        if (info && info.bpm) state.floorBpm = info.bpm;
+        snapFloorZoomToBeats();
+      }
+    });
+  }
+  if ($('btnFloorUpload') && $('floorFileInput')) {
+    $('btnFloorUpload').addEventListener('click', function () {
+      $('floorFileInput').value = '';
+      $('floorFileInput').click();
+    });
+    $('floorFileInput').addEventListener('change', function () {
+      var f = $('floorFileInput').files && $('floorFileInput').files[0];
+      if (f) handleFloorAudioFile(f);
+    });
+  }
+  if ($('tab-floorwt')) {
+    $('tab-floorwt').addEventListener('dragover', function (ev) {
+      ev.preventDefault();
+      $('tab-floorwt').classList.add('drag-over');
+    });
+    $('tab-floorwt').addEventListener('dragleave', function () {
+      $('tab-floorwt').classList.remove('drag-over');
+    });
+    $('tab-floorwt').addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      $('tab-floorwt').classList.remove('drag-over');
+      var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f) handleFloorAudioFile(f);
+    });
+  }
+  if ($('btnFloorFilePlay')) {
+    $('btnFloorFilePlay').addEventListener('click', function () {
+      if (FloorView && FloorView.toggleFilePlay) FloorView.toggleFilePlay();
+    });
+  }
+  if ($('floorFileSeek')) {
+    $('floorFileSeek').addEventListener('input', function () {
+      if (FloorView && FloorView.seekFile) FloorView.seekFile(parseFloat($('floorFileSeek').value) || 0);
+    });
+  }
+  if ($('btnFloorStop')) {
+    $('btnFloorStop').addEventListener('click', function () {
+      if (FloorView && FloorView.stopAudio) FloorView.stopAudio();
+    });
+  }
+  function snapFloorZoomToBeats() {
+    if (!Engine.floorZoomLogFromSec) return;
+    var sec = (60 * (state.floorBeats || 4)) / Math.max(40, state.floorBpm || 120);
+    state.floorZoomLog = Engine.floorZoomLogFromSec(sec);
+    if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state, 'floorZoomLog');
+    syncFloorUI();
+  }
+  if ($('floorZoomSlider')) {
+    $('floorZoomSlider').addEventListener('input', function () {
+      state.floorZoomLog = Engine.clamp(parseFloat($('floorZoomSlider').value) || 0.7295, 0, 1);
+      if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state, 'floorZoomLog');
+      syncFloorUI();
+    });
+  }
+  document.querySelectorAll('.floor-scope-btn[data-fscope]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.floorScopeView = btn.getAttribute('data-fscope') || 'eq';
+      syncFloorUI();
+    });
+  });
+  if ($('floorBpmInput')) {
+    $('floorBpmInput').addEventListener('input', function () {
+      var b = parseFloat($('floorBpmInput').value);
+      if (isFinite(b)) {
+        state.floorBpm = Engine.clamp(Math.round(b), 40, 240);
+        snapFloorZoomToBeats();
+      }
+    });
+  }
+  if ($('floorBeatsSelect')) {
+    $('floorBeatsSelect').addEventListener('change', function () {
+      var bts = parseFloat($('floorBeatsSelect').value);
+      if (isFinite(bts) && bts > 0) {
+        state.floorBeats = bts;
+        snapFloorZoomToBeats();
+      }
+    });
+  }
+  document.querySelectorAll('.floor-demo-btn[data-fdemo]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var d = btn.getAttribute('data-fdemo');
+      if (d === 'mod') {
+        setActiveTab('modlogic');
+        return;
+      }
+      state.toggles.cutaway = true;
+      state.toggles.floorWt = true;
+      state.toggles.fourBitOrbit = false;
+      state.toggles.animate = true;
+      if (d === 'wavetable') {
+        state.floorMode = 'wavetable';
+        state.floorDepth = 0.72;
+        state.floorSmooth = 0.55;
+      } else if (d === 'minimeters') {
+        state.floorMode = 'spectrogram';
+        state.floorDepth = 0.82;
+        state.floorSmooth = 0.58;
+      } else if (d === 'fifths') {
+        state.floorMode = 'spectrogram';
+        state.r = 1.0; state.rIn = 0.67; state.orderN = 12;
+        syncParamUI();
+        if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state);
+        if (ModMatrix && ModMatrix.applyPreset) ModMatrix.applyPreset('chimeFifths');
+      }
+      syncHudToggles();
+      syncFloorUI();
+      bump();
+    });
+  });
+  syncFloorUI();
+
   $('clearTrace').addEventListener('click', function () { Lissajous2D.clearTrail(); });
   $('btnRefWaves').addEventListener('click', function () {
     state.toggles.refWaves = !state.toggles.refWaves;
@@ -1319,6 +1911,7 @@
     }
 
     syncParamUI();
+    if (ModMatrix && typeof ModMatrix.captureBase === 'function') ModMatrix.captureBase(state);
     syncHudToggles();
     syncMagChips();
     bump();
@@ -1393,6 +1986,7 @@
       if (d.mf) state.magFocus = d.mf;
       if (typeof d.mz === 'number') state.magZoom = d.mz;
       syncParamUI();
+      if (ModMatrix && typeof ModMatrix.captureBase === 'function') ModMatrix.captureBase(state);
       syncHudToggles();
       syncMagChips();
     } finally {
@@ -1545,7 +2139,7 @@
       navigator.clipboard.writeText(location.href).catch(function () {});
     }
     btn.textContent = 'Copied!';
-    setTimeout(function () { btn.textContent = 'Share Link'; }, 1400);
+    setTimeout(function () { btn.textContent = 'Share'; }, 1400);
   });
 
   // ---- Frobenius Controls ----
@@ -1770,6 +2364,15 @@
     }
     if (state.archimedesAuto !== false && $('archimedesZSlider')) {
       $('archimedesZSlider').value = res.slice.zNorm.toFixed(2);
+    }
+    if ($('rackSliceZOut')) {
+      var modActiveSlice = ModMatrix && ModMatrix.isTargetRouted && ModMatrix.isTargetRouted('archimedesZNorm');
+      if (!modActiveSlice) {
+        $('rackSliceZOut').textContent = (res.slice.zNorm >= 0 ? '+' : '') + res.slice.zNorm.toFixed(2);
+        if (state.archimedesAuto !== false && $('rackSliceZ') && document.activeElement !== $('rackSliceZ')) {
+          $('rackSliceZ').value = res.slice.zNorm.toFixed(2);
+        }
+      }
     }
 
     drawArchimedesCanvas(res);
@@ -2120,6 +2723,29 @@
     requestAnimationFrame(function () { Scene3D.resize(); });
   });
 
+  // ---- Collapsible Left Rack & Bottom Dock (Viewport stretches/compresses smoothly) ----
+  var panelCollapsed = false;
+  var dockCollapsed = false;
+
+  function setPanelCollapsed(collapsed) {
+    panelCollapsed = !!collapsed;
+    if (document.body) document.body.classList.toggle('panel-collapsed', panelCollapsed);
+    if ($('btnExpandPanel')) $('btnExpandPanel').hidden = !panelCollapsed;
+    requestAnimationFrame(function () { if (Scene3D && Scene3D.resize) Scene3D.resize(); });
+  }
+
+  function setDockCollapsed(collapsed) {
+    dockCollapsed = !!collapsed;
+    if (document.body) document.body.classList.toggle('dock-collapsed', dockCollapsed);
+    if ($('btnExpandDock')) $('btnExpandDock').hidden = !dockCollapsed;
+    requestAnimationFrame(function () { if (Scene3D && Scene3D.resize) Scene3D.resize(); });
+  }
+
+  if ($('btnCollapsePanel')) $('btnCollapsePanel').addEventListener('click', function () { setPanelCollapsed(true); });
+  if ($('btnExpandPanel')) $('btnExpandPanel').addEventListener('click', function () { setPanelCollapsed(false); });
+  if ($('btnCollapseDock')) $('btnCollapseDock').addEventListener('click', function () { setDockCollapsed(true); });
+  if ($('btnExpandDock')) $('btnExpandDock').addEventListener('click', function () { setDockCollapsed(false); });
+
   // ---- Keyboard Studio Shortcuts ----
   window.addEventListener('keydown', function (ev) {
     if (ev.key === 'Escape') {
@@ -2139,12 +2765,24 @@
     else if (ev.altKey && ev.key === '3') { ev.preventDefault(); selectSlot('C'); }
     else if (ev.key === '[') cycleSlot(-1);
     else if (ev.key === ']') cycleSlot(1);
+    else if (ev.key === '\\') setPanelCollapsed(!panelCollapsed);
+    else if (ev.key === '`') setDockCollapsed(!dockCollapsed);
     else if (ev.key === 'g' || ev.key === 'G') toggleGhostRef();
-    else if (ev.key === '1') setActiveTab('scopes');
-    else if (ev.key === '2') setActiveTab('harmonics');
-    else if (ev.key === '3') setActiveTab('frobenius');
-    else if (ev.key === '4') setActiveTab('bits');
-    else if (ev.key === '5') setActiveTab('agent');
+    else if (ev.key === '1') { setDockCollapsed(false); setActiveTab('scopes'); }
+    else if (ev.key === '2') { setDockCollapsed(false); setActiveTab('harmonics'); }
+    else if (ev.key === '3') { setDockCollapsed(false); setActiveTab('frobenius'); }
+    else if (ev.key === '4') { setDockCollapsed(false); setActiveTab('bits'); }
+    else if (ev.key === '5') { setDockCollapsed(false); setActiveTab('modlogic'); }
+    else if (ev.key === '6') { setDockCollapsed(false); setActiveTab('floorwt'); }
+    else if (ev.key === '7') { setDockCollapsed(false); setActiveTab('agent'); }
+    else if (ev.key === '?') toggleGuideTab();
+    else if (ev.key === 'w' || ev.key === 'W') {
+      state.toggles.floorWt = !state.toggles.floorWt;
+      if (state.toggles.floorWt && !state.toggles.cutaway) state.toggles.cutaway = true;
+      syncHudToggles();
+      syncFloorUI();
+      bump();
+    }
     else if (ev.key === 'z' || ev.key === 'Z') {
       state.toggles.magnifier = !state.toggles.magnifier;
       syncHudToggles();
@@ -2193,6 +2831,7 @@
     TimeSeries.init($('timeseries'));
     Harmonics2D.init($('harmonicSpecCanvas'), $('ramanujanCanvas'));
     Frobenius.init($('frobPhasor'), $('frobCountCanvas'));
+    if (FloorView && typeof FloorView.init === 'function') FloorView.init($('floorViewCanvas'));
 
     applyFrobMode();
     if (!restoreFromHash()) {
@@ -2209,6 +2848,26 @@
       publishAgent();
     }
     initSlots();
+    if (ModMatrix && typeof ModMatrix.init === 'function') {
+      ModMatrix.init({
+        getState: function () { return state; },
+        setActiveTab: function (tabId) { setDockCollapsed(false); setActiveTab(tabId); },
+        setPlayhead: function (t) {
+          state.playT = Engine.clamp(Number(t) || 0, 0, 1);
+          state.toggles.animate = false;
+          syncHudToggles();
+          bump();
+        },
+        setLockVolume: setLockVolumeMode,
+        syncHudToggles: syncHudToggles,
+        setPanelCollapsed: setPanelCollapsed,
+        onParamsRestored: function () {
+          syncParamUI();
+          setPhaseFromDeg((state.phaseRad || 0) * 180 / Math.PI, true);
+          bumpAnimated();
+        }
+      });
+    }
     if (START_THEATRE) {
       theatreMode = true;
       syncDisplayModeUI();
@@ -2249,6 +2908,14 @@
       if (state.toggles.animate) {
         state.playT = (state.playT + dt * PLAY_SPEED) % 1;
       }
+      if (ModMatrix && typeof ModMatrix.evaluate === 'function') {
+        var modRes = ModMatrix.evaluate(state, state.playT, dt);
+        if (modRes && modRes.changed) {
+          autoMoved = true;
+          updateShellReadout();
+          bumpAnimated();
+        }
+      }
       if (popoutWin && (autoMoved || state.toggles.animate)) {
         sendPopoutSync(false);
       }
@@ -2265,8 +2932,15 @@
     var ph = Engine.playhead(state, state.points, state.playT);
     window.__lastPlayhead = ph;
 
+    // §10 Cutaway Floor 3D Wavetable / MiniMeters 3D Spectrogram field (computed only when active)
+    var floorFieldData = null;
+    if ((state.toggles.floorWt || state.activeTab === 'floorwt') && Engine.floorField) {
+      var audioOpts = (FloorView && FloorView.getAudioOptions) ? FloorView.getAudioOptions(state) : null;
+      floorFieldData = Engine.floorField(state, state.playT, audioOpts || undefined);
+    }
+
     // Always render Hero 3D Sphere + Zoom Lens (when open)
-    Scene3D.update(state, state.playT, state.points, lastRendered);
+    Scene3D.update(state, state.playT, state.points, lastRendered, floorFieldData);
     Magnifier2D.update(state, state.playT);
 
     // Update active dock tab views (plus Lissajous Crosshair for agreement hook)
@@ -2278,6 +2952,11 @@
     } else if (state.activeTab === 'frobenius') {
       Frobenius.update(state);
       updateFrobReadouts();
+    } else if (state.activeTab === 'modlogic' && ModMatrix && typeof ModMatrix.drawScope === 'function') {
+      ModMatrix.drawScope(state);
+    } else if (state.activeTab === 'floorwt' && FloorView && floorFieldData) {
+      FloorView.update(state, floorFieldData);
+      updateFloorReadouts(floorFieldData);
     }
 
     updateReadouts(ph);

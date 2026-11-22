@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ===== agent/mcp-server.mjs =====
-   Zero-dependency MCP stdio server for the Ramanujan's Gift agent
+   Zero-dependency MCP stdio server for The Ramanujan Chime agent
    toolset (docs/AGENT-INTERFACE.md section 9).
 
    Transport: newline-delimited JSON-RPC 2.0 on stdin/stdout.

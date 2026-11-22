@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Ramanujan's Gift — Spatial Synth Playground</title>
+<title>The Ramanujan Chime — Spatial Synth Playground</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6.5' fill='none' stroke='%2336d6c8' stroke-width='2'/><circle cx='8' cy='8' r='3' fill='%23ff6b7a'/></svg>" />
 <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -15,9 +15,9 @@
     <span class="brand-mark" aria-hidden="true">◍</span>
     <div class="brand-copy">
       <div class="brand-title-row">
-        <h1>Ramanujan's Gift</h1>
+        <h1>The Ramanujan Chime</h1>
         <span class="badge-f32">IEEE-754 FLOAT32</span>
-        <button id="btnThesis" class="pill-btn subtle" type="button" title="Read the Ramanujan's Gift & Hollow Sphere thesis">? Concept</button>
+        <button id="btnThesis" class="pill-btn subtle" type="button" title="Open the interactive Guide &amp; Live Demos tab (? key)">? Guide</button>
       </div>
       <p class="premise">Constant hollow sphere carrier <em>V = 4/3&middot;&pi;(R&sup3; &minus; r&sup3;)</em> &middot; internal 2D <em>f(x)/x</em> slice &middot; conjugate phasor twins <em>P + P&#772; = 2&middot;Re(P)</em></p>
     </div>
@@ -41,34 +41,14 @@
   </div>
 </header>
 
-<!-- ===== COLLAPSIBLE CONCEPT BANNER ===== -->
-<section id="thesisBanner" class="thesis-banner" hidden>
-  <div class="thesis-inner">
-    <div>
-      <strong>The Carrier Vessel:</strong> The outer sphere <code>R</code> and inner cavity <code>r</code> form an invariant 3D wavetable frame (<code>V = 4/3&middot;&pi;(R&sup3;&minus;r&sup3;)</code>). Slice it at <code>z = 0</code> and its cross-section becomes an inscribed 2D <code>f(x)/x</code> oscilloscope dial where sine waves, Weierstrass fractals, and Morlet wavelets live inside the sphere.
-    </div>
-    <div>
-      <strong>Two Twins (&sect;7):</strong> <em>Antipodal</em> <code>&minus;P = (&minus;x,&minus;y,&minus;z)</code> is an audio 180&deg; polarity flip (null test <code>P+(&minus;P)=0</code>). <em>Conjugate</em> <code>P&#772; = (x,&minus;y,z)</code> is the negative-frequency mirror whose sum <code>P+P&#772; = 2&middot;Re(P)</code> cancels the imaginary axis &mdash; unifying cosines, Morlet spectra, and Frobenius point counts.
-    </div>
-    <div>
-      <strong>Ramanujan &amp; Float32:</strong> In 32-bit audio float, <code>&pi; = 0x40490FDB</code> (~144.5 dB precision). Ramanujan's 1914 <code>1/&pi;</code> series drops ~208 dB per harmonic &mdash; locking all 32 bits on the <code>k=0</code> fundamental alone!
-    </div>
-    <button id="closeThesis" class="mini-btn" type="button">Close</button>
-  </div>
-</section>
-
 <!-- ===== MAIN ZERO-SCROLL WORKSPACE ===== -->
 <main class="layout">
 
-  <!-- ===== LEFT SYNTH RACK ===== -->
-  <aside class="panel">
+  <!-- ===== LEFT SYNTH RACK (CLEAN HAIRLINE STUDIO LAYOUT) ===== -->
+  <aside class="panel" id="leftPanel">
 
-    <!-- 1. Preset Selector + VST A/B/C Sphere Slots -->
-    <section class="group">
-      <div class="group-head">
-        <label class="kicker" for="presetSelect">Patch Preset</label>
-        <button id="btnShare" class="mini-btn" type="button" title="Copy shareable URL hash for current patch">Share Link</button>
-      </div>
+    <!-- 1. A/B/C Slots + Preset Selector -->
+    <section class="rack-top">
       <div id="abcBar" class="abc-bar" role="group" aria-label="Sphere A/B/C State Slots">
         <div class="abc-slots">
           <button type="button" class="abc-btn active" data-slot="A" title="Sphere Slot A (Alt+1 or [ / ])">A</button>
@@ -76,247 +56,299 @@
           <button type="button" class="abc-btn" data-slot="C" title="Sphere Slot C (Alt+3 or [ / ])">C</button>
         </div>
         <div class="abc-tools">
-          <button type="button" id="btnSlotCopy" class="abc-tool" title="Clone active sphere state into another slot (click Copy, then A, B, or C)">Copy &rarr;</button>
           <button type="button" id="btnSlotGhost" class="abc-tool" title="Overlay previous slot's trajectory as a reference ghost curve (G key)">Ghost</button>
+          <button type="button" id="btnSlotCopy" class="abc-tool" title="Clone active sphere state into another slot (click Copy, then A, B, or C)">Copy</button>
+          <button type="button" id="btnShare" class="abc-tool" title="Copy shareable URL hash for current patch">Share</button>
+          <button type="button" id="btnCollapsePanel" class="abc-tool collapse-ico" title="Collapse left menu (\ key)" aria-label="Collapse left menu">&laquo;</button>
         </div>
       </div>
-      <select id="presetSelect" data-agent-input="preset"></select>
-      <div id="patchNote" class="note"></div>
+      <div class="preset-row">
+        <select id="presetSelect" data-agent-input="preset"></select>
+        <button type="button" id="btnPatchNote" class="preset-info-btn mono" title="Show / hide preset explanation" aria-expanded="false" aria-controls="patchNote">!</button>
+      </div>
+      <div id="patchNote" class="note preset-explainer" hidden></div>
     </section>
 
-    <!-- 2. Hollow Sphere Constant Carrier & §§1-3 Dual-Sphere Time-Stretch / Modal Resonance -->
-    <section class="group">
-      <div class="group-head">
-        <span class="kicker">Hollow Sphere Vessel</span>
-        <div class="vessel-head-right">
-          <button type="button" id="btnLockVol" class="mini-btn lock-vol-btn" title="Constant-Volume Time-Stretch (§2.1): keep V = 4/3·π(R³ − r³) invariant so expanding Cavity r drives Outer R = (r³ + R₀³)^(1/3) with Jacobian dR/dr = η²">&#128274; Lock V</button>
-          <span class="kicker-sub mono" id="shellFormulaBadge">4/3&pi;(R&sup3;&minus;r&sup3;)</span>
+    <!-- Scrollable Clean Parameter Stack -->
+    <div class="rack-scroll">
+
+      <!-- 2. Hollow Vessel (OSC A · R, OSC B · r, Syzygy Snaps, Slice z/R) -->
+      <section class="rack-group">
+        <div class="group-head">
+          <span class="kicker">Hollow Vessel</span>
+          <button type="button" id="btnLockVol" class="lock-vol-btn" title="Constant-Volume Time-Stretch (§2.1): keep V = 4/3·π(R³ − r³) invariant so expanding Cavity r drives Outer R = (r³ + R₀³)^(1/3)">
+            <i class="lock-dot"></i> Lock V
+          </button>
         </div>
-      </div>
 
-      <div class="field-row">
-        <div class="field small">
-          <label for="radius" title="Outer Sphere R (OSC A — always active)">OSC A &middot; R <output id="radiusOut">1.00</output></label>
-          <input type="range" id="radius" data-agent-input="r" min="0.3" max="2.6" step="0.01" value="1" data-default="1" />
-        </div>
-        <div class="field small">
-          <label for="innerRadius" title="Inner Cavity r (OSC B — nested resonator &amp; time-stretch core)">OSC B &middot; r <output id="innerRadiusOut">0.45</output></label>
-          <input type="range" id="innerRadius" data-agent-input="rIn" min="0" max="2.4" step="0.01" value="0.45" data-default="0.45" />
-        </div>
-      </div>
-
-      <!-- Quick Modal Syzygy & Half-Power Snap Ratios (§3.1 & §5.7) -->
-      <div class="syzygy-snap-row" role="group" aria-label="Dual-Sphere Modal Ratio Presets">
-        <span class="snap-lbl">&eta;=r/R:</span>
-        <button type="button" class="snap-chip" data-eta="0" title="r = 0 (Solid Ball — OSC A only, OSC B off)">0 Solid</button>
-        <button type="button" class="snap-chip active" data-eta="0.45" title="η = 0.45 (α = 20:9 ≈ 2.22× · +182.4¢ modal beating)">.45 Beat</button>
-        <button type="button" class="snap-chip" data-eta="0.5" title="η = 0.50 (α = 2:1 Exact Octave · Triple Harmonic Lock 1 : 2 : 2!)">.50 Oct&#9733;</button>
-        <button type="button" class="snap-chip" data-eta="0.6667" title="η = 2/3 (α = 3:2 Perfect Fifth · Triple Lock 2 : 3 : 6!)">.67 5th&#9733;</button>
-        <button type="button" class="snap-chip" data-eta="0.7071" title="η = 1/√2 ≈ 0.7071 (−3 dB Half-Power 4-Bit Bow Tangency!)">.71 &minus;3dB</button>
-        <button type="button" class="snap-chip" data-eta="0.75" title="η = 0.75 (α = 4:3 Perfect Fourth · Wall 4× Double Octave · Lock 3 : 4 : 12!)">.75 4th&#9733;</button>
-      </div>
-
-      <div class="shell-meter">
-        <span>Shell Vol <b id="shellVolOut" class="mono">3.81</b></span>
-        <span>Wall &Delta;r <b id="shellWallOut" class="mono">0.55</b></span>
-        <span>Ring A <b id="shellRingAreaOut" class="mono" title="Archimedes Constant Cross-Sectional Ring Area π(R² − r²) across |z| ≤ r">2.51</b></span>
-      </div>
-
-      <!-- §2.3 Four Geometric Time-Stretch Modulators & §3.1 Modal Syzygy Readout -->
-      <div class="stretch-mod-card">
-        <div class="mod-grid mono">
-          <div class="mod-cell" title="mod_eta: Linear cavity-to-carrier macro ratio η = r / R ∈ [0, 1)">
-            <div class="mod-cell-top"><span>&eta; = r/R</span><b id="modEtaOut">0.450</b></div>
-            <div class="mod-bar"><i id="modEtaFill" style="width:45%"></i></div>
+        <div class="param-row" data-mod-target="r">
+          <div class="param-head">
+            <span class="param-lbl">
+              <label for="radius" title="Outer Sphere R (OSC A — always active)">Outer R</label>
+              <span class="param-sub">OSC A</span>
+              <span class="mod-badges" data-mod-badges="r"></span>
+            </span>
+            <output id="radiusOut" class="mono param-val val-cyan">1.00</output>
           </div>
-          <div class="mod-cell" title="mod_area: Radial Jacobian dR/dr|_V = η² = A_in / A_out (instantaneous constant-volume expansion rate)">
-            <div class="mod-cell-top"><span>&eta;&sup2; = dR/dr</span><b id="modAreaOut">0.203</b></div>
-            <div class="mod-bar"><i id="modAreaFill" style="width:20.3%"></i></div>
-          </div>
-          <div class="mod-cell" title="mod_vol: Fraction of sphere volume in shell wall 1 − η³ = V_shell / V_outer">
-            <div class="mod-cell-top"><span>1&minus;&eta;&sup3; = V/V<sub>out</sub></span><b id="modVolOut">0.909</b></div>
-            <div class="mod-bar"><i id="modVolFill" style="width:90.9%"></i></div>
-          </div>
-          <div class="mod-cell" title="mod_stretch: Time-stretch ratio α = R / r = 1/η and musical octave shift log₂(R/r)">
-            <div class="mod-cell-top"><span>&alpha; = R/r</span><b id="modStretchOut">2.22&times; (+1.15o)</b></div>
-            <div class="mod-bar"><i id="modStretchFill" style="width:55%"></i></div>
+          <div class="slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="r"></div>
+            <input type="range" id="radius" data-agent-input="r" min="0.3" max="2.6" step="0.01" value="1" data-default="1" />
+            <div class="mod-live-dot" data-mod-dot="r" hidden></div>
           </div>
         </div>
-        <div class="syzygy-status mono" id="syzygyBadge" title="Coupled Radial Breathing Modes (ℓ = 0): Outer 1/R : Inner 1/r : Wall 1/(R−r)">
-          Modes 1 : 2.22 : 1.82 &middot; 20:9 (+182.4&cent; beat)
-        </div>
-        <div class="stretch-route-row" role="group" aria-label="Time-Stretch Modulation Coupling (§2.2)">
-          <span class="route-lbl">Stretch Mod:</span>
-          <button type="button" class="route-chip active" data-stretch="off" title="Unmodulated formula evaluation (baseline)">Off</button>
-          <button type="button" class="route-chip" data-stretch="pitchLock" title="Pitch-Locked DAW Time-Stretch (§2.2): Morlet/Gaussian window σ ↦ α·σ while carrier frequency f stays locked">Pitch &sigma;&middot;&alpha;</button>
-          <button type="button" class="route-chip" data-stretch="tape" title="Tape-Style Resampling (§2.2): Carrier frequency f ↦ f / α (pitch drops as stretch α increases)">Tape f/&alpha;</button>
-          <button type="button" class="route-chip" data-stretch="jacobian" title="Radial Jacobian Phase Warp (§2.1): Phase φ ↦ φ + η²·π">Jacobian &eta;&sup2;</button>
-        </div>
-      </div>
 
-      <div class="field strobe-field" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
-        <div class="field-head">
-          <label for="orderN">Order N (Strobe)</label>
-          <div class="auto-pills" role="group" aria-label="Order N automation">
-            <button type="button" class="auto-pill" data-auto-target="orderN" data-auto-mode="pingpong" title="Ping-Pong: sweep back and forth between two green bounds">&#8644; Ping</button>
-            <button type="button" class="auto-pill" data-auto-target="orderN" data-auto-mode="repeat" title="Repeat: sweep from green Start to red Return bound and jump back to start">&#8635; Repeat</button>
+        <div class="param-row" data-mod-target="rIn">
+          <div class="param-head">
+            <span class="param-lbl">
+              <label for="innerRadius" title="Inner Cavity r (OSC B — nested resonator &amp; time-stretch core)">Cavity r</label>
+              <span class="param-sub">OSC B</span>
+              <span class="mod-badges" data-mod-badges="rIn"></span>
+            </span>
+            <output id="innerRadiusOut" class="mono param-val val-emerald">0.45</output>
           </div>
-          <output id="orderNOut">19</output>
-        </div>
-        <div class="range-auto-wrap" id="orderNWrap">
-          <input type="range" id="orderN" data-agent-input="orderN" min="5" max="64" step="1" value="19" data-default="19" />
-          <div class="auto-track-overlay" id="orderNMarkers" hidden>
-            <div class="auto-band"></div>
-            <div class="auto-marker marker-start" data-handle="start" title="Drag Start bound (green)"></div>
-            <div class="auto-marker marker-end" data-handle="end" title="Drag End / Return bound"></div>
+          <div class="slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="rIn"></div>
+            <input type="range" id="innerRadius" data-agent-input="rIn" min="0" max="2.4" step="0.01" value="0.45" data-default="0.45" />
+            <div class="mod-live-dot" data-mod-dot="rIn" hidden></div>
           </div>
         </div>
-        <div class="auto-panel" id="orderNAutoBar" hidden>
-          <button type="button" class="auto-play-btn active" id="orderNAutoPlay" title="Pause / Resume Order N automation">&#10074;&#10074;</button>
-          <label class="bound-ctl" title="Start bound (green line)">
-            <i class="bound-dot green"></i>
-            <input type="number" id="orderNStart" min="5" max="64" step="1" value="10" aria-label="Order N start bound" />
-          </label>
-          <span class="auto-arrow" id="orderNAutoArrow">&harr;</span>
-          <label class="bound-ctl" title="End / Return-to-start bound">
-            <i class="bound-dot green" id="orderNEndDot"></i>
-            <input type="number" id="orderNEnd" min="5" max="64" step="1" value="48" aria-label="Order N end bound" />
-          </label>
-          <select id="orderNSpeed" class="auto-speed" aria-label="Order N sweep speed" title="Steps per second">
-            <option value="1">1/s</option>
-            <option value="2">2/s</option>
-            <option value="4" selected>4/s</option>
-            <option value="8">8/s</option>
-            <option value="16">16/s</option>
-            <option value="32">32/s</option>
-          </select>
-        </div>
-        <div class="strobe-sub mono" id="orderNBadge">19/19 &middot; prime order (full cycle)</div>
-      </div>
-    </section>
 
-    <!-- 3. Oscillator & Harmonic Controls -->
-    <section class="group">
-      <span class="kicker">Oscillator &amp; Harmonics <span class="hint">dbl-click resets</span></span>
-
-      <div class="field-row">
-        <div class="field small">
-          <label for="amp">Gain amp <output id="ampOut">1.00</output></label>
-          <input type="range" id="amp" data-agent-input="amp" min="0.1" max="2.5" step="0.05" value="1" data-default="1" />
+        <!-- Single-Line Vessel Telemetry + 5 Clean Syzygy Ratio Buttons -->
+        <div class="vessel-summary mono">
+          <span>&eta;=<b id="modEtaOut">0.45</b></span>
+          <span>&alpha;=<b id="modStretchOut">2.22&times;</b></span>
+          <span>V=<b id="shellVolOut">3.81</b></span>
+          <span id="syzygyBadge" class="syzygy-pill" title="Coupled Radial Breathing Modes (ℓ = 0): Outer 1/R : Inner 1/r : Wall 1/(R−r)">beat</span>
         </div>
-        <div class="field small">
-          <label for="freq">Freq f <output id="freqOut">1.0</output></label>
-          <input type="range" id="freq" data-agent-input="f" min="0.5" max="8" step="0.5" value="1" data-default="1" />
-        </div>
-      </div>
 
-      <div class="field">
-        <div class="field-head">
-          <label for="phaseSlider">Phase &phi;</label>
-          <div class="auto-pills" role="group" aria-label="Phase automation">
-            <button type="button" class="auto-pill" data-auto-target="phase" data-auto-mode="pingpong" title="Ping-Pong: sweep back and forth between two green bounds">&#8644; Ping</button>
-            <button type="button" class="auto-pill" data-auto-target="phase" data-auto-mode="repeat" title="Repeat: sweep from green Start to red Return bound and jump back to start">&#8635; Repeat</button>
+        <div class="syzygy-snap-row" role="group" aria-label="Dual-Sphere Modal Ratio Presets">
+          <button type="button" class="snap-chip" data-eta="0" title="r = 0 (Solid Ball — OSC A only)">0</button>
+          <button type="button" class="snap-chip" data-eta="0.5" title="η = 0.50 (α = 2:1 Exact Octave · Triple Lock 1:2:2)">.50</button>
+          <button type="button" class="snap-chip" data-eta="0.6667" title="η = 2/3 (α = 3:2 Perfect Fifth · Triple Lock 2:3:6)">2/3</button>
+          <button type="button" class="snap-chip" data-eta="0.7071" title="η = 1/√2 ≈ 0.7071 (−3 dB Half-Power Bow Tangency)">&minus;3dB</button>
+          <button type="button" class="snap-chip" data-eta="0.75" title="η = 0.75 (α = 4:3 Perfect Fourth · Triple Lock 3:4:12)">.75</button>
+        </div>
+
+        <!-- Archimedes Axial Slice z/R (Routable Target) -->
+        <div class="param-row" data-mod-target="archimedesZNorm">
+          <div class="param-head">
+            <span class="param-lbl">
+              <label for="rackSliceZ" title="Archimedes Constant-Area Axial Slice z/R (drag a modulator here to entangle)">Slice z/R</label>
+              <span class="mod-badges" data-mod-badges="archimedesZNorm"></span>
+            </span>
+            <output id="rackSliceZOut" class="mono param-val">+0.00</output>
           </div>
-          <output id="phaseOut">0&deg;</output>
-        </div>
-        <div class="range-auto-wrap" id="phaseWrap">
-          <input type="range" id="phaseSlider" data-agent-input="phase" min="-180" max="180" step="1" value="0" data-default="0" />
-          <div class="auto-track-overlay" id="phaseMarkers" hidden>
-            <div class="auto-band"></div>
-            <div class="auto-marker marker-start" data-handle="start" title="Drag Start bound (green)"></div>
-            <div class="auto-marker marker-end" data-handle="end" title="Drag End / Return bound"></div>
+          <div class="slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="archimedesZNorm"></div>
+            <input type="range" id="rackSliceZ" min="-1" max="1" step="0.01" value="0" data-default="0" />
+            <div class="mod-live-dot" data-mod-dot="archimedesZNorm" hidden></div>
           </div>
         </div>
-        <div class="auto-panel" id="phaseAutoBar" hidden>
-          <button type="button" class="auto-play-btn active" id="phaseAutoPlay" title="Pause / Resume Phase automation">&#10074;&#10074;</button>
-          <label class="bound-ctl" title="Start angle in degrees (green line)">
-            <i class="bound-dot green"></i>
-            <input type="number" id="phaseStart" min="-180" max="180" step="1" value="-180" aria-label="Phase start bound" />
-          </label>
-          <span class="auto-arrow" id="phaseAutoArrow">&harr;</span>
-          <label class="bound-ctl" title="End / Return-to-start angle in degrees">
-            <i class="bound-dot green" id="phaseEndDot"></i>
-            <input type="number" id="phaseEnd" min="-180" max="180" step="1" value="180" aria-label="Phase end bound" />
-          </label>
-          <select id="phaseSpeed" class="auto-speed" aria-label="Phase sweep speed" title="Degrees per second">
-            <option value="15">15&deg;/s</option>
-            <option value="30">30&deg;/s</option>
-            <option value="60" selected>60&deg;/s</option>
-            <option value="120">120&deg;/s</option>
-            <option value="180">180&deg;/s</option>
-            <option value="360">360&deg;/s</option>
-          </select>
-        </div>
-        <div class="sub-field">
-          <input type="number" id="phaseDeg" data-agent-input="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
-          <span>deg</span>
-          <span id="phaseRad" class="mono">0.0000 rad</span>
-        </div>
-      </div>
+      </section>
 
-      <div class="field highlight-field">
-        <label for="harmonicsK">Harmonics / Partials K <output id="harmonicsKOut">6</output></label>
-        <input type="range" id="harmonicsK" data-agent-input="K" min="0" max="14" step="1" value="6" data-default="6" />
-      </div>
+      <!-- 3. Oscillator & Order (Clean sliders — modulation indicators replace inline Ping/Repeat) -->
+      <section class="rack-group">
+        <div class="group-head">
+          <span class="kicker">Oscillator &amp; Order</span>
+          <span class="rack-hint">drop mod here</span>
+        </div>
 
-      <div class="field-row">
-        <div class="field small">
-          <label for="fractalA" title="Weierstrass amplitude decay a^k">Decay a <output id="fractalAOut">0.50</output></label>
-          <input type="range" id="fractalA" data-agent-input="a" min="0.15" max="0.85" step="0.05" value="0.5" data-default="0.5" />
-        </div>
-        <div class="field small">
-          <label for="fractalB" title="Weierstrass frequency multiplier b^k">Lacunarity b <output id="fractalBOut">3</output></label>
-          <input type="range" id="fractalB" data-agent-input="b" min="2" max="9" step="1" value="3" data-default="3" />
-        </div>
-      </div>
-
-      <div class="field-row">
-        <div class="field small">
-          <label for="ratioN">n <output id="ratioNOut">3</output></label>
-          <input type="range" id="ratioN" data-agent-input="n" min="1" max="8" step="1" value="3" data-default="3" />
-        </div>
-        <div class="field small">
-          <label for="ratioM">m <output id="ratioMOut">2</output></label>
-          <input type="range" id="ratioM" data-agent-input="m" min="1" max="8" step="1" value="2" data-default="2" />
-        </div>
-        <div class="field small">
-          <label for="ratioK">k <output id="ratioKOut">1</output></label>
-          <input type="range" id="ratioK" data-agent-input="k" min="1" max="8" step="1" value="1" data-default="1" />
-        </div>
-      </div>
-    </section>
-
-    <!-- 4. Collapsible Modular Formula Patch Bay -->
-    <section class="group">
-      <details id="formulaDrawer" class="patch-drawer">
-        <summary class="kicker summary-kicker">Patch Bay Equations <span>t=0..1, u=&minus;1..1</span></summary>
-        <div class="drawer-body">
-          <div class="formula-row">
-            <label class="axis" for="formulaX">x(t)</label>
-            <input id="formulaX" class="formula" data-axis="x" data-agent-input="fx" spellcheck="false" />
+        <div class="param-row" data-mod-target="orderN" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
+          <div class="param-head">
+            <span class="param-lbl">
+              <label for="orderN">Order N</label>
+              <span class="mod-badges" data-mod-badges="orderN"></span>
+            </span>
+            <span class="param-val-group">
+              <span id="orderNBadge" class="order-tag mono">prime</span>
+              <output id="orderNOut" class="mono param-val val-gold">19</output>
+            </span>
           </div>
-          <div class="err" id="errX"></div>
-
-          <div class="formula-row">
-            <label class="axis" for="formulaY">y(t)</label>
-            <input id="formulaY" class="formula" data-axis="y" data-agent-input="fy" spellcheck="false" />
-          </div>
-          <div class="err" id="errY"></div>
-
-          <div class="formula-row">
-            <label class="axis" for="formulaZ">z(t)</label>
-            <input id="formulaZ" class="formula" data-axis="z" data-agent-input="fz" spellcheck="false" />
-          </div>
-          <div class="err" id="errZ"></div>
-
-          <div class="funcs-body">
-            <code>t</code> <code>u</code> <code>r</code> <code>rIn</code> <code>N</code> <code>f</code> <code>K</code> <code>a</code> <code>b</code> <code>n</code> <code>m</code> <code>k</code> <code>phase</code><br>
-            <code>weierstrass(x,a,b,K)</code> <code>morlet(x,w,ph,s)</code> <code>cbrt</code><br>
-            <code>fourierSquare(x,K)</code> <code>sin</code> <code>cos</code> <code>tan</code> <code>saw</code> <code>lerp</code>
+          <div class="slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="orderN"></div>
+            <input type="range" id="orderN" data-agent-input="orderN" min="5" max="64" step="1" value="19" data-default="19" />
+            <div class="mod-live-dot" data-mod-dot="orderN" hidden></div>
           </div>
         </div>
-      </details>
-    </section>
+
+        <div class="param-row" data-mod-target="phaseDeg">
+          <div class="param-head">
+            <span class="param-lbl">
+              <label for="phaseSlider">Phase &phi;</label>
+              <span class="mod-badges" data-mod-badges="phaseDeg"></span>
+            </span>
+            <output id="phaseOut" class="mono param-val val-cyan">0&deg;</output>
+          </div>
+          <div class="slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="phaseDeg"></div>
+            <input type="range" id="phaseSlider" data-agent-input="phase" min="-180" max="180" step="1" value="0" data-default="0" />
+            <div class="mod-live-dot" data-mod-dot="phaseDeg" hidden></div>
+          </div>
+        </div>
+
+        <div class="param-grid-2">
+          <div class="param-row" data-mod-target="f">
+            <div class="param-head">
+              <span class="param-lbl">
+                <label for="freq">Freq f</label>
+                <span class="mod-badges" data-mod-badges="f"></span>
+              </span>
+              <output id="freqOut" class="mono param-val">1.0</output>
+            </div>
+            <div class="slider-wrap">
+              <div class="mod-range-bar" data-mod-bar="f"></div>
+              <input type="range" id="freq" data-agent-input="f" min="0.5" max="8" step="0.5" value="1" data-default="1" />
+              <div class="mod-live-dot" data-mod-dot="f" hidden></div>
+            </div>
+          </div>
+
+          <div class="param-row" data-mod-target="amp">
+            <div class="param-head">
+              <span class="param-lbl">
+                <label for="amp">Gain</label>
+                <span class="mod-badges" data-mod-badges="amp"></span>
+              </span>
+              <output id="ampOut" class="mono param-val">1.00</output>
+            </div>
+            <div class="slider-wrap">
+              <div class="mod-range-bar" data-mod-bar="amp"></div>
+              <input type="range" id="amp" data-agent-input="amp" min="0.1" max="2.5" step="0.05" value="1" data-default="1" />
+              <div class="mod-live-dot" data-mod-dot="amp" hidden></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="param-row" data-mod-target="K">
+          <div class="param-head">
+            <span class="param-lbl">
+              <label for="harmonicsK">Partials K</label>
+              <span class="mod-badges" data-mod-badges="K"></span>
+            </span>
+            <output id="harmonicsKOut" class="mono param-val">6</output>
+          </div>
+          <div class="slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="K"></div>
+            <input type="range" id="harmonicsK" data-agent-input="K" min="0" max="14" step="1" value="6" data-default="6" />
+            <div class="mod-live-dot" data-mod-dot="K" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Collapsible Equations, Fractal Ratios & Exact Phase -->
+      <section class="rack-group">
+        <details id="formulaDrawer" class="patch-drawer">
+          <summary class="kicker summary-kicker">Equations &amp; Ratios <span class="mono">x, y, z(t) &#9662;</span></summary>
+          <div class="drawer-body">
+            <div class="param-grid-2">
+              <div class="param-row" data-mod-target="a">
+                <div class="param-head">
+                  <span class="param-lbl">
+                    <label for="fractalA" title="Weierstrass amplitude decay a^k">Decay a</label>
+                    <span class="mod-badges" data-mod-badges="a"></span>
+                  </span>
+                  <output id="fractalAOut" class="mono param-val">0.50</output>
+                </div>
+                <div class="slider-wrap">
+                  <div class="mod-range-bar" data-mod-bar="a"></div>
+                  <input type="range" id="fractalA" data-agent-input="a" min="0.15" max="0.85" step="0.05" value="0.5" data-default="0.5" />
+                  <div class="mod-live-dot" data-mod-dot="a" hidden></div>
+                </div>
+              </div>
+              <div class="param-row" data-mod-target="b">
+                <div class="param-head">
+                  <span class="param-lbl">
+                    <label for="fractalB" title="Weierstrass frequency multiplier b^k">Lacun. b</label>
+                    <span class="mod-badges" data-mod-badges="b"></span>
+                  </span>
+                  <output id="fractalBOut" class="mono param-val">3</output>
+                </div>
+                <div class="slider-wrap">
+                  <div class="mod-range-bar" data-mod-bar="b"></div>
+                  <input type="range" id="fractalB" data-agent-input="b" min="2" max="9" step="1" value="3" data-default="3" />
+                  <div class="mod-live-dot" data-mod-dot="b" hidden></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="param-grid-3">
+              <div class="param-row" data-mod-target="n">
+                <div class="param-head">
+                  <span class="param-lbl"><label for="ratioN">n</label><span class="mod-badges" data-mod-badges="n"></span></span>
+                  <output id="ratioNOut" class="mono param-val">3</output>
+                </div>
+                <div class="slider-wrap">
+                  <div class="mod-range-bar" data-mod-bar="n"></div>
+                  <input type="range" id="ratioN" data-agent-input="n" min="1" max="8" step="1" value="3" data-default="3" />
+                  <div class="mod-live-dot" data-mod-dot="n" hidden></div>
+                </div>
+              </div>
+              <div class="param-row">
+                <div class="param-head">
+                  <label for="ratioM">m</label>
+                  <output id="ratioMOut" class="mono param-val">2</output>
+                </div>
+                <div class="slider-wrap">
+                  <input type="range" id="ratioM" data-agent-input="m" min="1" max="8" step="1" value="2" data-default="2" />
+                </div>
+              </div>
+              <div class="param-row">
+                <div class="param-head">
+                  <label for="ratioK">k</label>
+                  <output id="ratioKOut" class="mono param-val">1</output>
+                </div>
+                <div class="slider-wrap">
+                  <input type="range" id="ratioK" data-agent-input="k" min="1" max="8" step="1" value="1" data-default="1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="sub-field">
+              <input type="number" id="phaseDeg" data-agent-input="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
+              <span>deg</span>
+              <span id="phaseRad" class="mono">0.0000 rad</span>
+            </div>
+
+            <div class="stretch-route-row" role="group" aria-label="Time-Stretch Modulation Coupling (§2.2)">
+              <span class="route-lbl">Stretch:</span>
+              <button type="button" class="route-chip active" data-stretch="off">Off</button>
+              <button type="button" class="route-chip" data-stretch="pitchLock" title="Morlet σ ↦ α·σ">Pitch</button>
+              <button type="button" class="route-chip" data-stretch="tape" title="Freq f ↦ f / α">Tape</button>
+              <button type="button" class="route-chip" data-stretch="jacobian" title="Phase φ ↦ φ + η²·π">Jacob.</button>
+            </div>
+
+            <div class="formula-row">
+              <label class="axis" for="formulaX">x(t)</label>
+              <input id="formulaX" class="formula" data-axis="x" data-agent-input="fx" spellcheck="false" />
+            </div>
+            <div class="err" id="errX"></div>
+
+            <div class="formula-row">
+              <label class="axis" for="formulaY">y(t)</label>
+              <input id="formulaY" class="formula" data-axis="y" data-agent-input="fy" spellcheck="false" />
+            </div>
+            <div class="err" id="errY"></div>
+
+            <div class="formula-row">
+              <label class="axis" for="formulaZ">z(t)</label>
+              <input id="formulaZ" class="formula" data-axis="z" data-agent-input="fz" spellcheck="false" />
+            </div>
+            <div class="err" id="errZ"></div>
+
+            <div class="funcs-body">
+              <code>t</code> <code>u</code> <code>r</code> <code>rIn</code> <code>N</code> <code>f</code> <code>K</code> <code>a</code> <code>b</code> <code>n</code> <code>m</code> <code>k</code> <code>phase</code> <code>eta</code> <code>alpha</code><br>
+              <code>weierstrass(x,a,b,K)</code> <code>morlet(x,w,ph,s)</code> <code>cbrt</code> <code>fourierSquare(x,K)</code>
+            </div>
+          </div>
+        </details>
+      </section>
+
+    </div>
+
+    <!-- Quiet Rack Footer -->
+    <div class="rack-footer">
+      <span>Drag any <b class="val-cyan">(&bull;)</b> onto a slider</span>
+      <button type="button" id="rackRouteCount" class="rack-route-count mono" title="Open 5 · Mod &amp; Logic Matrix">0 routes</button>
+    </div>
 
   </aside>
 
@@ -354,6 +386,7 @@
           <button type="button" class="hud-pill active" data-toggle="trace" id="btnTrace" data-agent-toggle="trace">Trail</button>
           <button type="button" class="hud-pill accent-cyan active" data-toggle="fourBitOrbit" id="btnFourBit" data-agent-toggle="fourBitOrbit" title="Toggle Four-Bit Orbit: 1000 (8) ↔ 0001 (1) Binary Palindrome, 1111/F Top Pole, 0000 Bottom Pole & Quadray Tetrahedron (B key)">&#11041; 4-Bit Orbit</button>
           <button type="button" class="hud-pill accent-emerald active" data-toggle="resonanceMode" id="btnResonance" title="Toggle §§1–3 Active Dual-Sphere Coupled Modal Resonance &amp; Archimedes Constant-Area Axial Slice (R key)">&#9673; Resonance</button>
+          <button type="button" class="hud-pill accent-cyan" data-toggle="floorWt" id="btnFloorWt" title="Toggle §10 Cutaway Floor 3D Wavetable / MiniMeters 3D Spectrogram (W key)">&#9638; Floor WT</button>
           <button type="button" class="hud-pill accent-green" data-toggle="harmorVoid" id="btnHarmorVoid" title="Toggle Harmor Void Palette (§5.6): [Cavity = BitWave = Luminous Green] over pure #000000 digital silence (V key)">&#9680; Harmor Void</button>
           <button type="button" class="hud-pill accent-gold" data-toggle="strobeN" id="btnStrobeN" data-agent-toggle="strobeN" title="Quantize continuous curve into N discrete cyclic group steps (N key)">&#9672; Order N</button>
           <button type="button" class="hud-pill accent-coral" data-toggle="magnifier" id="btnMagnifier" data-agent-toggle="magnifier" title="Toggle Circular Fractal & Harmonic Zoom Magnifier (Z key)">&#8981; Zoom Lens</button>
@@ -457,9 +490,14 @@
         </div>
         <canvas id="archimedesCanvas" class="arch-canvas" width="268" height="58"></canvas>
 
-        <div class="res-slice-ctl mono">
+        <div class="res-slice-ctl mono" data-mod-target="archimedesZNorm" title="Drag any modulator handle (•) here to modulate z(t), or use Slice z(t) as a source tap in 5 · Mod &amp; Logic">
           <button type="button" id="btnArchAuto" class="mag-chip active" title="Sweep axial slice z automatically with oscillator playhead">Auto z(t)</button>
-          <input type="range" id="archimedesZSlider" min="-1" max="1" step="0.01" value="0" aria-label="Archimedes axial slice z/R" />
+          <span class="mod-badges" data-mod-badges="archimedesZNorm"></span>
+          <div class="slider-wrap res-slider-wrap">
+            <div class="mod-range-bar" data-mod-bar="archimedesZNorm"></div>
+            <input type="range" id="archimedesZSlider" min="-1" max="1" step="0.01" value="0" aria-label="Archimedes axial slice z/R" />
+            <div class="mod-live-dot" data-mod-dot="archimedesZNorm" hidden></div>
+          </div>
           <span id="resSliceZOut" class="slice-z-val">z=+0.45</span>
         </div>
       </div>
@@ -482,26 +520,85 @@
         </div>
       </div>
 
+      <!-- Edge reveal handles (visible only when Left Rack or Bottom Dock is collapsed) -->
+      <button type="button" id="btnExpandPanel" class="edge-reveal edge-reveal-left" hidden title="Show Left Rack (\ key)" aria-label="Show Left Rack">&raquo; Rack</button>
+      <button type="button" id="btnExpandDock" class="edge-reveal edge-reveal-bottom" hidden title="Show Bottom Dock (` key)" aria-label="Show Bottom Dock">&blacktriangle; Dock</button>
+
     </div>
 
     <!-- ===== TABBED BOTTOM INSPECTOR DOCK ===== -->
-    <div class="dock">
+    <div class="dock" id="bottomDock">
 
       <!-- Dock Tab Bar + Persistent Live Telemetry -->
       <div class="dock-bar">
         <div class="dock-tabs" role="tablist">
-          <button type="button" class="dock-tab active" role="tab" data-tab="scopes" data-agent-tab="scopes">1 &middot; Scopes &amp; Slice</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="harmonics" data-agent-tab="harmonics">2 &middot; Harmonics &amp; Ramanujan</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="frobenius" data-agent-tab="frobenius">3 &middot; Frobenius &amp; Hasse</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="bits" data-agent-tab="bits">4 &middot; Float32 Bit Lab</button>
-          <button type="button" class="dock-tab" role="tab" data-tab="agent" data-agent-tab="agent">5 &middot; Agent</button>
+          <button type="button" class="dock-tab dock-tab-guide" role="tab" data-tab="guide" title="Coherent introduction &amp; 1-click live demos (? key)">? Guide</button>
+          <button type="button" class="dock-tab active" role="tab" data-tab="scopes" data-agent-tab="scopes">1 &middot; Scopes</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="harmonics" data-agent-tab="harmonics">2 &middot; Harmonics</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="frobenius" data-agent-tab="frobenius">3 &middot; Frobenius</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="bits" data-agent-tab="bits">4 &middot; Bit Lab</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="modlogic"><i id="modTabDot" class="mod-tab-dot"></i>5 &middot; Mod &amp; Logic</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="floorwt"><i id="floorTabDot" class="mod-tab-dot"></i>6 &middot; Floor WT</button>
+          <button type="button" class="dock-tab" role="tab" data-tab="agent" data-agent-tab="agent">7 &middot; Agent</button>
         </div>
 
-        <div class="telemetry-strip mono">
-          <span class="tele-item"><em id="statusReadout" class="zone-badge">ON SPHERE</em></span>
-          <span class="tele-item"><span>|P|</span> <b id="distReadout">—</b></span>
-          <span class="tele-item hide-narrow"><span>&ang;</span> <b id="angleReadout">—</b></span>
-          <span class="tele-item hide-narrow"><span>y<sub>f32</sub></span> <b id="quickHexReadout">—</b></span>
+        <div class="dock-bar-right">
+          <div class="telemetry-strip mono">
+            <span class="tele-item"><em id="statusReadout" class="zone-badge">ON SPHERE</em></span>
+            <span class="tele-item"><span>|P|</span> <b id="distReadout">&mdash;</b></span>
+            <span class="tele-item hide-narrow"><span>&ang;</span> <b id="angleReadout">&mdash;</b></span>
+            <span class="tele-item hide-narrow"><span>y<sub>f32</sub></span> <b id="quickHexReadout">&mdash;</b></span>
+          </div>
+          <button type="button" id="btnCollapseDock" class="mini-btn dock-collapse-btn" title="Collapse bottom dock (` key)" aria-label="Collapse bottom dock">&blacktriangledown;</button>
+        </div>
+      </div>
+
+      <!-- GUIDE TAB: Coherent Introduction & 1-Click Live Interactive Demos -->
+      <div id="tab-guide" class="dock-pane guide-pane">
+        <div class="guide-grid-3">
+          <!-- Col 1: Guided Demo Chapters -->
+          <div class="panel2d guide-col-chapters">
+            <div class="panel2d-head">
+              <span class="kicker">Guided Live Demos &mdash; Click to Audition</span>
+              <div class="guide-step-btns">
+                <button type="button" id="btnGuidePrev" class="mini-btn" title="Previous demo chapter">&larr;</button>
+                <button type="button" id="btnGuideNext" class="mini-btn" title="Next demo chapter">&rarr;</button>
+              </div>
+            </div>
+            <div id="guideChapterList" class="guide-chapters"></div>
+          </div>
+
+          <!-- Col 2: Active Chapter Explainer & Try-This Actions -->
+          <div class="panel2d guide-col-story">
+            <div class="panel2d-head">
+              <span class="kicker" id="guideStoryTitle">1 &middot; The Hollow Vessel &amp; 4-Bit Orbit</span>
+              <span class="mini-tag mono" id="guideStoryFormula">V = 4/3&middot;&pi;(R&sup3;&minus;r&sup3;)</span>
+            </div>
+            <div id="guideStoryBody" class="guide-story-body"></div>
+            <div class="guide-actions">
+              <button type="button" id="btnGuideRun" class="mini-btn guide-run-btn">&#9654; Load This Demo</button>
+              <button type="button" class="mini-btn guide-jump-btn" data-guide-tab="scopes">1 &middot; Scopes</button>
+              <button type="button" class="mini-btn guide-jump-btn" data-guide-tab="bits">4 &middot; Bit Lab</button>
+              <button type="button" class="mini-btn guide-jump-btn" data-guide-tab="modlogic">5 &middot; Mod &amp; Logic</button>
+              <button type="button" class="mini-btn guide-jump-btn" data-guide-tab="agent">6 &middot; Agent</button>
+            </div>
+          </div>
+
+          <!-- Col 3: Studio Map & Shortcuts -->
+          <div class="panel2d guide-col-ref">
+            <div class="panel2d-head">
+              <span class="kicker">Studio Controls &amp; Surfaces</span>
+              <span class="mini-tag mono">f32 &middot; zero-build</span>
+            </div>
+            <div class="guide-ref-list">
+              <div class="guide-ref-row"><span class="mono guide-key">!</span><span>Expand full explainer for any selected patch preset</span></div>
+              <div class="guide-ref-row"><span class="mono guide-key">(&bull;)</span><span>Drag handles in <b>5 &middot; Mod &amp; Logic</b> onto any Left Rack slider or the floating <b>Auto z(t)</b> slider</span></div>
+              <div class="guide-ref-row"><span class="mono guide-key">&laquo; / \</span><span>Collapse Left Rack so the 3D sphere stretches wide</span></div>
+              <div class="guide-ref-row"><span class="mono guide-key">&blacktriangledown; / `</span><span>Collapse Bottom Dock for full-height 3D view</span></div>
+              <div class="guide-ref-row"><span class="mono guide-key">Space</span><span>Play / Pause &middot; <b>C</b> Cutaway &middot; <b>R</b> Resonance &middot; <b>V</b> Harmor Void &middot; <b>N</b> Order N &middot; <b>T</b> Theatre</span></div>
+              <div class="guide-ref-row"><span class="mono guide-key">6 &middot; Agent</span><span>Deterministic state JSON, deeplinks, CLI &amp; MCP server (<code>window.ramanujanSphere</code>)</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -648,7 +745,179 @@
         </div>
       </div>
 
-      <!-- TAB 5: Agent Layer (additive — window.ramanujanSphere + machine-readable surfaces) -->
+      <!-- TAB 5: Mod & Logic — Deterministic Parent-Clock LFO & Logical Entanglement Matrix -->
+      <div id="tab-modlogic" class="dock-pane modlogic-pane">
+        <!-- Toolbar matching original studio dock chrome -->
+        <div class="mod-toolbar">
+          <div class="mod-toolbar-left">
+            <span class="kicker mod-kicker">Parent Clock</span>
+            <div class="segmented compact-seg" role="group" aria-label="Modulation parent clock mode">
+              <button type="button" class="seg-btn mod-clk-btn active" data-clk="playT" title="Phase-locked to oscillator playhead playT (zero drift, ?static reproducible)">Sync playT</button>
+              <button type="button" class="seg-btn mod-clk-btn" data-clk="free" title="Independent free-running master LFO clock">Free Hz</button>
+            </div>
+            <label class="mod-scrub-ctl" title="Deterministic master phase scrubber">
+              <span>Scrub &Phi;</span>
+              <input type="range" id="modMasterScrub" min="0" max="1" step="0.002" value="0" />
+              <span id="modMasterPhiOut" class="mono">0.00</span>
+            </label>
+            <select id="modMasterSpeed" class="mod-mini-sel mono" aria-label="Free clock rate" title="Free-mode cycle rate">
+              <option value="0.07">0.5&times;</option>
+              <option value="0.14" selected>1.0&times;</option>
+              <option value="0.28">2.0&times;</option>
+              <option value="0.56">4.0&times;</option>
+            </select>
+          </div>
+          <div class="mod-toolbar-right">
+            <span class="mod-preset-lbl">Preset:</span>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="chimeFifths" title="Step Phase around the Circle of Fifths (+7 mod 12; Invert for Fourths) with 4-Bit zero-crossing chime strikes">Chime Fifths</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="autoZDrive" title="Use the Archimedes Auto z(t) oscillator to drive Phase, Order N &amp; Partials K">Auto z &rarr; Synth</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="entangled">Entangled Slice</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="nibbleStep">4-Bit Stepper</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="volBreath">Lock-V Breather</button>
+            <button type="button" class="mini-btn mod-preset-btn mod-clear-btn" data-mpreset="clear">Clear</button>
+          </div>
+        </div>
+
+        <!-- 3-Column Studio Body using native panel2d cards -->
+        <div class="mod-grid-3">
+          <!-- Col 1: Modulators & Geometric Taps -->
+          <div class="panel2d mod-col-sources">
+            <div class="panel2d-head">
+              <span class="kicker">Modulators &amp; Taps (Drag &bull;)</span>
+              <button type="button" id="btnModAddLfo" class="mini-btn">+ Add LFO</button>
+            </div>
+            <div id="modLfoList" class="mod-lfo-list"></div>
+            <div class="mod-tap-section">
+              <div class="mod-sub-lbl">Geometric &amp; State Entanglement</div>
+              <div id="modTapGrid" class="mod-tap-grid"></div>
+            </div>
+          </div>
+
+          <!-- Col 2: Active Patch Matrix & Logic Rules -->
+          <div class="panel2d mod-col-routes">
+            <div class="panel2d-head">
+              <span class="kicker">Active Patch Matrix &amp; Logic Rules</span>
+              <span class="mini-tag mono">click row to inspect</span>
+            </div>
+            <div id="modRouteList" class="mod-route-list"></div>
+          </div>
+
+          <!-- Col 3: Entanglement Oscilloscope + Route Inspector -->
+          <div class="panel2d mod-col-scope">
+            <div class="panel2d-head">
+              <span class="kicker">Entanglement Scope</span>
+              <span id="modScopeLegend" class="mini-tag mono">idle</span>
+            </div>
+            <canvas id="modScopeCanvas" class="mini-canvas mod-scope-canvas"></canvas>
+            <div id="modRouteInspector" class="mod-inspector"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 6: Cutaway Floor 3D Wavetable (GitWave) & MiniMeters 3D Spectrogram (§10) -->
+      <div id="tab-floorwt" class="dock-pane floorwt-pane">
+        <div class="mod-toolbar">
+          <div class="mod-toolbar-left">
+            <button type="button" id="btnFloorEnable" class="mini-btn floor-enable-btn" title="Enable/disable 3D Cutaway Floor surface (W key)">&#9679; Floor Off</button>
+            <div class="segmented compact-seg" role="group" aria-label="Floor visual mode">
+              <button type="button" class="seg-btn floor-mode-btn active" data-fmode="wavetable" title="GitWave-style 3D volumetric wavetable oscillator seated on the cutaway floor">3D Wavetable</button>
+              <button type="button" class="seg-btn floor-mode-btn" data-fmode="spectrogram" title="MiniMeters-style 2D center equalizer with 3D cavity dispersion">MiniMeters 3D</button>
+            </div>
+            <label class="mod-scrub-ctl" title="Vertical amplitude / height of the 3D floor">
+              <span>Depth</span>
+              <input type="range" id="floorDepthSlider" min="0.15" max="1.25" step="0.02" value="0.68" />
+              <span id="floorDepthOut" class="mono">68%</span>
+            </label>
+            <label class="mod-scrub-ctl" title="Smoothing (Wavetable) or 3D cavity dispersion spread (MiniMeters)">
+              <span id="floorSmoothLbl">Smooth</span>
+              <input type="range" id="floorSmoothSlider" min="0" max="1" step="0.02" value="0.52" />
+              <span id="floorSmoothOut" class="mono">52%</span>
+            </label>
+            <label class="mod-scrub-ctl" title="Wavetable / equalizer footprint proportion inside sphere cavity">
+              <span>Size</span>
+              <input type="range" id="floorSizeSlider" min="0.45" max="1" step="0.02" value="0.94" />
+              <span id="floorSizeOut" class="mono">94%</span>
+            </label>
+            <div class="floor-zoom-ctl" data-mod-target="floorZoomLog" title="Continuous RX-style Time Zoom T (16ms micro-PCM ↔ 12s macro terrain) — controls floor glide speed past z=0 needle; mappable in 5 · Mod &amp; Logic!">
+              <span>Zoom T</span>
+              <span class="mod-badges" data-mod-badges="floorZoomLog"></span>
+              <div class="slider-wrap floor-zoom-wrap">
+                <div class="mod-range-bar" data-mod-bar="floorZoomLog"></div>
+                <input type="range" id="floorZoomSlider" min="0" max="1" step="0.005" value="0.7295" aria-label="Floor time zoom T" />
+                <div class="mod-live-dot" data-mod-dot="floorZoomLog" hidden></div>
+              </div>
+              <span id="floorZoomOut" class="mono">2.00s</span>
+            </div>
+          </div>
+          <div class="mod-toolbar-right">
+            <label class="floor-bpm-ctl mono" title="Tempo (BPM) used for BPM beat snaps (auto-detected on MP3 upload)">
+              <input type="number" id="floorBpmInput" min="40" max="240" step="1" value="120" aria-label="Floor BPM" />
+              <span>BPM</span>
+            </label>
+            <select id="floorBeatsSelect" class="mod-mini-sel mono" aria-label="Snap Zoom T to BPM beat interval" title="Snap Zoom T to a musical beat interval at the current BPM">
+              <option value="0.25">1/4b</option>
+              <option value="1">1 Beat</option>
+              <option value="2">2 Beats</option>
+              <option value="4" selected>1 Bar</option>
+              <option value="8">2 Bars</option>
+            </select>
+            <input type="file" id="floorFileInput" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a" hidden />
+            <button type="button" id="btnFloorUpload" class="mini-btn floor-audio-btn" title="Load a local MP3 / WAV / OGG file — z=0 is Present needle, +z Incoming Future, −z Fading Past">&#8679; MP3</button>
+            <button type="button" id="btnFloorSys" class="mini-btn floor-audio-btn" title="Capture live browser tab or system audio loopback into the MiniMeters 3D floor">Sys</button>
+            <button type="button" id="btnFloorTone" class="mini-btn floor-audio-btn" title="Audition soft Web Audio harmonic chime tuned to Outer R : Inner r : Wall modes">&#9834;</button>
+            <button type="button" id="btnFloorMic" class="mini-btn floor-audio-btn" title="Feed live microphone audio into the MiniMeters 3D Spectrogram floor">Mic</button>
+          </div>
+        </div>
+
+        <!-- Inline MP3 Transport Strip (shown automatically when an audio file is loaded) -->
+        <div id="floorFileBar" class="floor-file-bar mono" hidden>
+          <button type="button" id="btnFloorFilePlay" class="mini-btn floor-play-btn" title="Play / Pause uploaded audio">&#9654;</button>
+          <span id="floorFileName" class="floor-file-name">track.mp3</span>
+          <input type="range" id="floorFileSeek" class="floor-file-seek" min="0" max="1" step="0.001" value="0" aria-label="Seek audio track" />
+          <span id="floorFileTime" class="floor-file-time">0:00 / 0:00</span>
+          <button type="button" id="btnFloorStop" class="mini-btn" title="Stop audio &amp; return to synth spectrum">Stop</button>
+        </div>
+
+        <div class="floor-grid-2">
+          <!-- Main 2D Paired Scope (Active Slice / MiniMeters 2D EQ / RX 11 PCM Needle Groove) -->
+          <div class="panel2d floor-col-scope">
+            <div class="panel2d-head">
+              <span class="kicker" id="floorScopeTitle">2D Active Slice &mdash; Synced to Auto z(t) &amp; Cutaway Floor</span>
+              <div class="floor-scope-head-right">
+                <div class="segmented compact-seg" role="group" aria-label="2D floor scope view">
+                  <button type="button" class="seg-btn floor-scope-btn active" data-fscope="eq" title="MiniMeters 2D Equalizer / Active Wavetable Slice">EQ / Slice</button>
+                  <button type="button" class="seg-btn floor-scope-btn" data-fscope="pcm" title="RX 11-style 2D PCM Needle Groove (auto-shows sample dots at micro Zoom T)">PCM Groove</button>
+                </div>
+                <span id="floorPitchBadge" class="mini-tag mono">98.00Hz | G2 + 0 Cents</span>
+              </div>
+            </div>
+            <canvas id="floorViewCanvas" class="mini-canvas floor-canvas"></canvas>
+          </div>
+
+          <!-- Cavity Proportion & Quick Showcase Card -->
+          <div class="panel2d floor-col-info">
+            <div class="panel2d-head">
+              <span class="kicker">Cavity &amp; Time Window T</span>
+              <span id="floorModeTag" class="mini-tag mono">WAVETABLE</span>
+            </div>
+            <div class="floor-readouts mono">
+              <div><span>Window T / Cav</span> <b id="floorWinOut">2.00s &middot; Cav 0.90s</b></div>
+              <div><span>Floor Velocity</span> <b id="floorVelOut">1.00 &Oslash;/s</b></div>
+              <div><span>RMS / Crest</span> <b id="floorDynOut">&mdash; (synth)</b></div>
+              <div><span>Chromatic Pitch</span> <b id="floorPitchOut">G2 (+0&cent;)</b></div>
+              <div><span>Modal Interval</span> <b id="floorIntOut">20:9 beat</b></div>
+            </div>
+            <div class="floor-preset-row">
+              <button type="button" class="mini-btn floor-demo-btn" data-fdemo="wavetable">Cutaway WT</button>
+              <button type="button" class="mini-btn floor-demo-btn" data-fdemo="minimeters">MiniMeters 3D</button>
+              <button type="button" class="mini-btn floor-demo-btn" data-fdemo="fifths">Fifths Chime</button>
+              <button type="button" class="mini-btn floor-demo-btn" data-fdemo="mod">Modulate z(t)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 7: Agent Layer (additive — window.ramanujanSphere + machine-readable surfaces) -->
       <div id="tab-agent" class="dock-pane agent-pane" data-agent-panel="agent">
         <div class="agent-card agent-card-bridge">
           <div class="panel2d-head">
@@ -694,6 +963,21 @@
   </section>
 </main>
 
+<!-- Live SVG Patch Cable Overlay for FabFilter Volcano-style drag-and-drop routing -->
+<svg id="modCableOverlay" aria-hidden="true">
+  <defs>
+    <filter id="modCableGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <path id="modDragCable" d="" fill="none" stroke="#36d6c8" stroke-width="2.5" stroke-linecap="round" filter="url(#modCableGlow)" opacity="0"/>
+  <circle id="modDragTip" cx="0" cy="0" r="5" fill="#4df3dd" opacity="0"/>
+</svg>
+
 <!-- Agent-inspectable UI state (contract §5) — always mounted, refreshed on publish + frames -->
 <pre id="ramanujan-sphere-state" data-schema-version="1" hidden></pre>
 
@@ -712,6 +996,8 @@
 <script src="js/harmonics2d.js"></script>
 <script src="js/frobenius.js"></script>
 <script src="js/views.js"></script>
+<script src="js/floor-view.js"></script>
+<script src="js/mod-matrix.js"></script>
 <script src="js/app.js"></script>
 <script src="js/agent-bridge.js"></script>
 </body>

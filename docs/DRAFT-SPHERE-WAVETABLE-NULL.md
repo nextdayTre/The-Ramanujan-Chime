@@ -2,7 +2,7 @@
 
 > **Status:** `DRAFT — CHRONOLOGICAL ITERATIVE DESIGN SPEC (REAL GUI)`
 >
-> **How to use this document:** This is an **iterative, chronological specification** meant to evolve directly inside the existing **Ramanujan's Gift** GUI (`index.html`, `js/engine.js`, `js/scene3d.js`, `js/app.js`, and its existing studio scopes/cutaway sphere/4-Bit Orbit)—**never** as a detached standalone spike page. Work through the document **in chronological order** (§1 → §2 → §3 → §4 → §5 → §5.5 → §5.6 → §5.7), proving and integrating each layer visually inside the real instrument before layering the next, while weighing the §6 constraint trade-offs honestly along the way.
+> **How to use this document:** This is an **iterative, chronological specification** meant to evolve directly inside the existing **The Ramanujan Chime** GUI (`index.html`, `js/engine.js`, `js/scene3d.js`, `js/app.js`, and its existing studio scopes/cutaway sphere/4-Bit Orbit)—**never** as a detached standalone spike page. Work through the document **in chronological order** (§1 → §2 → §3 → §4 → §5 → §5.5 → §5.6 → §5.7), proving and integrating each layer visually inside the real instrument before layering the next, while weighing the §6 constraint trade-offs honestly along the way.
 
 ---
 
@@ -161,7 +161,7 @@ We should support (or choose among) three clear ways to populate the 256 frames:
 
 In audio engineering, a null test adds a polarity-inverted copy of Signal B to Signal A: $\Delta = A + (-B) = A - B$. Everything identical cancels to digital silence; whatever survives is the **exact structural difference**.
 
-`Ramanujan's Gift` already has the exact two twins needed to make this deeper than a plain scalar subtraction:
+`The Ramanujan Chime` already has the exact two twins needed to make this deeper than a plain scalar subtraction:
 - **Antipodal Twin ($-P$):** 180° polarity inversion $\implies$ **Scalar / Vector Null Test**.
 - **Conjugate Twin ($\bar{P}$):** imaginary-axis flip $\implies$ **Complex Quadrature Split** (separating amplitude mismatch from phase/group-delay smearing).
 
@@ -579,14 +579,92 @@ function quatRotateVec(q, v) {
 
 ---
 
-### 9.3 Next-Session Agenda: GUI Cleanup, Typography & Potential Backend Swap
+### 9.3 Next-Session Agenda: GUI Cleanup, Typography, Modulation Routing & Potential Backend Swap
 
 1. **Redesign the Left Vertical Menu & Typography:**
    - Replace the cluttered multi-card vertical stack with a clean, intentional studio layout and upgraded typography (matching the visual clarity of the bottom **2D Slice & Quadrature** and **Dual Oscilloscope** panes).
    - Strip redundant micro-badges, excess borders, and crowded pill rows; group controls so only the active context is visible.
 2. **Declutter the 3D Viewport HUD:**
    - Consolidate floating top HUD pills and bottom overlay cards so the 3D hollow sphere has clean negative space.
-3. **Evaluate Backend / Architecture Swap:**
+3. **Design Note — Dedicated Modulation & Entanglement Routing Tab (FabFilter Volcano-Style Click-and-Drag LFO GUI):**
+   - **What works today:** The existing inline **Ping-Pong / Repeat** controls work great for quick local motion on **Order $N$ Strobe**, **Phase $\varphi$**, and the new **$z(t)$ Archimedes Slice oscillator** (`Auto z(t)`).
+   - **What the GUI Cleanup should add:** Build a more robust, dedicated **Modulation & Routing** tool inspired by **FabFilter Volcano's click-and-drag LFO mapping GUI** (source tiles with `+ Add Modulation`, drag-and-drop patch cables/handles onto target parameters, and clear visual depth/polarity rings).
+   - **Bottom-Dock Tab Placement:** Place this routing workspace in the **bottom dock as its own dedicated tab** alongside `1 · Scopes & Slice` (Quadrature), `2 · Harmonics & Ramanujan`, `3 · Frobenius & Hasse`, `4 · Float32 Bit Lab`, and `5 · Agent`. Keeping it in its own bottom tab gives the routing matrix the same clean studio canvas space as the Ramanujan/Quadrature views without crowding the left sidebar.
+   - **Parent LFO & Deterministic Entanglement Logic:** Rather than relying solely on independent free-running ping-pong oscillators that can drift relative to one another, the routing tab should support a **parent LFO** and **cross-parameter entanglement rules** for deterministic coupling—for example, driving $z(t)$ deterministically from the live state of **Phase $\varphi$**, **Order $N$ Strobe**, **$\eta = r/R$**, or the **4-Bit Orbit** nibble (ratios, phase-locked sweeps, or state-dependent triggers).
+4. **Evaluate Backend / Architecture Swap:**
    - Decide whether to keep `js/engine.js` as a classic script or migrate the math/DSP backend (e.g., modular ES modules, worker/WASM pipeline, or cleaner state store) while preserving the core math primitives and tests.
-4. **Re-introduce Step 2 (§§5.5–5.6) & Step 3 (§5.7) Harmoniously:**
-   - Once the UI shell and typography are clean, bring in Cavity Collapse / BitWave Attraction and the 4-Bit Violin-Bow Richter-Yaw scanner as focused, uncluttered visual modes.
+5. **Re-introduce Step 2 (§§5.5–5.6) & Step 3 (§5.7) Harmoniously:**
+   - Once the UI shell, typography, and bottom-dock routing tab are clean, bring in Cavity Collapse / BitWave Attraction and the 4-Bit Violin-Bow Richter-Yaw scanner as focused, uncluttered visual modes.
+
+---
+
+### 9.4 Musical Articulation: Why It Is Called *The Ramanujan Chime* (Chromatic Cavity, Circle of Fifths/Fourths & Observed State)
+
+> **Completed GUI & Modulation Foundation:** The cleaned-up `274px` vertical Left Rack (`!` toggleable preset explainer, live modulation range bars & badges), collapsible Left/Bottom studio panels (`«` / `\`, `▾` / `` ` ``), native-themed **`5 · Mod & Logic`** tab (`js/mod-matrix.js`, deterministic Parent Clock, click-and-drag cables, bidirectional `Auto z(t)` / `Slice z(t)` mapping, `Quant 12-Tone`, `Fifths +7`), and coherent **`? Guide`** interactive demo tab are now integrated in the real instrument.
+
+This section captures the exact mathematical-musical identity behind the instrument's name—connecting the **Circle of Fifths / Circle of Fourths**, the **Two Twins (`−P`, `P̄`)**, the **4-Bit Orbit quadrature sweep**, and the **Parent-Clock LFO matrix**:
+
+1. **Hollow Vessel Ratios = The Core Musical Intervals:**
+   - $\eta = 0.50 \implies \alpha = 2:1$ (**Octave**, triple lock `1 : 2 : 2`)
+   - $\eta = 2/3 \implies \alpha = 3:2$ (**Perfect Fifth**, clockwise Circle of Fifths generator)
+   - $\eta = 0.75 \implies \alpha = 4:3$ (**Perfect Fourth**, counter-clockwise Circle of Fourths generator)
+   - $\eta = 1/\sqrt{2} \approx 0.7071 \implies \alpha = \sqrt{2}:1$ (**Equal-Tempered Tritone** & exact $-3\text{ dB}$ 4-Bit Bow tangency)
+2. **Cavity Space = Chromatic Potential ($\mathbb{Z}_{12}$); Conjugation = Fifths $\leftrightarrow$ Fourths:**
+   - At `Order N = 12`, clockwise stride $g = +7 \pmod{12}$ walks the **Circle of Fifths** (`0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5`), while its exact **complex conjugate mirror** $P \mapsto \bar{P}$ ($g = -7 \equiv +5 \pmod{12}$, or clicking **Invert** on the `Fifths (+7)` operator) walks the **Circle of Fourths** (*Negative Harmony*).
+   - Antipodal polarity inversion $-P$ ($+6 \pmod{12}$, $180^\circ$) is the exact **Tritone** axis (`C ↔ F♯/G♭`), and the shared divisor $4$ of $\mathbb{Z}_{12}$ and the 16-state 4-Bit Orbit yields the $90^\circ$ **quadrature cross** (`Cdim7` = `C → A → F♯ → E♭` / `0001 → 1111 → 1000 → 0000`) and the $90^\circ$ ($3$-semitone) Major-to-Relative-Minor offset between outer `OSC A` and inner `OSC B`.
+3. **Observed State, Key Signature & Clef Change:**
+   - **Observed State (Tonic Lock):** Focusing your eyes on a single moving vector (`0001`) inside a multi-twin modulation establishes a moving reference frame—declaring that vector the local tonic while the chromatic cavity turns around it.
+   - **Phase Modulation $\varphi(t)$ = Key Signature Transposition:** Smooth `LFO → Phase φ` glides continuously through key space; `Fifths (+7)` / `Quant 12-Tone` steps `Phase φ` in exact $210^\circ$ / $30^\circ$ key-signature changes.
+   - **Twin Mode (`P`, `P̄`, `−P`) = Clef / Polarity Inversion:** Re-interprets the same chromatic cavity under positive fifths, negative-harmony fourths, or tritone cancellation.
+   - **The "Chime":** Just as a struck hollow metal chime rings via coupled outer-wall and inner-cavity standing waves, $P + \bar{P} = 2\operatorname{Re}(P)$ collapses rotation into a resonant diameter oscillation (`1000 ↔ 0001`) that strikes crystalline harmonic nodes whenever phase modulation hits a syzygy lock or `1000₂ (0x8)` zero-crossing.
+
+---
+
+## 10. Next-Session Feature Spec: The Cutaway Floor 3D Wavetable & MiniMeters Spectrogram
+
+> **Status:** `NEXT-SESSION DEDICATED SLICE (BRAINSTORM & HANDOFF SPEC)`
+>
+> **Priority & Reference Boundary:** **The Ramanujan Chime** is always the sole architectural priority. Visual inspiration for the volumetric 3D wavetable ribbon comes from the sibling project **`GitWave`** (`C:\Users\trevor\Documents\GitWave\`, specifically its volumetric surface aesthetic in `src/render/depth.js` and `src/core/wavetable.ts`), referenced strictly for visual/shader inspiration—zero cross-repo dependency or GitWave rules apply.
+
+### 10.1 Geometric Placement: Seated on the Cutaway Floor (`y = 0`)
+
+Inside the **Cutaway Hollow Sphere** (outer radius $R$, inner cavity radius $r$), the flat equatorial floor ($y = 0$, $x^2 + z^2 \le R^2$) is bisected cleanly by the vertical **2D $f(x)$ Slice** plane ($z = 0$):
+
+- **Width ($X$-axis, $x \in [-R, +R]$):** Single-cycle waveform phase (Wavetable mode) or log-frequency spectrum axis (Spectrogram mode).
+- **Depth ($Z$-axis, $z \in [-R, +R]$):** Wavetable frame stack (`WT POS`, driven by `Auto z(t)` / `Slice z/R` and routable in `5 · Mod & Logic`) or 3D dispersion / time-history waterfall.
+- **Harmonic & Cavity Proportionality:**
+  - Every slice at depth $z$ can either span the inscribed square/rectangle inside the floor or taper cleanly to the circular sphere chords $\rho_{\text{out}}(z) = \sqrt{R^2 - z^2}$ and $\rho_{\text{in}}(z) = \sqrt{r^2 - z^2}$ (visually distinguishing inner cavity `OSC B` energy inside $|z| \le r$ from outer shell `OSC A` dispersion across $r < |z| \le R$).
+  - Chromatic / Circle-of-Fifths pitch spacing ($\mathbb{Z}_{12}$, §9.4) aligns naturally with the floor's frequency/harmonic grid and vessel ratios (`0.50` Octave, `2/3` Fifth, `−3 dB` Tritone, `0.75` Fourth).
+
+### 10.2 Dual-Purpose Floor Mesh (1-Click Mode Swap)
+
+The exact same Three.js parametric ribbon/mesh surface (`js/floor-wavetable.js` or dedicated group inside `js/scene3d.js`) serves **two complementary modes**:
+
+| Mode | Center Plane (`z = 0` / Active `WT POS`) | 3D Floor Dispersion (`z ∈ [-R, +R]`) | Visual Language |
+| :--- | :--- | :--- | :--- |
+| **1. 3D Wavetable Oscillator** *(GitWave aesthetic)* | Glowing golden/amber **Active Slice** curve sweeping along `Auto z(t)` (`Slice z/R`), synced directly to the 2D $f(x)$ Slice & Oscilloscope. | Translucent volumetric multi-frame ribbon mesh (`24–64` depth slices) morphing smoothly across the cavity proportional to $R$, $r$, `K`, `Order N`, and active `5 · Mod & Logic` routes. | Deep luminous indigo/cyan/emerald translucent mesh + bright front rim + glowing golden travelling `WT POS` slice (adapts to `Harmor Void` green-on-black). |
+| **2. 3D MiniMeters Spectrogram** *(Live 3D Equalizer Demo)* | Live **2D Animated Equalizer** anchored along the center `2D f(x)` slice (`z = 0`), with spectral tilt line and peak pitch/cents callout (e.g. `97.14 Hz | G2 − 15¢`, linked to §9.4 chromatic pitch classes). | **3D Spectral Dispersion** radiating symmetrically (or waterfalling) across the floor from the center 2D EQ slice, with dispersion spread governed by wavetable size and inner/outer cavity bounds ($r$ vs. $R$). | Vibrant MiniMeters spectral curtains (deep violet → magenta → crimson peaks → bright cyan high-end shimmer) with vertical frequency gridlines. |
+
+### 10.3 Signal Sources & `5 · Mod & Logic` Integration
+
+1. **Deterministic Synth Spectrum (Default, Offline & `?static=1`-Safe):**
+   - Computes wavetable frames and real-time harmonic/FFT spectrum directly from the active Ramanujan Chime formula, partials `K`, `Order N`, and `sphereResonance` state inside `js/engine.js`—zero audio permissions needed, 100% deterministic.
+2. **Optional Live Audio / Demo Input (Fun Showcase Mode):**
+   - Optional Web Audio `AnalyserNode` hook (built-in Web Audio chime/synth preview or user microphone/line-in) driving the MiniMeters 3D Spectrogram floor live.
+3. **Modulation Coupling:**
+   - Floor `WT POS` locks natively to **`Slice z/R` (`Auto z(t)`)**—meaning all existing `5 · Mod & Logic` presets (`Auto z → Synth`, `Chime Fifths`, `Entangled Slice`, `Lock-V Breather`) immediately animate the 3D floor surface and travelling amber slice with zero extra wiring!
+   - Expose 2–3 minimal, GitWave-clean sculpting parameters (`WT Depth`, `Dispersion`, `Smooth` + `Wavetable / Spectrogram` mode toggle) inside a dedicated bottom-dock tab or clean viewport popover—keeping the Left Rack completely uncluttered.
+
+### 10.4 Suggested Next-Session Build Order
+1. [x] **Pure Math (`js/engine.js`):** Deterministic `floorField` (3D Wavetable + MiniMeters 3D Spectrogram), `freqToNoteCents`, zero-dep radix-2 `fftMag`, `audioDynamics` (RMS / Peak / Crest Factor), and logarithmic `floorZoomSec` / `floorZoomLogFromSec`.
+2. [x] **3D Cutaway Floor Mesh (`js/scene3d.js`):** GPU `BufferGeometry` ribbon surface + wireframe ribs + glowing golden `WT POS` slice + vertical MiniMeters 2D EQ curtain & spectral tilt line seated at `y = 0` inside the cutaway bowl.
+3. [x] **Studio Tab, Audio Sources & RX-Style Zoom (`js/floor-view.js`, `6 · Floor WT`, `? Guide` Ch 07):** MP3/WAV/OGG upload with true lookahead, `Sys Audio` loopback (`getDisplayMedia`), `♪ Tone`, `Mic`, BPM beat snaps, continuous `Zoom T` routable in `5 · Mod & Logic`, and 2D `PCM Groove` view.
+
+### 10.5 The Infinite Time-Domain Floor & Record-Needle Zoom Model (Wavelet Translation–Dilation)
+
+The audio file (or any continuous synth evolution) forms an **infinite 2D time-domain floor** $F(x, \tau)$ gliding beneath the stationary Hollow Sphere ($R, r$):
+
+- **Present Stylus (`z = 0`, `2D f(x)` Slice):** Translation $b = t_{\text{now}}$ — the record needle reading the groove.
+- **Continuous Logarithmic Time Zoom ($T_{\text{zoom}} \in [16\text{ ms}, 12\text{ s}]$):** Dilation $a = T_{\text{zoom}}$ controlling the apparent velocity of the floor through the invariant cavity:
+  $$\tau(z) = t_{\text{now}} + \frac{z}{2R}\,T_{\text{zoom}}, \qquad v_{\text{floor}} = \frac{2R}{T_{\text{zoom}}} \;\;(\text{sphere diameters / sec})$$
+- **Constant Cavity, Modulated Floor:** Because `Floor Zoom` (`floorZoomLog`) is registered as a first-class modulation target in **`5 · Mod & Logic`**, holding $(R, r)$ constant while modulating `Zoom T` elastically accelerates and decelerates the infinite floor through the needle—matching the Morlet translation–dilation frame $\psi_{a,b}(t) = a^{-1/2}\psi((t-b)/a)$ and transitioning seamlessly from macro 3D spectrogram terrain (`12 s`) down to RX 11-style micro-PCM discrete sample dots (`16 ms`).

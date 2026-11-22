@@ -2,7 +2,7 @@
   "name": "ramanujan-sphere",
   "version": "1.0.0",
   "private": true,
-  "description": "Ramanujan's Gift — zero-build static instrument with an agent interface (CLI + MCP) over one shared maths core.",
+  "description": "The Ramanujan Chime — zero-build static instrument with an agent interface (CLI + MCP) over one shared maths core.",
   "scripts": {
     "test": "node --test",
     "artifacts": "node scripts/gen-agent-artifacts.mjs",

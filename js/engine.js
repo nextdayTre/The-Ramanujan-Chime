@@ -913,6 +913,418 @@
     };
   }
 
+  // ---- §10 Chromatic Pitch/Cents & Cutaway Floor 3D Wavetable / MiniMeters Spectrogram ----
+  var NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  function freqToNoteCents(freqHz) {
+    if (!isFinite(freqHz) || freqHz <= 1e-3) {
+      return { freqHz: 0, midi: 0, note: '—', octave: 0, cents: 0, label: '—' };
+    }
+    var midiFloat = 69 + 12 * (Math.log(freqHz / 440) / Math.LN2);
+    var midi = Math.round(midiFloat);
+    var cents = Math.round((midiFloat - midi) * 100);
+    var pc = ((midi % 12) + 12) % 12;
+    var octave = Math.floor(midi / 12) - 1;
+    var note = NOTE_NAMES[pc] + String(octave);
+    var cSign = cents >= 0 ? '+' : '−';
+    var label = freqHz.toFixed(2) + 'Hz | ' + note + ' ' + cSign + ' ' + Math.abs(cents) + ' Cents';
+    return {
+      freqHz: Math.fround(freqHz),
+      midi: midi,
+      pitchClass: pc,
+      note: note,
+      octave: octave,
+      cents: cents,
+      label: label
+    };
+  }
+
+  function smoothArr1D(arr, passes) {
+    var n = arr.length;
+    var src = new Float32Array(arr);
+    var dst = new Float32Array(n);
+    for (var p = 0; p < passes; p++) {
+      for (var i = 0; i < n; i++) {
+        var a = src[i > 0 ? i - 1 : 0];
+        var b = src[i];
+        var c = src[i < n - 1 ? i + 1 : n - 1];
+        dst[i] = 0.25 * a + 0.5 * b + 0.25 * c;
+      }
+      var tmp = src; src = dst; dst = tmp;
+    }
+    return src;
+  }
+
+  // Zero-dependency radix-2 Cooley-Tukey FFT (Hann-windowed) for on-demand MP3/PCM spectral slices
+  var _fftCache = {};
+  function getFftTables(n) {
+    if (_fftCache[n]) return _fftCache[n];
+    var rev = new Uint16Array(n);
+    var bits = Math.round(Math.log(n) / Math.LN2);
+    for (var i = 0; i < n; i++) {
+      var x = i, r = 0;
+      for (var b = 0; b < bits; b++) { r = (r << 1) | (x & 1); x >>= 1; }
+      rev[i] = r;
+    }
+    var hann = new Float32Array(n);
+    for (var j = 0; j < n; j++) hann[j] = 0.5 * (1 - Math.cos(TAU * j / (n - 1)));
+    var cosT = new Float32Array(n >> 1);
+    var sinT = new Float32Array(n >> 1);
+    for (var k = 0; k < (n >> 1); k++) {
+      var a = -TAU * k / n;
+      cosT[k] = Math.cos(a);
+      sinT[k] = Math.sin(a);
+    }
+    var tbl = { rev: rev, hann: hann, cosT: cosT, sinT: sinT, re: new Float32Array(n), im: new Float32Array(n) };
+    _fftCache[n] = tbl;
+    return tbl;
+  }
+
+  function fftMag(pcm, startIdx, fftSize) {
+    var n = fftSize || 256;
+    var tbl = getFftTables(n);
+    var re = tbl.re, im = tbl.im, rev = tbl.rev, hann = tbl.hann;
+    var len = pcm ? pcm.length : 0;
+    var base = Math.floor(startIdx || 0);
+    for (var i = 0; i < n; i++) {
+      var idx = base + i;
+      var s = (idx >= 0 && idx < len) ? pcm[idx] : 0;
+      re[rev[i]] = s * hann[i];
+      im[rev[i]] = 0;
+    }
+    for (var size = 2; size <= n; size <<= 1) {
+      var half = size >> 1;
+      var step = n / size;
+      for (var st = 0; st < n; st += size) {
+        for (var k = 0; k < half; k++) {
+          var ti = k * step;
+          var wr = tbl.cosT[ti], wi = tbl.sinT[ti];
+          var i0 = st + k, i1 = i0 + half;
+          var tr = wr * re[i1] - wi * im[i1];
+          var tiVal = wr * im[i1] + wi * re[i1];
+          re[i1] = re[i0] - tr;
+          im[i1] = im[i0] - tiVal;
+          re[i0] += tr;
+          im[i0] += tiVal;
+        }
+      }
+    }
+    var halfN = n >> 1;
+    var out = new Float32Array(halfN);
+    var norm = 2.0 / (n * 0.5); // compensate for Hann coherent gain
+    for (var m = 0; m < halfN; m++) {
+      var mag = Math.sqrt(re[m] * re[m] + im[m] * im[m]) * norm;
+      var db = 20 * Math.log10(Math.max(1e-5, mag));
+      // Map [-66 dB .. 0 dB] -> [0 .. 1] cleanly (MiniMeters dynamic window)
+      out[m] = Math.fround(clamp((db + 66) / 66, 0, 1));
+    }
+    return out;
+  }
+
+  // Exact RMS, Peak & Crest Factor (Peak/RMS in dB) over a PCM window
+  function audioDynamics(pcm, startIdx, windowLen) {
+    var len = pcm ? pcm.length : 0;
+    var n = Math.max(1, Math.floor(windowLen || 512));
+    var base = Math.floor(startIdx || 0);
+    var sumSq = 0;
+    var peak = 0;
+    for (var i = 0; i < n; i++) {
+      var idx = base + i;
+      var v = (idx >= 0 && idx < len) ? pcm[idx] : 0;
+      var av = Math.abs(v);
+      if (av > peak) peak = av;
+      sumSq += v * v;
+    }
+    var rms = Math.sqrt(sumSq / n);
+    var rmsDb = rms > 1e-6 ? (20 * Math.log10(rms)) : -Infinity;
+    var peakDb = peak > 1e-6 ? (20 * Math.log10(peak)) : -Infinity;
+    var crestDb = (rms > 1e-6 && peak > 1e-6) ? (peakDb - rmsDb) : 0;
+    return {
+      rms: Math.fround(rms),
+      peak: Math.fround(peak),
+      rmsDb: isFinite(rmsDb) ? Math.fround(rmsDb) : -Infinity,
+      peakDb: isFinite(peakDb) ? Math.fround(peakDb) : -Infinity,
+      crestDb: Math.fround(Math.max(0, crestDb))
+    };
+  }
+
+  // Continuous logarithmic RX-style Floor Time Zoom: zoomLog in [0..1] <-> T in [16ms .. 12.0s]
+  var FLOOR_ZOOM_MIN_SEC = 0.016;
+  var FLOOR_ZOOM_MAX_SEC = 12.0;
+  var FLOOR_ZOOM_RATIO = FLOOR_ZOOM_MAX_SEC / FLOOR_ZOOM_MIN_SEC;
+
+  function floorZoomSec(zoomLog) {
+    var z = clamp(zoomLog == null ? 0.7295 : zoomLog, 0, 1);
+    return Math.fround(FLOOR_ZOOM_MIN_SEC * Math.pow(FLOOR_ZOOM_RATIO, z));
+  }
+
+  function floorZoomLogFromSec(sec) {
+    var s = clamp(sec || 2.0, FLOOR_ZOOM_MIN_SEC, FLOOR_ZOOM_MAX_SEC);
+    return Math.fround(Math.log(s / FLOOR_ZOOM_MIN_SEC) / Math.log(FLOOR_ZOOM_RATIO));
+  }
+
+  function fmtZoomSec(sec) {
+    if (!isFinite(sec)) return '2.00s';
+    if (sec < 0.1) return Math.round(sec * 1000) + 'ms';
+    if (sec < 1.0) return Math.round(sec * 1000) + 'ms';
+    return sec.toFixed(2) + 's';
+  }
+
+  function floorField(state, playT, opts) {
+    opts = opts || {};
+    var res = sphereResonance(state, playT || 0);
+    var R = Math.fround(Math.max(0.2, res.R));
+    var rIn = Math.fround(clamp(res.rIn, 0, R));
+    var eta = res.eta;
+    var alpha = res.cavityActive && res.stretchRatio ? res.stretchRatio : 1.0;
+    var wallMult = res.wallRatio || 1.0;
+
+    var mode = opts.mode || state.floorMode || 'wavetable'; // 'wavetable' | 'spectrogram'
+    var slices = clamp(opts.slices || 28, 8, 48) | 0;
+    var bins = clamp(opts.bins || 72, 24, 128) | 0;
+    var size = clamp(opts.size != null ? opts.size : (state.floorSize != null ? state.floorSize : 0.94), 0.35, 1.0);
+    var depth = clamp(opts.depth != null ? opts.depth : (state.floorDepth != null ? state.floorDepth : 0.68), 0.1, 1.35);
+    var smooth = clamp(opts.smooth != null ? opts.smooth : (state.floorSmooth != null ? state.floorSmooth : 0.52), 0.0, 1.0);
+
+    var rEff = R * size;
+    var zSpan = rEff * 0.92;
+    var activeZNorm = clamp(res.slice ? res.slice.zNorm : 0, -1, 1);
+    var activeZ = activeZNorm * zSpan;
+
+    var f = Math.max(0.25, state.f || 1);
+    var K = clamp(Math.round(state.K != null ? state.K : 6), 1, 14);
+    var ph = state.phaseRad || 0;
+    var N = clamp(Math.round(state.orderN || 16), 5, 64);
+    var amp = clamp(state.amp || 1, 0.1, 2.5);
+    var t = playT || 0;
+
+    var rows = new Array(slices);
+    var rowZ = new Float32Array(slices);
+    var rowHalfW = new Float32Array(slices);
+    var rowInCavity = new Uint8Array(slices);
+    var eqCenter = new Float32Array(bins);
+    var tiltLine = new Float32Array(bins);
+    var activeSlice = new Float32Array(bins);
+    var peakFreqHz = 0;
+    var peakMag = -1;
+    var peakBin = 0;
+
+    var minHz = 32;
+    var maxHz = 12000;
+    var logRatio = Math.log(maxHz / minHz);
+
+    function binToHz(b) {
+      return minHz * Math.exp((b / (bins - 1)) * logRatio);
+    }
+
+    if (mode === 'spectrogram') {
+      // ---- Mode 2: MiniMeters-Style 2D Animated Equalizer (z = 0) + 3D Cavity Dispersion / BPM Timeline ----
+      var temporalRows = opts.temporalRows; // Optional [slices][bins]: index 0 = fading past (-z), mid = present (0), last = incoming future (+z)
+      var audioBins = opts.audioBins;
+      var hasTemporal = !!(temporalRows && temporalRows.length === slices);
+
+      if (hasTemporal) {
+        var centerRow = opts.presentRow || temporalRows[Math.floor(slices * 0.5)];
+        for (var tbi = 0; tbi < bins; tbi++) {
+          var vNow = clamp(centerRow[tbi] || 0, 0, 1);
+          eqCenter[tbi] = Math.fround(vNow);
+          if (vNow > peakMag) { peakMag = vNow; peakBin = tbi; peakFreqHz = binToHz(tbi); }
+        }
+      } else if (audioBins && audioBins.length >= 16) {
+        for (var bi = 0; bi < bins; bi++) {
+          var fHz = binToHz(bi);
+          var nyq = opts.sampleRate ? opts.sampleRate * 0.5 : 22050;
+          var idxF = clamp((fHz / nyq) * (audioBins.length - 1), 0, audioBins.length - 1);
+          var i0 = Math.floor(idxF);
+          var i1 = Math.min(audioBins.length - 1, i0 + 1);
+          var fracI = idxF - i0;
+          var rawA = (audioBins[i0] * (1 - fracI) + audioBins[i1] * fracI) / 255;
+          var valA = Math.pow(clamp(rawA, 0, 1), 1.15);
+          eqCenter[bi] = Math.fround(valA);
+          if (valA > peakMag) { peakMag = valA; peakBin = bi; peakFreqHz = fHz; }
+        }
+      } else {
+        // Deterministic harmonic synth spectrum aligned to chromatic Z_12 & dual-sphere radial modes
+        var semiShift = (ph / PI) * 6; // Phase phi transposes across chromatic pitch classes!
+        var baseHz = 98.0 * f * Math.pow(2, semiShift / 12); // Anchored near G2 (98 Hz)
+        var peaks = [];
+        // Outer sphere fundamental + K harmonics
+        for (var h = 1; h <= Math.min(K + 2, 14); h++) {
+          var hAmp = (1.0 / Math.pow(h, 0.58)) * (0.78 + 0.22 * Math.cos(TAU * t * (1 + 0.25 * h) + ph * 0.5 * h));
+          peaks.push({ hz: baseHz * h, w: 0.042 + 0.008 * h, a: hAmp * Math.min(1.2, 0.72 + 0.28 * amp) });
+        }
+        // Inner cavity OSC B coupled modal resonances (alpha = R/r)
+        if (res.cavityActive) {
+          for (var c = 1; c <= 4; c++) {
+            var cAmp = (0.68 / Math.pow(c, 0.65)) * (0.72 + 0.28 * Math.sin(TAU * t * alpha * 0.5 + c));
+            peaks.push({ hz: baseHz * alpha * c, w: 0.036, a: cAmp });
+          }
+          // Shell wall breathing mode (1 / (1 - eta))
+          peaks.push({ hz: baseHz * wallMult, w: 0.055, a: 0.52 * (0.8 + 0.2 * Math.cos(TAU * t * 2)) });
+        }
+        // Order-N high-frequency metallic chime overtones
+        var shimmerHz = baseHz * Math.max(4, N * 0.5);
+        peaks.push({ hz: shimmerHz, w: 0.085, a: 0.36 + 0.16 * Math.sin(TAU * t * 3 + ph) });
+        peaks.push({ hz: shimmerHz * 1.498, w: 0.095, a: 0.28 + 0.14 * Math.cos(TAU * t * 2.5) });
+
+        for (var b = 0; b < bins; b++) {
+          var hz = binToHz(b);
+          var logHz = Math.log(hz);
+          var sum = 0;
+          for (var pk = 0; pk < peaks.length; pk++) {
+            var d = (logHz - Math.log(Math.max(16, peaks[pk].hz))) / peaks[pk].w;
+            if (Math.abs(d) < 4.5) {
+              sum += peaks[pk].a * Math.exp(-0.5 * d * d);
+            }
+          }
+          // Gentle high-frequency harmonic shimmer floor (MiniMeters sparkle)
+          var hiRatio = b / (bins - 1);
+          var sparkle = hiRatio > 0.45
+            ? (0.14 + 0.18 * Math.pow(Math.sin(b * 1.7 + TAU * t * 2 + ph), 2)) * (hiRatio - 0.35) * (1 - Math.pow(hiRatio, 5))
+            : 0;
+          var mag = clamp(Math.tanh((sum + sparkle) * 0.85), 0, 1);
+          eqCenter[b] = Math.fround(mag);
+          if (mag > peakMag) { peakMag = mag; peakBin = b; peakFreqHz = hz; }
+        }
+      }
+
+      // Spectral tilt reference line (smooth linear slope across log frequency, MiniMeters style)
+      for (var tb = 0; tb < bins; tb++) {
+        var uTilt = tb / (bins - 1);
+        tiltLine[tb] = Math.fround(clamp(0.14 + 0.56 * uTilt, 0, 1));
+      }
+
+      // 3D Cavity Dispersion / Constant-BPM Time Window T across the sphere floor (z = 0 is Present!)
+      // When temporalRows are supplied (MP3 / System Audio BPM timeline):
+      //   z > 0 = Incoming future approaching the 2D f(x) slice
+      //   z = 0 = Exact Present (2D MiniMeters Equalizer)
+      //   z < 0 = Fading past dissipating away through the hollow sphere cavity
+      var dispSigma = 0.28 + smooth * 0.78;
+      for (var s = 0; s < slices; s++) {
+        var v = slices > 1 ? (s / (slices - 1)) * 2 - 1 : 0; // -1 (back / past) .. +1 (front / incoming)
+        var z = v * zSpan;
+        var halfW = Math.sqrt(Math.max(0.01, rEff * rEff - z * z));
+        var inCav = res.cavityActive && Math.abs(z) <= rIn;
+        rowZ[s] = Math.fround(z);
+        rowHalfW[s] = Math.fround(halfW);
+        rowInCavity[s] = inCav ? 1 : 0;
+
+        var row = new Float32Array(bins);
+        var distZ = Math.abs(v);
+        var envZ = hasTemporal
+          ? (0.34 + 0.66 * Math.exp(-0.5 * Math.pow(distZ / Math.max(0.35, dispSigma), 2)))
+          : Math.exp(-0.5 * Math.pow(distZ / dispSigma, 2));
+        var cavityBoost = inCav ? (1.0 + 0.14 * Math.cos(distZ * PI * alpha)) : 1.0;
+        var ripplePhase = distZ * 4.5 - TAU * t * 1.5;
+        var srcRow = hasTemporal ? temporalRows[s] : eqCenter;
+
+        for (var j = 0; j < bins; j++) {
+          var u = j / (bins - 1);
+          var travel = hasTemporal ? 1.0 : (0.86 + 0.14 * Math.cos(ripplePhase + u * 5.0));
+          var edgeTaper = Math.sin(u * PI);
+          var taper = Math.pow(Math.max(0, edgeTaper), 0.14);
+          row[j] = Math.fround(clamp((srcRow[j] || 0) * envZ * cavityBoost * travel * taper * depth, 0, 1.35));
+        }
+        rows[s] = row;
+      }
+
+      for (var as = 0; as < bins; as++) activeSlice[as] = eqCenter[as];
+    } else {
+      // ---- Mode 1: GitWave-Inspired 3D Volumetric Wavetable Floor (Proportional to R, r, Z_12) ----
+      var smoothPasses = Math.round(smooth * 5);
+      var waveTime = TAU * t;
+      var activeRowIdxF = ((activeZNorm + 1) * 0.5) * (slices - 1);
+
+      for (var si = 0; si < slices; si++) {
+        var vz = slices > 1 ? (si / (slices - 1)) * 2 - 1 : 0;
+        var zPos = vz * zSpan;
+        var hw = Math.sqrt(Math.max(0.01, rEff * rEff - zPos * zPos));
+        var inC = res.cavityActive && Math.abs(zPos) <= rIn;
+        rowZ[si] = Math.fround(zPos);
+        rowHalfW[si] = Math.fround(hw);
+        rowInCavity[si] = inC ? 1 : 0;
+
+        var rawRow = new Float32Array(bins);
+        var sliceMorph = vz * PI * (0.65 + 0.35 * eta);
+        var fmIdx = 0.35 + 0.55 * (K / 14) + (inC ? 0.25 : 0);
+
+        for (var bi2 = 0; bi2 < bins; bi2++) {
+          var u2 = bi2 / (bins - 1);
+          var theta = u2 * TAU * Math.max(1, Math.min(4, f)) + ph + sliceMorph;
+          var modOsc = Math.sin(theta * Math.max(1, alpha * 0.75) - waveTime + vz * 2.4);
+          var carrier = Math.sin(theta + fmIdx * modOsc + waveTime * 0.5);
+          var oddHarm = Math.sin(theta * 3 - sliceMorph * 1.4) * (0.28 * (K / 14));
+          var fifthHarm = Math.sin(theta * 1.5 + waveTime) * (inC ? 0.32 : 0.12);
+          var bell = Math.pow(Math.sin(u2 * PI), 0.32); // Clean pinned edges along circular sphere rim
+          var yVal = (carrier * 0.68 + oddHarm + fifthHarm) * bell;
+          rawRow[bi2] = Math.fround(clamp(yVal, -1, 1));
+        }
+
+        var smRow = smoothPasses > 0 ? smoothArr1D(rawRow, smoothPasses) : rawRow;
+        for (var k = 0; k < bins; k++) {
+          smRow[k] = Math.fround(smRow[k] * depth);
+        }
+        rows[si] = smRow;
+      }
+
+      // Interpolate exact Active WT Pos slice at activeZNorm (synced to Auto z(t)!)
+      var r0 = clamp(Math.floor(activeRowIdxF), 0, slices - 1);
+      var r1 = Math.min(slices - 1, r0 + 1);
+      var rf = activeRowIdxF - r0;
+      for (var ak = 0; ak < bins; ak++) {
+        activeSlice[ak] = Math.fround(rows[r0][ak] * (1 - rf) + rows[r1][ak] * rf);
+      }
+
+      // Fundamental pitch of the active wavetable carrier (chromatic Z_12)
+      var wtSemi = (ph / PI) * 6;
+      peakFreqHz = 98.0 * f * Math.pow(2, wtSemi / 12);
+    }
+
+    var pitchInfo = freqToNoteCents(peakFreqHz);
+    var bpm = clamp(opts.bpm || state.floorBpm || 120, 40, 240);
+    var windowBeats = clamp(opts.windowBeats || state.floorBeats || 4, 0.25, 16);
+    var windowSec = opts.windowSec != null
+      ? clamp(opts.windowSec, FLOOR_ZOOM_MIN_SEC, FLOOR_ZOOM_MAX_SEC)
+      : (state.floorZoomLog != null ? floorZoomSec(state.floorZoomLog) : ((60 * windowBeats) / bpm));
+    var cavityWindowSec = windowSec * eta;
+    var floorVelocity = (2 * R) / Math.max(1e-4, windowSec); // sphere diameters/sec past z=0 needle
+
+    return {
+      mode: mode,
+      R: R,
+      rIn: rIn,
+      rEff: Math.fround(rEff),
+      eta: eta,
+      alpha: alpha,
+      size: size,
+      depth: depth,
+      smooth: smooth,
+      slices: slices,
+      bins: bins,
+      zSpan: Math.fround(zSpan),
+      activeZNorm: Math.fround(activeZNorm),
+      activeZ: Math.fround(activeZ),
+      rows: rows,
+      rowZ: rowZ,
+      rowHalfW: rowHalfW,
+      rowInCavity: rowInCavity,
+      activeSlice: activeSlice,
+      eqCenter: eqCenter,
+      tiltLine: tiltLine,
+      peakBin: peakBin,
+      pitch: pitchInfo,
+      syzygy: res.syzygy,
+      bpm: bpm,
+      windowBeats: windowBeats,
+      windowSec: Math.fround(windowSec),
+      cavityWindowSec: Math.fround(cavityWindowSec),
+      floorVelocity: Math.fround(floorVelocity),
+      dynamics: opts.dynamics || null,
+      hasLookahead: !!opts.hasLookahead,
+      sourceLabel: opts.sourceLabel || 'SYNTH'
+    };
+  }
+
   var Harmony = {
     PRECISION: 'float32',
     engine: {
@@ -932,6 +1344,13 @@
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,
+      freqToNoteCents: freqToNoteCents,
+      fftMag: fftMag,
+      audioDynamics: audioDynamics,
+      floorZoomSec: floorZoomSec,
+      floorZoomLogFromSec: floorZoomLogFromSec,
+      fmtZoomSec: fmtZoomSec,
+      floorField: floorField,
       fmtNum: fmtNum, bitInspect: bitInspect,
       ramanujanSeries: ramanujanSeries,
       initSecp: initSecp, secpSeq: secpSeq,
