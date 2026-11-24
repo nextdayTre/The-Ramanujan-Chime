@@ -19,7 +19,6 @@
       Harmonics2D = Harmony.Harmonics2D,
       Frobenius = Harmony.Frobenius,
       BitWaveFeed = Harmony.BitWaveFeed,
-      SynthLCD = Harmony.SynthLCD,
       FloorView = Harmony.FloorView,
       ModMatrix = Harmony.ModMatrix,
       ChimeRack = Harmony.ChimeRack,
@@ -70,8 +69,7 @@
     floorBpm: 120,         // §10 tempo (BPM) governing BPM beat snaps
     floorBeats: 4,         // §10 default beat snap (1 Bar = 4 beats)
     floorZoomLog: 0.7295,  // §10.5 continuous logarithmic RX Time Zoom [0..1] <-> [16ms..12s] (routable in Mod & Logic)
-    floorScopeView: 'eq',  // §10.5 'eq' | 'pcm' | 'bitwave' | 'lcd' | 'dual'
-    lcdCoalesce: 0.34,     // Harmor / FAS System A Travelling Focus Beam coalesce [0..1] (routable in Mod & Logic)
+    floorScopeView: 'eq',  // §10.5 'eq' (MiniMeters EQ / Active Slice) | 'pcm' (RX 11 PCM Needle Groove)
     formulas: {
       x: 'r*cos(TAU*f*t+phase)',
       y: 'r*sin(TAU*f*t+phase)',
@@ -119,7 +117,6 @@
   var dirty = 0;
   var lastRendered = -1;
   var slots = null;
-  var slotStages = Object.create(null);
   var isRestoringSlot = false;
   var copyArmed = false;
   var popoutWin = null;
@@ -1654,11 +1651,7 @@
     if ($('floorSmoothLbl')) $('floorSmoothLbl').textContent = isSpec ? 'Disp' : 'Smooth';
     if ($('floorModeTag')) $('floorModeTag').textContent = isSpec ? 'MINIMETERS 3D' : 'WAVETABLE';
     if ($('floorScopeTitle')) {
-      if (state.floorScopeView === 'lcd') {
-        $('floorScopeTitle').innerHTML = 'Synth LCD &mdash; Fixed-Interval Base58 / Hex Spectrogram';
-      } else if (state.floorScopeView === 'dual') {
-        $('floorScopeTitle').innerHTML = 'Dual &mdash; BitWave Waveform + Base58 Synth LCD';
-      } else if (state.floorScopeView === 'bitwave') {
+      if (state.floorScopeView === 'bitwave') {
         $('floorScopeTitle').innerHTML = 'BitWave 2D Register &mdash; Monotone-Cubic Spline (0x8 Zero-Crossing)';
       } else if (state.floorScopeView === 'pcm') {
         $('floorScopeTitle').innerHTML = 'RX 11-Style 2D PCM Needle Groove &mdash; Constant Cavity &amp; Zoom T';
@@ -1669,7 +1662,6 @@
       }
     }
     syncBitWaveUI();
-    syncLcdUI();
     if ($('floorDepthSlider')) $('floorDepthSlider').value = String(state.floorDepth);
     if ($('floorDepthOut')) $('floorDepthOut').textContent = Math.round(state.floorDepth * 100) + '%';
     if ($('floorSmoothSlider')) $('floorSmoothSlider').value = String(state.floorSmooth);
@@ -2197,229 +2189,9 @@
           $('floorBwBar').hidden = true;
         }
       }
-      if ($('floorLcdBar') && (state.floorScopeView === 'lcd' || state.floorScopeView === 'dual')) {
-        $('floorLcdBar').hidden = false;
-      }
       syncFloorUI();
     });
   });
-
-  // ---- Harmor / FAS Synthetic Spectral LCD & Bitcoin Keypair Lifecycle Pipeline ----
-  function hexToNibblesArr(hexStr) {
-    var clean = String(hexStr || '').trim().replace(/^0[xX]/, '').toUpperCase();
-    var out = [];
-    var cap = Math.min(clean.length, 64);
-    for (var i = 0; i < cap; i++) {
-      var v = parseInt(clean.charAt(i), 16);
-      if (isFinite(v)) out.push(v);
-    }
-    return out;
-  }
-
-  function syncLcdUI() {
-    if (!SynthLCD) return;
-    var cfg = SynthLCD.getConfig();
-    var bar = $('floorLcdBar');
-    var barOpen = !!(bar && !bar.hidden);
-    if ($('btnFloorLcdToggle')) $('btnFloorLcdToggle').classList.toggle('active', cfg.enabled || barOpen);
-    var planeBtn = $('btnLcdPlaneToggle');
-    if (planeBtn) {
-      planeBtn.classList.toggle('active', cfg.enabled);
-      planeBtn.innerHTML = cfg.enabled ? '&#9679; Sphere LCD On' : '&#9679; Sphere LCD';
-    }
-    document.querySelectorAll('.lcd-enc-btn[data-lcdenc]').forEach(function (b) {
-      b.classList.toggle('active', b.getAttribute('data-lcdenc') === cfg.encoding);
-    });
-    if ($('btnLcdBinary')) $('btnLcdBinary').classList.toggle('active', !!cfg.harmorBinary);
-    var coal = state.lcdCoalesce != null ? state.lcdCoalesce : cfg.coalesce;
-    if ($('lcdCoalesceSlider') && document.activeElement !== $('lcdCoalesceSlider')) {
-      $('lcdCoalesceSlider').value = String(coal);
-    }
-    if ($('lcdCoalesceOut')) $('lcdCoalesceOut').textContent = Math.round(coal * 100) + '%';
-    if ($('lcdRowLbl') && cfg.row) {
-      var shortB58 = cfg.row.base58 ? (cfg.row.base58.slice(0, 10) + '…') : cfg.row.label;
-      $('lcdRowLbl').textContent = (cfg.rowIndex + 1) + '/' + cfg.rowCount + ' · ' + shortB58;
-      $('lcdRowLbl').title = cfg.sourceLabel + ' — ' + cfg.row.label + ' (' + cfg.row.base58 + ')';
-    }
-    document.querySelectorAll('.lcd-stage-btn[data-lcdstage]').forEach(function (b) {
-      b.classList.toggle('active', b.getAttribute('data-lcdstage') === cfg.stageId);
-    });
-  }
-
-  function applyLifecycleStage(stageId, opts) {
-    if (!SynthLCD) return;
-    opts = opts || {};
-    var def = SynthLCD.STAGE_DEFS.find(function (s) { return s.id === stageId; }) || SynthLCD.STAGE_DEFS[5];
-    var nextEnc = opts.keepEncoding ? SynthLCD.getConfig().encoding : def.lcdMode;
-    SynthLCD.setConfig({ stageId: def.id, encoding: nextEnc, enabled: opts.enablePlane !== false });
-    var hex = SynthLCD.getStageHex(def.id);
-    if (BitWaveFeed && hex) {
-      BitWaveFeed.ingest(hex, { name: def.name, transport: 'lifecycle', preserveSelection: false });
-    }
-    if (opts.openDual !== false) {
-      state.floorScopeView = def.id === 'base58' ? 'dual' : 'dual';
-    }
-    if (opts.focusFront && Scene3D && Scene3D.setCameraView) {
-      Scene3D.setCameraView('front', state);
-    }
-    syncHudToggles();
-    syncFloorUI();
-    bump();
-  }
-
-  function refreshLifecycleRackStages() {
-    if (!SynthLCD) return;
-    var row = SynthLCD.getCurrentRow();
-    if (!row) return;
-    var defs = SynthLCD.STAGE_DEFS;
-    for (var i = 0; i < defs.length; i++) {
-      var d = defs[i];
-      var hx = SynthLCD.getStageHex(d.id);
-      slotStages[d.slot] = {
-        stageId: d.id,
-        short: d.short,
-        name: d.name,
-        color: d.color,
-        hex: hx,
-        nibbles: hexToNibblesArr(hx),
-        text: d.id === 'base58' ? row.base58 : hx,
-        encoding: d.lcdMode,
-        isLcd: d.id === 'base58',
-        rowLabel: row.label
-      };
-    }
-    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
-  }
-
-  function populateLifecycleRack() {
-    if (!SynthLCD || !slots) return;
-    var defs = SynthLCD.STAGE_DEFS;
-    var stagePresets = [12, 12, 12, 12, 12, 12];
-    var stageRIn = [0.22, 0.35, 0.50, 0.62, 0.71, 0.45];
-    for (var i = 0; i < defs.length; i++) {
-      var slotKey = defs[i].slot;
-      if (SLOT_ORDER.indexOf(slotKey) < 0) {
-        SLOT_ORDER.push(slotKey);
-      }
-      var snap = snapshotFromPreset(stagePresets[i], { rIn: stageRIn[i], ph: i * 30 });
-      if (snap) slots[slotKey] = snap;
-    }
-    refreshLifecycleRackStages();
-    SynthLCD.setConfig({ enabled: true, stageId: 'base58', encoding: 'base58' });
-    state.floorScopeView = 'dual';
-    selectSlot('F');
-    var fHex = SynthLCD.getStageHex('base58');
-    if (BitWaveFeed && fHex) BitWaveFeed.ingest(fHex, { name: 'Base58 Synth LCD', transport: 'lifecycle' });
-    syncFloorUI();
-    if (ChimeRack && ChimeRack.setView) ChimeRack.setView('rack');
-    bump();
-  }
-
-  if ($('btnFloorLcdToggle')) {
-    $('btnFloorLcdToggle').addEventListener('click', function () {
-      var bar = $('floorLcdBar');
-      if (!bar) return;
-      var willShow = bar.hidden;
-      bar.hidden = !willShow;
-      if (willShow && state.floorScopeView !== 'lcd' && state.floorScopeView !== 'dual') {
-        state.floorScopeView = 'dual';
-      }
-      syncFloorUI();
-    });
-  }
-  if ($('btnLcdPlaneToggle')) {
-    $('btnLcdPlaneToggle').addEventListener('click', function () {
-      if (!SynthLCD) return;
-      var next = !SynthLCD.isEnabled();
-      SynthLCD.setConfig({ enabled: next });
-      if (next) {
-        if (Scene3D && Scene3D.setCameraView) Scene3D.setCameraView('front', state);
-        if (state.floorScopeView !== 'lcd' && state.floorScopeView !== 'dual') {
-          state.floorScopeView = 'dual';
-        }
-      }
-      syncHudToggles();
-      syncFloorUI();
-      bump();
-    });
-  }
-  document.querySelectorAll('.lcd-enc-btn[data-lcdenc]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (!SynthLCD) return;
-      SynthLCD.setConfig({ encoding: btn.getAttribute('data-lcdenc') || 'base58' });
-      if (state.floorScopeView !== 'lcd' && state.floorScopeView !== 'dual') {
-        state.floorScopeView = 'lcd';
-      }
-      syncFloorUI();
-      bump();
-    });
-  });
-  if ($('btnLcdBinary')) {
-    $('btnLcdBinary').addEventListener('click', function () {
-      if (!SynthLCD) return;
-      SynthLCD.setConfig({ harmorBinary: !SynthLCD.getConfig().harmorBinary });
-      syncFloorUI();
-      bump();
-    });
-  }
-  if ($('lcdCoalesceSlider')) {
-    $('lcdCoalesceSlider').addEventListener('input', function () {
-      var v = Engine.clamp(parseFloat($('lcdCoalesceSlider').value) || 0, 0, 1);
-      state.lcdCoalesce = v;
-      if (SynthLCD) SynthLCD.setConfig({ coalesce: v });
-      if (ModMatrix && ModMatrix.captureBase) ModMatrix.captureBase(state, 'lcdCoalesce');
-      syncLcdUI();
-      bump();
-    });
-  }
-  if ($('btnLcdCsvUpload') && $('floorCsvFileInput')) {
-    $('btnLcdCsvUpload').addEventListener('click', function () {
-      bwAutoSync = false;
-      $('floorCsvFileInput').click();
-    });
-    $('floorCsvFileInput').addEventListener('change', function () {
-      var f = $('floorCsvFileInput').files && $('floorCsvFileInput').files[0];
-      $('floorCsvFileInput').value = '';
-      if (!f || !SynthLCD) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        var res = SynthLCD.loadCsv(String(reader.result || ''), f.name);
-        if (res.ok) {
-          if (Object.keys(slotStages).length) refreshLifecycleRackStages();
-          applyLifecycleStage(SynthLCD.getConfig().stageId, { enablePlane: true, openDual: true });
-        } else if ($('lcdRowLbl')) {
-          $('lcdRowLbl').textContent = 'CSV err: ' + (res.error || 'invalid');
-        }
-      };
-      reader.readAsText(f);
-    });
-  }
-  if ($('btnLcdRowPrev')) {
-    $('btnLcdRowPrev').addEventListener('click', function () {
-      if (!SynthLCD) return;
-      SynthLCD.stepRow(-1);
-      if (Object.keys(slotStages).length) refreshLifecycleRackStages();
-      applyLifecycleStage(SynthLCD.getConfig().stageId, { keepEncoding: true, enablePlane: SynthLCD.isEnabled() });
-    });
-  }
-  if ($('btnLcdRowNext')) {
-    $('btnLcdRowNext').addEventListener('click', function () {
-      if (!SynthLCD) return;
-      SynthLCD.stepRow(1);
-      if (Object.keys(slotStages).length) refreshLifecycleRackStages();
-      applyLifecycleStage(SynthLCD.getConfig().stageId, { keepEncoding: true, enablePlane: SynthLCD.isEnabled() });
-    });
-  }
-  document.querySelectorAll('.lcd-stage-btn[data-lcdstage]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      applyLifecycleStage(btn.getAttribute('data-lcdstage'), { enablePlane: true, openDual: true, focusFront: true });
-    });
-  });
-  if ($('btnLcdSendRack')) {
-    $('btnLcdSendRack').addEventListener('click', function () {
-      populateLifecycleRack();
-    });
-  }
   if ($('floorBpmInput')) {
     $('floorBpmInput').addEventListener('input', function () {
       var b = parseFloat($('floorBpmInput').value);
@@ -2713,14 +2485,6 @@
     state.activeSlot = targetSlot;
     Lissajous2D.clearTrail();
     applySnapshot(slots[targetSlot]);
-    if (slotStages[targetSlot] && SynthLCD) {
-      var stMeta = slotStages[targetSlot];
-      SynthLCD.setConfig({ stageId: stMeta.stageId, encoding: stMeta.encoding, enabled: true });
-      if (BitWaveFeed && stMeta.hex) {
-        BitWaveFeed.ingest(stMeta.hex, { name: stMeta.name, transport: 'lifecycle', preserveSelection: false });
-      }
-      syncLcdUI();
-    }
     syncSlotUI();
     if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
   }
@@ -2774,7 +2538,6 @@
     if (idx < 0) return false;
     SLOT_ORDER.splice(idx, 1);
     delete slots[slotKey];
-    delete slotStages[slotKey];
     if (state.activeSlot === slotKey) {
       var fallback = SLOT_ORDER[Math.max(0, idx - 1)] || 'A';
       state.activeSlot = fallback;
@@ -3586,7 +3349,6 @@
       ChimeRack.init({
         getSlots: function () { return slots; },
         getSlotOrder: function () { return SLOT_ORDER; },
-        getSlotStages: function () { return slotStages; },
         getActiveSlot: function () { return state.activeSlot; },
         selectSlot: selectSlot,
         spawnChime: spawnChime,

@@ -958,127 +958,6 @@
     }
   }
 
-  // ---- Harmor / FAS Synthetic Spectral LCD 2D Scope (and Dual BitWave + LCD Overlay!) ----
-  function drawSynthLcdScope(state, field, w, h, harmor, overlayBitWave) {
-    var lcd = Harmony.SynthLCD;
-    if (!lcd) return;
-    var cfg = lcd.getConfig();
-    var hBin = cfg.harmorBinary || harmor;
-    var coal = state.lcdCoalesce != null ? state.lcdCoalesce : cfg.coalesce;
-    var playT = state.playT || 0;
-    var data = lcd.resolveLcdData(state, playT);
-
-    // Pull active BitWave nibbles (either from live feed or derived from active hex payload)
-    var bwMod = Harmony.BitWaveFeed;
-    var fd = (bwMod && typeof bwMod.getFeed === 'function') ? bwMod.getFeed() : null;
-    var nibbles = null;
-    if (fd && fd.active && fd.activeNibbles && fd.activeNibbles.length >= 2) {
-      nibbles = fd.activeNibbles;
-    } else if (data.hex) {
-      nibbles = [];
-      for (var ni = 0; ni < Math.min(data.hex.length, 64); ni++) {
-        nibbles.push(parseInt(data.hex.charAt(ni), 16) || 0);
-      }
-    }
-
-    var padL = 34, padR = 10, padT = 17, padB = 18;
-    var plotW = Math.max(24, w - padL - padR);
-    var plotH = Math.max(20, h - padT - padB);
-
-    ctx.fillStyle = hBin ? '#000000' : '#04080e';
-    ctx.fillRect(0, 0, w, h);
-
-    // Left frequency axis labels (Harmor partial bands: 6.4kHz top -> 440Hz bottom)
-    ctx.fillStyle = hBin ? 'rgba(56, 255, 114, 0.58)' : '#7c8aa0';
-    ctx.font = '8.5px "Cascadia Code", Consolas, monospace';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('6.4k', padL - 4, padT + 4);
-    ctx.fillText('1.7k', padL - 4, padT + plotH * 0.5);
-    ctx.fillText('440', padL - 4, padT + plotH - 4);
-
-    // Draw the Harmor-binarized fixed-interval Synthetic LCD matrix + Travelling Focus Beam
-    var drawRes = lcd.drawSwooshLcd(
-      ctx,
-      { x: padL, y: padT, w: plotW, h: plotH },
-      data,
-      playT,
-      {
-        coalesce: coal,
-        harmorBinary: hBin,
-        nibbles: nibbles,
-        fillBg: true
-      }
-    );
-
-    // Dual Mode: overlay the luminous BitWave binary/nibble monotone-cubic waveform right over the LCD!
-    if (overlayBitWave && nibbles && nibbles.length >= 2 && bwMod && typeof bwMod.sampleMonotone === 'function') {
-      var samples = Math.min(360, Math.max(96, Math.floor(plotW / 1.5)));
-      ctx.save();
-      ctx.strokeStyle = hBin ? 'rgba(255, 184, 77, 0.28)' : 'rgba(255, 184, 77, 0.30)';
-      ctx.lineWidth = 4.5;
-      ctx.beginPath();
-      for (var si = 0; si <= samples; si++) {
-        var u = si / samples;
-        var val = bwMod.sampleMonotone(nibbles, u); // [-1..1]
-        var wx = padL + u * plotW;
-        var wy = padT + (0.5 - val * 0.44) * plotH;
-        if (si === 0) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy);
-      }
-      ctx.stroke();
-
-      ctx.strokeStyle = '#ffb84d';
-      ctx.lineWidth = 1.65;
-      ctx.stroke();
-
-      // Active BitWave playhead dot on the Dual curve
-      var vNow = bwMod.sampleMonotone(nibbles, playT);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(padL + (((playT % 1) + 1) % 1) * plotW, padT + (0.5 - vNow * 0.44) * plotH, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Subtle aperture border
-    ctx.strokeStyle = hBin ? 'rgba(56, 255, 114, 0.32)' : 'rgba(77, 243, 221, 0.28)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(padL, padT, plotW, plotH);
-
-    // Top-left caption
-    ctx.font = '600 9.5px "Cascadia Code", Consolas, monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = hBin ? '#38ff72' : '#4df3dd';
-    var modeHdr = (overlayBitWave ? 'DUAL BITWAVE + SYNTH LCD' : 'SYNTH LCD SPECTROGRAM') +
-      ' [' + data.encoding.toUpperCase() + (hBin ? ' · 0/1' : '') + ']';
-    if (data.checksumValid === true) modeHdr += ' · ✓ SEAL';
-    ctx.fillText(modeHdr, padL + 2, 2);
-
-    // Top-right active slot character & coalesce readout
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffb84d';
-    var actCh = (drawRes && drawRes.activeChar) ? drawRes.activeChar : '—';
-    var actSlot = (drawRes ? drawRes.activeCharIdx + 1 : 1) + '/' + data.matrix.charCount;
-    ctx.fillText('[' + actCh + '] #' + actSlot + ' · FOCUS ' + Math.round(coal * 100) + '%', w - padR, 2);
-
-    // Bottom decoded text strip aligned under the fixed time-intervals
-    var chars = data.text;
-    var charCount = data.matrix.charCount;
-    var stride = data.matrix.stride;
-    var colW = plotW / data.matrix.cols;
-    ctx.font = '600 9px "Cascadia Code", Consolas, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    var stepC = charCount > 34 ? 2 : 1;
-    for (var ci = 0; ci < charCount; ci += stepC) {
-      var cx = padL + (ci * stride + 2.5) * colW;
-      var isHit = drawRes && ci === drawRes.activeCharIdx;
-      ctx.fillStyle = isHit ? '#ffb84d' : (hBin ? 'rgba(184, 255, 208, 0.80)' : '#9cb0c6');
-      ctx.fillText(chars.charAt(ci), cx, h - 2);
-    }
-  }
-
   function update(state, field) {
     if (!canvas || !ctx || !field) return;
     var w = canvas.clientWidth, h = canvas.clientHeight;
@@ -1097,10 +976,6 @@
     }
     if (state.floorScopeView === 'bitwave') {
       drawBitWaveScope(state, field, w, h, harmor);
-      return;
-    }
-    if (state.floorScopeView === 'lcd' || state.floorScopeView === 'dual') {
-      drawSynthLcdScope(state, field, w, h, harmor, state.floorScopeView === 'dual');
       return;
     }
 
