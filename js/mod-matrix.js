@@ -59,7 +59,8 @@
     a:               { key: 'a',               label: 'Decay a',    min: 0.15, max: 0.85, isInt: false, inputId: 'fractalA',        outId: 'fractalAOut',        fmt: function (v) { return v.toFixed(2); } },
     b:               { key: 'b',               label: 'Lacunarity b', min: 2,  max: 9,    isInt: true,  inputId: 'fractalB',        outId: 'fractalBOut',        fmt: function (v) { return String(Math.round(v)); } },
     n:               { key: 'n',               label: 'Ratio n',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioN',          outId: 'ratioNOut',          fmt: function (v) { return String(Math.round(v)); } },
-    floorZoomLog:    { key: 'floorZoomLog',    label: 'Floor Zoom', min: 0.0,  max: 1.0,  isInt: false, inputId: 'floorZoomSlider', outId: 'floorZoomOut',       fmt: function (v) { var E = Harmony.engine; return (E && E.fmtZoomSec && E.floorZoomSec) ? E.fmtZoomSec(E.floorZoomSec(v)) : v.toFixed(2); } }
+    floorZoomLog:    { key: 'floorZoomLog',    label: 'Floor Zoom', min: 0.0,  max: 1.0,  isInt: false, inputId: 'floorZoomSlider', outId: 'floorZoomOut',       fmt: function (v) { var E = Harmony.engine; return (E && E.fmtZoomSec && E.floorZoomSec) ? E.fmtZoomSec(E.floorZoomSec(v)) : v.toFixed(2); } },
+    lcdCoalesce:     { key: 'lcdCoalesce',     label: 'LCD Focus',  min: 0.0,  max: 1.0,  isInt: false, inputId: 'lcdCoalesceSlider', outId: 'lcdCoalesceOut',   fmt: function (v) { return Math.round(v * 100) + '%'; } }
   };
 
   function clamp(v, lo, hi) {
