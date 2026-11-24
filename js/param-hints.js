@@ -144,8 +144,9 @@
     orderN: {
       title: 'Order N · Cyclic Steps',
       accent: 'gold',
-      desc: 'Quantizes the path into N stepped points — prime N visits every step (jump stride uses slider n).',
+      desc: 'Quantizes the path into N stepped points — also drives search space N in Grover / Blocks.',
       check: function (ctx) {
+        if (hasIdent(ctx.formulas, 'N')) return { text: 'Active in patch formula', tone: 'active' };
         if (!ctx.strobeOn) return { text: 'Enable Order N HUD to strobe', tone: 'unused' };
         return ctx.orderDetail
           ? { text: ctx.orderDetail, tone: 'active' }

@@ -101,6 +101,139 @@
     return (2 / PI) * sum;
   }
 
+  // Grover amplitude-amplification & 3Blue1Brown colliding-blocks phase-space chords.
+  // Both share the exact unit-circle geometry X^2 + Y^2 = 1 with half-angle
+  // theta = asin(1 / sqrt(N)), alternating vertical Conjugate (P̄) wall/oracle flips
+  // (x, y) -> (x, -y) with slanted diffusion / momentum-conservation chords.
+  function groverVertexAngle(j, theta) {
+    var m = Math.floor(j / 2);
+    var mag = (2 * m + 1) * theta;
+    return (j % 2 === 1) ? -mag : mag;
+  }
+
+  function groverChord(t, N, K, isY) {
+    var nVal = Math.max(2, Number(N) || 16);
+    var steps = clamp(Math.round(K == null ? 3 : K), 1, 64);
+    var theta = Math.asin(1 / Math.sqrt(nVal));
+    var segs = 2 * steps;
+    var pos = clamp(t, 0, 1) * segs;
+    var j = Math.min(segs - 1, Math.floor(pos));
+    var s = pos - j;
+    var a0 = groverVertexAngle(j, theta);
+    var a1 = groverVertexAngle(j + 1, theta);
+    return isY
+      ? lerp(Math.sin(a0), Math.sin(a1), s)
+      : lerp(Math.cos(a0), Math.cos(a1), s);
+  }
+  function groverX(t, N, K) { return groverChord(t, N, K, false); }
+  function groverY(t, N, K) { return groverChord(t, N, K, true); }
+
+  function blocksVertexAngle(j, theta) {
+    if (j <= 0) return 0;
+    var pair = Math.ceil(j / 2);
+    return ((j % 2 === 1) ? 1 : -1) * 2 * pair * theta;
+  }
+
+  function blocksChord(t, N, K, isY) {
+    var nVal = Math.max(2, Number(N) || 11);
+    var theta = Math.asin(1 / Math.sqrt(nVal));
+    var maxBounces = Math.max(1, Math.floor(PI / theta));
+    var segs = (K == null || K <= 0)
+      ? maxBounces
+      : Math.min(maxBounces, Math.max(1, Math.round(K)));
+    var pos = clamp(t, 0, 1) * segs;
+    var j = Math.min(segs - 1, Math.floor(pos));
+    var s = pos - j;
+    var a0 = blocksVertexAngle(j, theta);
+    var a1 = blocksVertexAngle(j + 1, theta);
+    return isY
+      ? lerp(Math.sin(a0), Math.sin(a1), s)
+      : lerp(Math.cos(a0), Math.cos(a1), s);
+  }
+  function blocksX(t, N, K) { return blocksChord(t, N, K, false); }
+  function blocksY(t, N, K) { return blocksChord(t, N, K, true); }
+
+  function groverMetrics(N, K, playT, mode) {
+    var nVal = Math.max(2, Number(N) || 16);
+    var theta = Math.asin(1 / Math.sqrt(nVal));
+    var thetaDeg = theta * 180 / PI;
+    var approxOpt = (PI / 4) * Math.sqrt(nVal);
+    var optSteps = Math.max(1, Math.round(approxOpt - 0.5));
+    var peakProb = Math.pow(Math.sin((2 * optSteps + 1) * theta), 2);
+    var maxBounces = Math.max(1, Math.floor(PI / theta));
+    var tClamped = clamp(playT == null ? 0 : playT, 0, 1);
+
+    if (mode === 'blocks') {
+      var bSegs = (K == null || K <= 0) ? maxBounces : Math.min(maxBounces, Math.max(1, Math.round(K)));
+      var bPos = tClamped * bSegs;
+      var bSegIdx = Math.min(bSegs - 1, Math.floor(bPos));
+      var bCount = Math.min(bSegs, Math.floor(bPos + 0.5));
+      var by = blocksY(tClamped, nVal, K);
+      return {
+        mode: 'blocks',
+        N: nVal,
+        massRatio: nVal - 1,
+        thetaDeg: thetaDeg,
+        stepDeg: 2 * thetaDeg,
+        approxOpt: approxOpt,
+        optSteps: optSteps,
+        peakProb: peakProb,
+        maxBounces: maxBounces,
+        shownBounces: bSegs,
+        currentBounce: bCount,
+        phaseLabel: (bSegIdx % 2 === 0) ? 'Block Collision' : 'Wall Bounce (P̄)',
+        smallEnergy: clamp(by * by, 0, 1)
+      };
+    }
+
+    var steps = clamp(Math.round(K == null ? optSteps : K), 1, 64);
+    if (mode === 'orbit') {
+      var stepFloat = steps * tClamped;
+      var ang = (2 * stepFloat + 1) * theta;
+      var sVal = Math.sin(ang);
+      return {
+        mode: 'orbit',
+        N: nVal,
+        massRatio: nVal - 1,
+        thetaDeg: thetaDeg,
+        stepDeg: 2 * thetaDeg,
+        approxOpt: approxOpt,
+        optSteps: optSteps,
+        peakProb: peakProb,
+        maxBounces: maxBounces,
+        steps: steps,
+        currentStep: stepFloat,
+        phaseLabel: 'Continuous 2θ Rotation',
+        targetProb: clamp(sVal * sVal, 0, 1),
+        angleDeg: ang * 180 / PI
+      };
+    }
+
+    // Default: 'chords' (alternating Oracle P̄ vertical flip & Diffusion slanted reflection)
+    var gSegs = 2 * steps;
+    var gPos = tClamped * gSegs;
+    var gSegIdx = Math.min(gSegs - 1, Math.floor(gPos));
+    var nearestV = Math.min(gSegs, Math.floor(gPos + 0.5));
+    var vAng = groverVertexAngle(nearestV, theta);
+    var vSin = Math.sin(vAng);
+    return {
+      mode: 'chords',
+      N: nVal,
+      massRatio: nVal - 1,
+      thetaDeg: thetaDeg,
+      stepDeg: 2 * thetaDeg,
+      approxOpt: approxOpt,
+      optSteps: optSteps,
+      peakProb: peakProb,
+      maxBounces: maxBounces,
+      steps: steps,
+      currentStep: Math.floor(nearestV / 2),
+      phaseLabel: (gSegIdx % 2 === 0) ? 'Oracle Flip (P̄: y→−y)' : 'Diffusion (+2θ chord)',
+      targetProb: clamp(vSin * vSin, 0, 1),
+      angleDeg: Math.abs(vAng) * 180 / PI
+    };
+  }
+
   // Note: preserve original saw(x) = 2*frac(x)-1 behavior when users pass TAU*f*t,
   // Wait: in original engine.js, saw(x) was `2 * frac(x) - 1`! Let's keep exact
   // compatibility with original presets (`saw(TAU*f*t+phase)`).
@@ -118,6 +251,7 @@
     'saw', 'square', 'triangle',
     'weierstrass', 'weierstrassNorm', 'morlet', 'morletIm', 'gauss',
     'fourierSquare', 'fourierSaw',
+    'groverX', 'groverY', 'blocksX', 'blocksY',
     'eta', 'alpha', 'ringArea'
   ];
 
@@ -127,7 +261,8 @@
     Math.min, Math.max, clamp, lerp, frac,
     sawCompat, square, triCompat,
     weierstrass, weierstrassNorm, morlet, morletIm, gauss,
-    fourierSquare, fourierSaw
+    fourierSquare, fourierSaw,
+    groverX, groverY, blocksX, blocksY
   ];
 
   function paramsFor(t, s) {
@@ -174,7 +309,8 @@
           Math.min, Math.max, clamp, lerp, frac,
           sawCompat, square, triCompat,
           weierstrass, weierstrassNorm, morletStretched, morletImStretched, gaussStretched,
-          fourierSquare, fourierSaw
+          fourierSquare, fourierSaw,
+          groverX, groverY, blocksX, blocksY
         ];
       }
     }
@@ -1441,6 +1577,8 @@
       weierstrass: weierstrass, weierstrassNorm: weierstrassNorm,
       morlet: morlet, morletIm: morletIm, gauss: gauss,
       fourierSquare: fourierSquare, fourierSaw: fourierSaw,
+      groverX: groverX, groverY: groverY, blocksX: blocksX, blocksY: blocksY,
+      groverMetrics: groverMetrics,
       compile: compile, validate: validate, paramsFor: paramsFor,
       sample: sample, point: point, sampleWindow: sampleWindow,
       shellMetrics: shellMetrics, zoneOf: zoneOf,

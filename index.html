@@ -473,6 +473,54 @@
         </div>
       </div>
 
+      <!-- Floating Grover's Search & Colliding Blocks (π) Rosetta Case-Study HUD Card (opt-in via ? Guide #08) -->
+      <div id="groverWidget" class="grover-widget" hidden>
+        <div class="fb-head">
+          <span class="fb-title grv-title">&#9672; Grover &amp; Blocks (&pi;) &middot; Rosetta Lens</span>
+          <div class="grv-head-right">
+            <span class="fb-nibble mono" id="grvBadge">N=16 &middot; 96.1%</span>
+            <button type="button" id="btnGroverClose" class="grv-close" title="Close Rosetta Lens">&times;</button>
+          </div>
+        </div>
+
+        <div class="grv-mode-row" role="group" aria-label="Grover / Blocks Geometry Mode">
+          <button type="button" class="mag-chip active" data-grv-mode="chords">Grover Chords</button>
+          <button type="button" class="mag-chip" data-grv-mode="orbit">Grover Orbit</button>
+          <button type="button" class="mag-chip" data-grv-mode="blocks">Blocks &rarr; &pi;</button>
+        </div>
+
+        <div class="grv-scale-row" id="grvScaleRow" role="group" aria-label="Search Space or Mass Ratio">
+          <button type="button" class="mag-chip active" data-grv-scale="16">N=16 (4-bit)</button>
+          <button type="button" class="mag-chip" data-grv-scale="25">N=25</button>
+          <button type="button" class="mag-chip" data-grv-scale="64">N=64 (6-bit)</button>
+        </div>
+
+        <div class="grv-meter">
+          <div class="grv-meter-head mono">
+            <span id="grvMeterLabel">Target P(|k&#10217;) = y&sup2;</span>
+            <b id="grvMeterVal">96.1%</b>
+          </div>
+          <div class="grv-bar-track">
+            <div id="grvBarFill" class="grv-bar-fill" style="width: 6%"></div>
+          </div>
+          <div class="grv-sub mono" id="grvSubLine">Step 0/4 &middot; &theta;=14.5&deg; &middot; Opt &pi;/4&radic;N = 3.14</div>
+        </div>
+
+        <div class="grv-rosetta" id="grvRosettaTable">
+          <div class="grv-ros-row"><span class="grv-ros-k">Unit Circle R</span><span class="grv-ros-v">Total Prob / Energy (X&sup2;+Y&sup2;=1)</span></div>
+          <div class="grv-ros-row"><span class="grv-ros-k">Top Pole (+Y)</span><span class="grv-ros-v">Target Key |k&#10217; (Height&sup2; = Hit %)</span></div>
+          <div class="grv-ros-row"><span class="grv-ros-k">Conjugate P&#772; (x,&minus;y)</span><span class="grv-ros-v">Oracle Sign-Flip / Wall Bounce</span></div>
+          <div class="grv-ros-row"><span class="grv-ros-k">Order N / Partials K</span><span class="grv-ros-v">Search Space N / Iterations</span></div>
+        </div>
+
+        <div class="fb-btn-row" role="group" aria-label="Grover Step & Camera Controls">
+          <button type="button" class="mag-chip" id="btnGroverStep">Step +1</button>
+          <button type="button" class="mag-chip" id="btnGroverPeak">Jump Peak</button>
+          <button type="button" class="mag-chip cam-btn" data-cam="front">Front f(x)</button>
+          <button type="button" class="mag-chip cam-btn" data-cam="iso">3D Iso</button>
+        </div>
+      </div>
+
       <!-- Floating Dual-Sphere Modal Resonance & Archimedes Constant-Area Slice HUD Card (§§1–3) -->
       <div id="resonanceWidget" class="res-widget">
         <div class="fb-head">
@@ -1153,6 +1201,7 @@
 <script src="js/floor-view.js"></script>
 <script src="js/mod-matrix.js"></script>
 <script src="js/chime-rack.js"></script>
+<script src="js/grover-lens.js"></script>
 <script src="js/app.js"></script>
 <script src="js/param-hints.js"></script>
 <script src="js/agent-bridge.js"></script>

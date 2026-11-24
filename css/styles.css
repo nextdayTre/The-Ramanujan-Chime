@@ -957,6 +957,112 @@ body.harmor-void .viewport {
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.52);
 }
 .fourbit-widget[hidden] { display: none !important; }
+
+/* ---- Floating Grover's Search & Colliding Blocks (π) Rosetta Lens Card ---- */
+.grover-widget {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 7;
+  width: 326px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(11, 16, 24, 0.90);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 176, 77, 0.44);
+  border-radius: 11px;
+  padding: 8px 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.56);
+}
+.grover-widget[hidden] { display: none !important; }
+.grv-title { color: var(--gold); }
+.grv-head-right { display: inline-flex; align-items: center; gap: 5px; }
+.grv-close {
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  line-height: 15px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+.grv-close:hover { color: var(--text); border-color: var(--gold); }
+.grv-mode-row, .grv-scale-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.grv-meter {
+  background: rgba(17, 24, 36, 0.85);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.grv-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.grv-meter-head b { color: var(--accent-bright); font-size: 11.5px; }
+.grv-bar-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.grv-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  transition: width 0.08s linear;
+}
+.grv-sub {
+  font-size: 9.8px;
+  color: #aebcd0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grv-rosetta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: rgba(9, 13, 20, 0.72);
+  border: 1px solid var(--line);
+}
+.grv-ros-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.grv-ros-k {
+  color: var(--accent-bright);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.grv-ros-v {
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .fb-head {
   display: flex;
   justify-content: space-between;
@@ -1716,6 +1822,7 @@ body.popout-mode #btnPopout {
 
 body.hud-hidden #viewport3d .hud,
 body.hud-hidden #viewport3d .fourbit-widget,
+body.hud-hidden #viewport3d .grover-widget,
 body.hud-hidden #viewport3d .mag-widget,
 body.hud-hidden #viewport3d .theatre-bar {
   display: none !important;
@@ -3043,10 +3150,12 @@ body.mod-dragging .floor-zoom-ctl[data-mod-target].drop-hover {
 
 body[data-stage-view="rack"] #viewport3d .hud,
 body[data-stage-view="rack"] #viewport3d .fourbit-widget,
+body[data-stage-view="rack"] #viewport3d .grover-widget,
 body[data-stage-view="rack"] #viewport3d .resonance-widget,
 body[data-stage-view="rack"] #viewport3d .mag-widget,
 body[data-stage-view="menu"] #viewport3d .hud,
 body[data-stage-view="menu"] #viewport3d .fourbit-widget,
+body[data-stage-view="menu"] #viewport3d .grover-widget,
 body[data-stage-view="menu"] #viewport3d .resonance-widget,
 body[data-stage-view="menu"] #viewport3d .mag-widget {
   display: none !important;

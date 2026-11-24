@@ -23,6 +23,7 @@
       FloorView = Harmony.FloorView,
       ModMatrix = Harmony.ModMatrix,
       ChimeRack = Harmony.ChimeRack,
+      GroverLens = Harmony.GroverLens,
       AgentCore = Harmony.AgentCore;   // js/agent-core.js — the ONE shared agent layer
 
   var SAMPLES = 3200;
@@ -1496,8 +1497,73 @@
         syncFloorUI();
         bump();
       }
+    },
+    {
+      num: '08',
+      title: 'Grover\'s Search & Colliding Blocks (π)',
+      sub: '2D Hilbert rotation, Oracle P̄ reflection & π-counting bounces',
+      formula: 'm* ≈ (π/4)·√N · θ = asin(1/√N)',
+      body: '<p>An exact geometric simulation of <b>Grover\'s quantum search</b> and <b>3Blue1Brown\'s colliding blocks</b> on the Chime\'s unit circle (<code>X² + Y² = R²</code>). Flipping the target key\'s sign (or bouncing the small block off the wall) is literally the Chime\'s <b>Conjugate Twin</b> <code>P̄ = (x, −y)</code>; alternating it with diffusion rotates the state by <code>2θ</code> per step until hitting the top pole <code>|k⟩</code> in <code>≈ (π/4)√N</code> steps.</p>' +
+        '<p>At <code>Order N = 16</code> (4-bit nibbles <code>0000..1111</code>), step 3 peaks at <b>96.1%</b> before harmonically overshooting. Switch the floating Rosetta Lens to <b>Blocks → π</b> to see <code>10:1</code> (10 hits) and <code>100:1</code> (31 hits → <code>3.1</code>) trace the exact zigzag chords!</p>' +
+        '<div class="guide-try-box"><b>Try this:</b> Click <code>Step +1</code> or <code>Jump Peak</code> in the floating Rosetta card, toggle <code>Grover Chords / Orbit / Blocks → π</code>, or switch to <b>1 · Scopes</b> to watch the probability wave peak and overshoot.</div>',
+      run: function () {
+        if (ModMatrix && ModMatrix.clearRoutes) ModMatrix.clearRoutes();
+        setLockVolumeMode(false);
+        if (GroverLens && GroverLens.open) {
+          GroverLens.open({ mode: 'chords', orderN: 16, K: 4, animate: true });
+        }
+      }
     }
   ];
+
+  if (GroverLens && GroverLens.attach) {
+    GroverLens.attach({
+      getState: function () { return state; },
+      apply: function (cfg) {
+        if (cfg.formulas) {
+          state.formulas.x = cfg.formulas.x;
+          state.formulas.y = cfg.formulas.y;
+          state.formulas.z = cfg.formulas.z;
+          if ($('formulaX')) { $('formulaX').value = cfg.formulas.x; $('formulaX').classList.remove('invalid'); }
+          if ($('formulaY')) { $('formulaY').value = cfg.formulas.y; $('formulaY').classList.remove('invalid'); }
+          if ($('formulaZ')) { $('formulaZ').value = cfg.formulas.z; $('formulaZ').classList.remove('invalid'); }
+          if ($('errX')) $('errX').textContent = '';
+          if ($('errY')) $('errY').textContent = '';
+          if ($('errZ')) $('errZ').textContent = '';
+        }
+        if (cfg.orderN != null) state.orderN = cfg.orderN;
+        if (cfg.K != null) state.K = cfg.K;
+        if (cfg.r != null) state.r = cfg.r;
+        if (cfg.rIn != null) state.rIn = cfg.rIn;
+        if (cfg.amp != null) state.amp = cfg.amp;
+        state.presetIndex = Presets.list.length - 1;
+        if ($('presetSelect')) $('presetSelect').value = String(state.presetIndex);
+        if (cfg.twinMode) setTwinMode(cfg.twinMode);
+        ['sliceGrid', 'cutaway', 'fourBitOrbit', 'resonanceMode', 'strobeN', 'magnifier', 'animate'].forEach(function (k) {
+          if (cfg[k] != null) state.toggles[k] = !!cfg[k];
+        });
+        syncParamUI();
+        syncHudToggles();
+        if (cfg.camera) Scene3D.setCameraView(cfg.camera, state);
+        bump();
+      },
+      setClock: function (t) {
+        state.toggles.animate = false;
+        state.playT = Engine.clamp(Number(t), 0, 1);
+        syncHudToggles();
+        bump();
+      }
+    });
+  }
+
+  function runGuideChapter(idx) {
+    var ch = GUIDE_CHAPTERS[idx];
+    if (!ch || !ch.run) return;
+    if (ch.num !== '08' && GroverLens && GroverLens.close) {
+      GroverLens.close();
+    }
+    ch.run();
+  }
 
   function renderGuideUI() {
     var listEl = $('guideChapterList');
@@ -1518,7 +1584,7 @@
         btn.addEventListener('click', function () {
           activeGuideIdx = idx;
           renderGuideUI();
-          ch.run();
+          runGuideChapter(idx);
         });
         listEl.appendChild(btn);
       })(i, GUIDE_CHAPTERS[i]);
@@ -1545,22 +1611,21 @@
   }
   if ($('btnGuideRun')) {
     $('btnGuideRun').addEventListener('click', function () {
-      var ch = GUIDE_CHAPTERS[activeGuideIdx];
-      if (ch && ch.run) ch.run();
+      runGuideChapter(activeGuideIdx);
     });
   }
   if ($('btnGuidePrev')) {
     $('btnGuidePrev').addEventListener('click', function () {
       activeGuideIdx = (activeGuideIdx - 1 + GUIDE_CHAPTERS.length) % GUIDE_CHAPTERS.length;
       renderGuideUI();
-      GUIDE_CHAPTERS[activeGuideIdx].run();
+      runGuideChapter(activeGuideIdx);
     });
   }
   if ($('btnGuideNext')) {
     $('btnGuideNext').addEventListener('click', function () {
       activeGuideIdx = (activeGuideIdx + 1) % GUIDE_CHAPTERS.length;
       renderGuideUI();
-      GUIDE_CHAPTERS[activeGuideIdx].run();
+      runGuideChapter(activeGuideIdx);
     });
   }
   document.querySelectorAll('.guide-jump-btn[data-guide-tab]').forEach(function (btn) {
@@ -2443,6 +2508,7 @@
       $('formulaDrawer').open = true;
       return;
     }
+    if (GroverLens && GroverLens.close) GroverLens.close();
 
     ['x', 'y', 'z'].forEach(function (axis) {
       var expr = p.formulas[axis];
@@ -2867,6 +2933,9 @@
     if (state.toggles.resonanceMode && Engine.sphereResonance && $('resonanceWidget')) {
       var res = Engine.sphereResonance(state, state.playT);
       updateResonanceWidget(res);
+    }
+    if (GroverLens && GroverLens.isActive && GroverLens.isActive()) {
+      GroverLens.update(state);
     }
   }
 
