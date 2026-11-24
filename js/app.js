@@ -560,17 +560,20 @@
     var prime = Engine.isPrimeInt(N);
     if (prime) {
       badge.textContent = 'prime';
-      badge.title = sub + '/' + N + ' · prime N (cofactor 1, stride ' + stride + ')';
+      badge.dataset.hintDetail = sub + '/' + N + ' · prime N (stride ' + stride + ')';
+      badge.removeAttribute('title');
       badge.style.color = '#ffb04d';
       badge.style.background = 'rgba(255, 176, 77, 0.14)';
     } else if (g === 1) {
       badge.textContent = 'coprime';
-      badge.title = sub + '/' + N + ' · coprime generator (stride ' + stride + ')';
+      badge.dataset.hintDetail = sub + '/' + N + ' · coprime (stride ' + stride + ')';
+      badge.removeAttribute('title');
       badge.style.color = '#6ee7a0';
       badge.style.background = 'rgba(110, 231, 160, 0.12)';
     } else {
       badge.textContent = 'sub/' + g;
-      badge.title = sub + '/' + N + ' · subgroup! gcd(' + stride + ',' + N + ')=' + g;
+      badge.dataset.hintDetail = sub + '/' + N + ' · subgroup gcd(' + stride + ',' + N + ')=' + g;
+      badge.removeAttribute('title');
       badge.style.color = '#ff8c98';
       badge.style.background = 'rgba(255, 107, 122, 0.14)';
     }
@@ -625,19 +628,23 @@
         var centsStr = (res.syzygy.detuneCents >= 0 ? '+' : '') + res.syzygy.detuneCents.toFixed(1) + '¢';
         if (!res.cavityActive) {
           syzEl.textContent = 'solid';
-          syzEl.title = 'OSC A Solid Ball (r = 0) · OSC B Off';
+          syzEl.dataset.hintDetail = 'Solid Ball (r = 0) · OSC B Off';
+          syzEl.removeAttribute('title');
           syzEl.classList.remove('locked');
         } else if (res.bowHalfPowerLock) {
           syzEl.textContent = '−3dB';
-          syzEl.title = '−3 dB 4-Bit Bow Tangency (η = 1/√2 ≈ 0.707 · α = √2)';
+          syzEl.dataset.hintDetail = '−3 dB Bow Tangency (η ≈ 0.707)';
+          syzEl.removeAttribute('title');
           syzEl.classList.add('locked');
         } else if (res.syzygy.tripleLock) {
           syzEl.textContent = res.syzygy.triadText + ' ★';
-          syzEl.title = 'Triple Lock ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.dataset.hintDetail = 'Triple Lock ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.removeAttribute('title');
           syzEl.classList.add('locked');
         } else {
           syzEl.textContent = res.syzygy.locked ? (res.syzygy.ratioText + ' ★') : 'beat';
-          syzEl.title = 'Modes ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.dataset.hintDetail = 'Modes ' + res.syzygy.triadText + ' · ' + res.syzygy.ratioText + ' ' + res.syzygy.intervalName + ' (' + centsStr + ')';
+          syzEl.removeAttribute('title');
           syzEl.classList.toggle('locked', !!res.syzygy.locked);
         }
       }

@@ -23,6 +23,14 @@
     </div>
   </div>
 
+  <div id="paramHintBar" class="topbar-hint" role="status" aria-live="polite" data-state="idle">
+    <div class="hint-head">
+      <span id="paramHintTitle" class="hint-title"></span>
+      <span id="paramHintStatus" class="hint-status mono" hidden></span>
+    </div>
+    <div id="paramHintBody" class="hint-body"></div>
+  </div>
+
   <div class="topbar-right">
     <div class="legend" aria-label="Sphere zone legend">
       <span class="chip"><i class="dot on"></i>Surface |P|&asymp;R</span>
@@ -76,15 +84,15 @@
       <section class="rack-group">
         <div class="group-head">
           <span class="kicker">Hollow Vessel</span>
-          <button type="button" id="btnLockVol" class="lock-vol-btn" title="Constant-Volume Time-Stretch (§2.1): keep V = 4/3·π(R³ − r³) invariant so expanding Cavity r drives Outer R = (r³ + R₀³)^(1/3)">
+          <button type="button" id="btnLockVol" class="lock-vol-btn" data-hint="lockVol">
             <i class="lock-dot"></i> Lock V
           </button>
         </div>
 
-        <div class="param-row" data-mod-target="r">
+        <div class="param-row" data-mod-target="r" data-hint="r">
           <div class="param-head">
             <span class="param-lbl">
-              <label for="radius" title="Outer Sphere R (OSC A — always active)">Outer R</label>
+              <label for="radius">Outer R</label>
               <span class="param-sub">OSC A</span>
               <span class="mod-badges" data-mod-badges="r"></span>
             </span>
@@ -97,10 +105,10 @@
           </div>
         </div>
 
-        <div class="param-row" data-mod-target="rIn">
+        <div class="param-row" data-mod-target="rIn" data-hint="rIn">
           <div class="param-head">
             <span class="param-lbl">
-              <label for="innerRadius" title="Inner Cavity r (OSC B — nested resonator &amp; time-stretch core)">Cavity r</label>
+              <label for="innerRadius">Cavity r</label>
               <span class="param-sub">OSC B</span>
               <span class="mod-badges" data-mod-badges="rIn"></span>
             </span>
@@ -115,25 +123,25 @@
 
         <!-- Single-Line Vessel Telemetry + 5 Clean Syzygy Ratio Buttons -->
         <div class="vessel-summary mono">
-          <span>&eta;=<b id="modEtaOut">0.45</b></span>
-          <span>&alpha;=<b id="modStretchOut">2.22&times;</b></span>
-          <span>V=<b id="shellVolOut">3.81</b></span>
-          <span id="syzygyBadge" class="syzygy-pill" title="Coupled Radial Breathing Modes (ℓ = 0): Outer 1/R : Inner 1/r : Wall 1/(R−r)">beat</span>
+          <span data-hint="eta">&eta;=<b id="modEtaOut">0.45</b></span>
+          <span data-hint="alpha">&alpha;=<b id="modStretchOut">2.22&times;</b></span>
+          <span data-hint="vol">V=<b id="shellVolOut">3.81</b></span>
+          <span id="syzygyBadge" class="syzygy-pill" data-hint="syzygy">beat</span>
         </div>
 
         <div class="syzygy-snap-row" role="group" aria-label="Dual-Sphere Modal Ratio Presets">
-          <button type="button" class="snap-chip" data-eta="0" title="r = 0 (Solid Ball — OSC A only)">0</button>
-          <button type="button" class="snap-chip" data-eta="0.5" title="η = 0.50 (α = 2:1 Exact Octave · Triple Lock 1:2:2)">.50</button>
-          <button type="button" class="snap-chip" data-eta="0.6667" title="η = 2/3 (α = 3:2 Perfect Fifth · Triple Lock 2:3:6)">2/3</button>
-          <button type="button" class="snap-chip" data-eta="0.7071" title="η = 1/√2 ≈ 0.7071 (−3 dB Half-Power Bow Tangency)">&minus;3dB</button>
-          <button type="button" class="snap-chip" data-eta="0.75" title="η = 0.75 (α = 4:3 Perfect Fourth · Triple Lock 3:4:12)">.75</button>
+          <button type="button" class="snap-chip" data-eta="0" data-hint="snap_0">0</button>
+          <button type="button" class="snap-chip" data-eta="0.5" data-hint="snap_half">.50</button>
+          <button type="button" class="snap-chip" data-eta="0.6667" data-hint="snap_2_3">2/3</button>
+          <button type="button" class="snap-chip" data-eta="0.7071" data-hint="snap_3db">&minus;3dB</button>
+          <button type="button" class="snap-chip" data-eta="0.75" data-hint="snap_3_4">.75</button>
         </div>
 
         <!-- Archimedes Axial Slice z/R (Routable Target) -->
-        <div class="param-row" data-mod-target="archimedesZNorm">
+        <div class="param-row" data-mod-target="archimedesZNorm" data-hint="sliceZ">
           <div class="param-head">
             <span class="param-lbl">
-              <label for="rackSliceZ" title="Archimedes Constant-Area Axial Slice z/R (drag a modulator here to entangle)">Slice z/R</label>
+              <label for="rackSliceZ">Slice z/R</label>
               <span class="mod-badges" data-mod-badges="archimedesZNorm"></span>
             </span>
             <output id="rackSliceZOut" class="mono param-val">+0.00</output>
@@ -153,7 +161,7 @@
           <span class="rack-hint">drop mod here</span>
         </div>
 
-        <div class="param-row" data-mod-target="orderN" title="Discrete Cyclic Order N inside the vessel/cavity (stride uses slider n)">
+        <div class="param-row" data-mod-target="orderN" data-hint="orderN">
           <div class="param-head">
             <span class="param-lbl">
               <label for="orderN">Order N</label>
@@ -171,7 +179,7 @@
           </div>
         </div>
 
-        <div class="param-row" data-mod-target="phaseDeg">
+        <div class="param-row" data-mod-target="phaseDeg" data-hint="phase">
           <div class="param-head">
             <span class="param-lbl">
               <label for="phaseSlider">Phase &phi;</label>
@@ -187,7 +195,7 @@
         </div>
 
         <div class="param-grid-2">
-          <div class="param-row" data-mod-target="f">
+          <div class="param-row" data-mod-target="f" data-hint="f">
             <div class="param-head">
               <span class="param-lbl">
                 <label for="freq">Freq f</label>
@@ -202,7 +210,7 @@
             </div>
           </div>
 
-          <div class="param-row" data-mod-target="amp">
+          <div class="param-row" data-mod-target="amp" data-hint="amp">
             <div class="param-head">
               <span class="param-lbl">
                 <label for="amp">Gain</label>
@@ -218,7 +226,7 @@
           </div>
         </div>
 
-        <div class="param-row" data-mod-target="K">
+        <div class="param-row" data-mod-target="K" data-hint="K">
           <div class="param-head">
             <span class="param-lbl">
               <label for="harmonicsK">Partials K</label>
@@ -240,10 +248,10 @@
           <summary class="kicker summary-kicker">Equations &amp; Ratios <span class="mono">x, y, z(t) &#9662;</span></summary>
           <div class="drawer-body">
             <div class="param-grid-2">
-              <div class="param-row" data-mod-target="a">
+              <div class="param-row" data-mod-target="a" data-hint="a">
                 <div class="param-head">
                   <span class="param-lbl">
-                    <label for="fractalA" title="Weierstrass amplitude decay a^k">Decay a</label>
+                    <label for="fractalA">Decay a</label>
                     <span class="mod-badges" data-mod-badges="a"></span>
                   </span>
                   <output id="fractalAOut" class="mono param-val">0.50</output>
@@ -254,10 +262,10 @@
                   <div class="mod-live-dot" data-mod-dot="a" hidden></div>
                 </div>
               </div>
-              <div class="param-row" data-mod-target="b">
+              <div class="param-row" data-mod-target="b" data-hint="b">
                 <div class="param-head">
                   <span class="param-lbl">
-                    <label for="fractalB" title="Weierstrass frequency multiplier b^k">Lacun. b</label>
+                    <label for="fractalB">Lacun. b</label>
                     <span class="mod-badges" data-mod-badges="b"></span>
                   </span>
                   <output id="fractalBOut" class="mono param-val">3</output>
@@ -271,7 +279,7 @@
             </div>
 
             <div class="param-grid-3">
-              <div class="param-row" data-mod-target="n">
+              <div class="param-row" data-mod-target="n" data-hint="n">
                 <div class="param-head">
                   <span class="param-lbl"><label for="ratioN">n</label><span class="mod-badges" data-mod-badges="n"></span></span>
                   <output id="ratioNOut" class="mono param-val">3</output>
@@ -282,7 +290,7 @@
                   <div class="mod-live-dot" data-mod-dot="n" hidden></div>
                 </div>
               </div>
-              <div class="param-row">
+              <div class="param-row" data-hint="m">
                 <div class="param-head">
                   <label for="ratioM">m</label>
                   <output id="ratioMOut" class="mono param-val">2</output>
@@ -291,7 +299,7 @@
                   <input type="range" id="ratioM" data-agent-input="m" min="1" max="8" step="1" value="2" data-default="2" />
                 </div>
               </div>
-              <div class="param-row">
+              <div class="param-row" data-hint="k">
                 <div class="param-head">
                   <label for="ratioK">k</label>
                   <output id="ratioKOut" class="mono param-val">1</output>
@@ -302,18 +310,18 @@
               </div>
             </div>
 
-            <div class="sub-field">
+            <div class="sub-field" data-hint="phaseExact">
               <input type="number" id="phaseDeg" data-agent-input="phaseDeg" value="0" step="1" aria-label="Phase in degrees" />
               <span>deg</span>
               <span id="phaseRad" class="mono">0.0000 rad</span>
             </div>
 
             <div class="stretch-route-row" role="group" aria-label="Time-Stretch Modulation Coupling (§2.2)">
-              <span class="route-lbl">Stretch:</span>
-              <button type="button" class="route-chip active" data-stretch="off">Off</button>
-              <button type="button" class="route-chip" data-stretch="pitchLock" title="Morlet σ ↦ α·σ">Pitch</button>
-              <button type="button" class="route-chip" data-stretch="tape" title="Freq f ↦ f / α">Tape</button>
-              <button type="button" class="route-chip" data-stretch="jacobian" title="Phase φ ↦ φ + η²·π">Jacob.</button>
+              <span class="route-lbl" data-hint="stretch_lbl">Stretch:</span>
+              <button type="button" class="route-chip active" data-stretch="off" data-hint="stretch_off">Off</button>
+              <button type="button" class="route-chip" data-stretch="pitchLock" data-hint="stretch_pitch">Pitch</button>
+              <button type="button" class="route-chip" data-stretch="tape" data-hint="stretch_tape">Tape</button>
+              <button type="button" class="route-chip" data-stretch="jacobian" data-hint="stretch_jacob">Jacob.</button>
             </div>
 
             <div class="formula-row">
@@ -1146,6 +1154,7 @@
 <script src="js/mod-matrix.js"></script>
 <script src="js/chime-rack.js"></script>
 <script src="js/app.js"></script>
+<script src="js/param-hints.js"></script>
 <script src="js/agent-bridge.js"></script>
 </body>
 </html>
