@@ -3283,3 +3283,79 @@ body.harmor-void .chime-overlay { background: #000000; }
   font-size: 18px;
   line-height: 1;
 }
+
+/* ===== Harmor / FAS Synthetic Spectral LCD & Bitcoin Lifecycle Strip ===== */
+.floor-scope-btn {
+  white-space: nowrap;
+}
+.floor-lcd-btn.active,
+.floor-lcd-plane-btn.active {
+  background: rgba(56, 255, 114, 0.16);
+  border-color: rgba(56, 255, 114, 0.65);
+  color: #7affad;
+}
+.lcd-bin-btn.active {
+  background: rgba(0, 0, 0, 0.85);
+  border-color: rgba(56, 255, 114, 0.72);
+  color: #38ff72;
+}
+.floor-lcd-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  margin-bottom: 5px;
+  background: rgba(6, 12, 16, 0.92);
+  border: 1px solid rgba(56, 255, 114, 0.28);
+  border-radius: 6px;
+  font-size: 10px;
+}
+.floor-lcd-bar[hidden] { display: none !important; }
+.lcd-coal-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.lcd-coal-ctl .slider-wrap {
+  width: 74px;
+}
+.lcd-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+.lcd-row-lbl {
+  color: #b8ffd0;
+  font-size: 10px;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcd-stages .seg-btn {
+  padding: 2px 6px;
+  font-size: 9.5px;
+}
+.lcd-rack-btn {
+  border-color: rgba(77, 243, 221, 0.55);
+  color: #4df3dd;
+  background: rgba(54, 214, 200, 0.10);
+  margin-left: auto;
+}
+.lcd-rack-btn:hover {
+  background: rgba(54, 214, 200, 0.20);
+  color: #ffffff;
+}
+.chime-card-stage-pill {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(56, 255, 114, 0.14);
+  color: #7affad;
+  border: 1px solid rgba(56, 255, 114, 0.35);
+}

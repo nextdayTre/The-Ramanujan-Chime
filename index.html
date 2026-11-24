@@ -925,11 +925,13 @@
             </select>
             <input type="file" id="floorFileInput" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a" hidden />
             <input type="file" id="floorBwFileInput" accept=".bitwave,.json,application/json,text/plain" hidden />
+            <input type="file" id="floorCsvFileInput" accept=".csv,.txt,text/csv,text/plain" hidden />
             <button type="button" id="btnFloorUpload" class="mini-btn floor-audio-btn" title="Load a local MP3 / WAV / OGG file — z=0 is Present needle, +z Incoming Future, −z Fading Past">&#8679; MP3</button>
             <button type="button" id="btnFloorSys" class="mini-btn floor-audio-btn" title="Capture live browser tab or system audio loopback into the MiniMeters 3D floor">Sys</button>
             <button type="button" id="btnFloorTone" class="mini-btn floor-audio-btn" title="Audition soft Web Audio harmonic chime tuned to Outer R : Inner r : Wall modes">&#9834;</button>
             <button type="button" id="btnFloorMic" class="mini-btn floor-audio-btn" title="Feed live microphone audio into the MiniMeters 3D Spectrogram floor">Mic</button>
             <button type="button" id="btnFloorBwToggle" class="mini-btn floor-bw-btn" title="Read-only BitWave register feed (#bw= share link, .bitwave JSON, hex register, or 2nd-tab BroadcastChannel)">BW Feed</button>
+            <button type="button" id="btnFloorLcdToggle" class="mini-btn floor-lcd-btn" title="Harmor / FAS Synthetic Spectral LCD &amp; Bitcoin Keypair Lifecycle CSV pipeline (K → Pub → SHA → RIPE → Seal → Base58)">LCD</button>
           </div>
         </div>
 
@@ -974,8 +976,43 @@
           <button type="button" id="btnFloorBwClear" class="mini-btn" title="Disconnect BitWave feed &amp; return to synth">Clear</button>
         </div>
 
+        <!-- Inline Harmor/FAS Synthetic LCD & Bitcoin Keypair Lifecycle Strip (hidden until toggled) -->
+        <div id="floorLcdBar" class="floor-lcd-bar mono" hidden>
+          <button type="button" id="btnLcdPlaneToggle" class="mini-btn floor-lcd-plane-btn" title="Show/hide upright Front f(x) coalescing Synthetic LCD spectrogram plane inside the 3D sphere">&#9679; Sphere LCD</button>
+          <div class="segmented compact-seg" role="group" aria-label="Synth LCD text encoding">
+            <button type="button" class="seg-btn lcd-enc-btn active" data-lcdenc="base58" title="Encode active payload as Bitcoin Base58 / Base58Check text on the spectral LCD">Base58</button>
+            <button type="button" class="seg-btn lcd-enc-btn" data-lcdenc="hex" title="Render raw hex nibbles directly on the spectral LCD">Hex</button>
+            <button type="button" class="seg-btn lcd-enc-btn" data-lcdenc="bin" title="Render 4-bit binary nibbles on the spectral LCD">Bin</button>
+          </div>
+          <button type="button" id="btnLcdBinary" class="mini-btn lcd-bin-btn active" title="Harmor Green-on-Black 0/1 Binarization (#38FF72 over #000000 void — eliminates harmonic bleed)">Harmor 0/1</button>
+          <div class="floor-zoom-ctl lcd-coal-ctl" data-mod-target="lcdCoalesce" title="System A Coalesce: 0% = Travelling Focus Beam swooshing ribbons into glyphs · 100% = full-window sharp LCD lock (routable in 5 · Mod &amp; Logic!)">
+            <span>Coalesce</span>
+            <span class="mod-badges" data-mod-badges="lcdCoalesce"></span>
+            <div class="slider-wrap floor-zoom-wrap">
+              <div class="mod-range-bar" data-mod-bar="lcdCoalesce"></div>
+              <input type="range" id="lcdCoalesceSlider" min="0" max="1" step="0.01" value="0.34" aria-label="Synth LCD coalesce focus" />
+              <div class="mod-live-dot" data-mod-dot="lcdCoalesce" hidden></div>
+            </div>
+            <span id="lcdCoalesceOut" class="mono">34%</span>
+          </div>
+          <span class="lcd-sep"></span>
+          <button type="button" id="btnLcdCsvUpload" class="mini-btn" title="Import Bitcoin keypair lifecycle CSV (K → Curve Point → SHA → RIPE → Checksum Seal → Base58)">&#8679; CSV</button>
+          <button type="button" id="btnLcdRowPrev" class="mini-btn" title="Previous keypair row">&#9664;</button>
+          <span id="lcdRowLbl" class="lcd-row-lbl" title="Active Bitcoin keypair lifecycle row">1/3 · secp256k1 G</span>
+          <button type="button" id="btnLcdRowNext" class="mini-btn" title="Next keypair row">&#9654;</button>
+          <div class="segmented compact-seg lcd-stages" role="group" aria-label="Bitcoin keypair lifecycle stages">
+            <button type="button" class="seg-btn lcd-stage-btn" data-lcdstage="k" title="Stage 1: Private Key K (256-bit scalar)">K</button>
+            <button type="button" class="seg-btn lcd-stage-btn" data-lcdstage="pub" title="Stage 2: secp256k1 Curve Point P = K·G">Pub</button>
+            <button type="button" class="seg-btn lcd-stage-btn" data-lcdstage="sha" title="Stage 3: SHA-256 Digest">SHA</button>
+            <button type="button" class="seg-btn lcd-stage-btn" data-lcdstage="ripe" title="Stage 4: RIPEMD-160 Hash (HASH160)">RIPE</button>
+            <button type="button" class="seg-btn lcd-stage-btn" data-lcdstage="seal" title="Stage 5: 0x00 || HASH160 || 4-byte Checksum Seal">Seal</button>
+            <button type="button" class="seg-btn lcd-stage-btn active" data-lcdstage="base58" title="Stage 6: Base58 P2PKH Address in Harmor Synthetic LCD">Base58</button>
+          </div>
+          <button type="button" id="btnLcdSendRack" class="mini-btn lcd-rack-btn" title="Route all 6 lifecycle stages (K → Pub → SHA → RIPE → Seal → Base58) across Chimes A–F in the Multi-Chime Front f(x) Rack!">&rarr; 6-Chime Rack</button>
+        </div>
+
         <div class="floor-grid-2">
-          <!-- Main 2D Paired Scope (Active Slice / MiniMeters 2D EQ / RX 11 PCM Needle Groove / BitWave 2D) -->
+          <!-- Main 2D Paired Scope (Active Slice / MiniMeters 2D EQ / RX 11 PCM Needle Groove / BitWave 2D / Synth LCD / Dual) -->
           <div class="panel2d floor-col-scope">
             <div class="panel2d-head">
               <span class="kicker" id="floorScopeTitle">2D Active Slice &mdash; Synced to Auto z(t) &amp; Cutaway Floor</span>
@@ -984,6 +1021,8 @@
                   <button type="button" class="seg-btn floor-scope-btn active" data-fscope="eq" title="MiniMeters 2D Equalizer / Active Wavetable Slice">EQ / Slice</button>
                   <button type="button" class="seg-btn floor-scope-btn" data-fscope="pcm" title="RX 11-style 2D PCM Needle Groove (auto-shows sample dots at micro Zoom T)">PCM Groove</button>
                   <button type="button" class="seg-btn floor-scope-btn" data-fscope="bitwave" title="BitWave 2D monotone-cubic register view (read-only feed sink)">BitWave</button>
+                  <button type="button" class="seg-btn floor-scope-btn" data-fscope="lcd" title="Harmor/FAS Synthetic LCD spectrogram displaying fixed-interval Base58 / Hex glyphs">Synth LCD</button>
+                  <button type="button" class="seg-btn floor-scope-btn" data-fscope="dual" title="Overlay BitWave binary waveform directly over its Base58/Hex Synthetic LCD spectrogram">Dual</button>
                 </div>
                 <span id="floorPitchBadge" class="mini-tag mono">98.00Hz | G2 + 0 Cents</span>
               </div>
@@ -1102,6 +1141,7 @@
 <script src="js/views.js"></script>
 <script src="js/bitwave-import.js"></script>
 <script src="js/bitwave-feed.js"></script>
+<script src="js/synth-lcd.js"></script>
 <script src="js/floor-view.js"></script>
 <script src="js/mod-matrix.js"></script>
 <script src="js/chime-rack.js"></script>

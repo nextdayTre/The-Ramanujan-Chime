@@ -224,6 +224,92 @@
       ctx.restore();
     }
 
+    // Optional per-Chime Bitcoin Lifecycle BitWave waveform OR Harmor Synthetic LCD band
+    var sm = opts.stageMeta;
+    if (sm) {
+      var lcdMod = Harmony.SynthLCD;
+      var bwMod = Harmony.BitWaveFeed;
+      if (sm.isLcd && lcdMod && typeof lcdMod.drawSwooshLcd === 'function') {
+        var bandW = radPx * 1.82;
+        var bandH = radPx * (compact ? 0.50 : 0.44);
+        var bx = cx - bandW * 0.5;
+        var by = cy - bandH * 0.5;
+        var lcdData = lcdMod.resolveLcdData(st, playT, {
+          text: sm.text,
+          hex: sm.hex,
+          encoding: sm.encoding || 'base58',
+          noCache: true,
+          maxChars: compact ? 18 : 34
+        });
+        var sNib = sm.nibbles || null;
+        ctx.save();
+        ctx.fillStyle = sm.harmorBinary !== false ? '#000000' : 'rgba(4, 9, 15, 0.90)';
+        ctx.fillRect(bx - 3, by - 3, bandW + 6, bandH + 6);
+        ctx.strokeStyle = sm.harmorBinary !== false ? 'rgba(56, 255, 114, 0.55)' : 'rgba(77, 243, 221, 0.50)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 3, by - 3, bandW + 6, bandH + 6);
+        lcdMod.drawSwooshLcd(
+          ctx,
+          { x: bx, y: by, w: bandW, h: bandH },
+          lcdData,
+          playT,
+          {
+            coalesce: sm.coalesce != null ? sm.coalesce : 0.35,
+            harmorBinary: sm.harmorBinary !== false,
+            nibbles: sNib,
+            compact: true,
+            fillBg: true
+          }
+        );
+        if (!compact && sm.text) {
+          ctx.font = '600 9px "Cascadia Code", Consolas, monospace';
+          ctx.fillStyle = sm.harmorBinary !== false ? '#b8ffd0' : '#dce8f5';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          var shortAddr = sm.text.length > 26 ? (sm.text.slice(0, 12) + '…' + sm.text.slice(-10)) : sm.text;
+          ctx.fillText(shortAddr, cx, by + bandH + 8);
+        }
+        ctx.restore();
+      } else if (sm.nibbles && sm.nibbles.length >= 2 && bwMod && typeof bwMod.sampleMonotone === 'function') {
+        var bwSpan = radPx * 1.78;
+        var bwLeft = cx - bwSpan * 0.5;
+        var bwAmp = radPx * 0.42;
+        var bwCols = compact ? 64 : 140;
+        var stCol = harmor ? '#4af28a' : (sm.color || '#4af28a');
+        ctx.save();
+        ctx.beginPath();
+        for (var bi = 0; bi <= bwCols; bi++) {
+          var bu = bi / bwCols;
+          var bv = bwMod.sampleMonotone(sm.nibbles, (bu + (playT || 0) * 0.25) % 1);
+          var pxb = bwLeft + bu * bwSpan;
+          var pyb = cy - bv * bwAmp;
+          if (bi === 0) ctx.moveTo(pxb, pyb); else ctx.lineTo(pxb, pyb);
+        }
+        ctx.strokeStyle = stCol;
+        ctx.lineWidth = compact ? 1.5 : 2.1;
+        ctx.stroke();
+
+        // Fill subtle translucent energy under the BitWave register trace
+        ctx.lineTo(bwLeft + bwSpan, cy);
+        ctx.lineTo(bwLeft, cy);
+        ctx.closePath();
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = stCol;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        if (!compact && sm.hex) {
+          ctx.font = '600 9px "Cascadia Code", Consolas, monospace';
+          ctx.fillStyle = stCol;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          var hxPrev = sm.hex.length > 22 ? (sm.hex.slice(0, 10) + '…' + sm.hex.slice(-8)) : sm.hex;
+          ctx.fillText('0x' + hxPrev, cx, cy + radPx * 0.46);
+        }
+        ctx.restore();
+      }
+    }
+
     ctx.restore();
 
     // Principal axes X (equator) and Y (f(x) meridian)
@@ -417,9 +503,11 @@
     var order = hooks.getSlotOrder();
     var activeSlot = hooks.getActiveSlot();
     var slots = hooks.getSlots();
+    var stages = (hooks.getSlotStages ? hooks.getSlotStages() : null) || {};
     var sig = order.join(',') + '|' + activeSlot + '|' + order.map(function (k) {
       var s = slots[k];
-      return s ? (s.p + ':' + (s.tw || 'both')) : '';
+      var sm = stages[k];
+      return (s ? (s.p + ':' + (s.tw || 'both')) : '') + (sm ? ('@' + sm.stageId + ':' + (sm.hex || '').slice(0, 8)) : '');
     }).join(';');
     if (!force && sig === lastRackSig) return;
     lastRackSig = sig;
@@ -430,21 +518,24 @@
         var snap = slots[slotKey];
         if (!snap) return;
         var isAct = slotKey === activeSlot;
+        var sm = stages[slotKey] || null;
         var card = document.createElement('div');
         card.className = 'chime-card' + (isAct ? ' active' : '');
         card.setAttribute('data-chime-slot', slotKey);
 
-        var title = shortPresetName(snap.p);
+        var title = sm ? sm.name : shortPresetName(snap.p);
         var phDeg = Math.round(snap.ph || 0);
         var rInVal = snap.rIn != null ? snap.rIn : 0.45;
         var twMode = snap.tw || 'both';
         var canDel = slotKey !== 'A' && slotKey !== 'B' && slotKey !== 'C';
+        var stagePill = sm ? ('<span class="chime-card-stage-pill mono">' + sm.short + '</span>') : '';
 
         card.innerHTML =
           '<div class="chime-card-head">' +
             '<div class="chime-card-id">' +
               '<span class="chime-dot' + (isAct ? ' active' : '') + '"></span>' +
               '<span class="chime-slot-tag mono">CHIME ' + slotKey + '</span>' +
+              stagePill +
               '<span class="chime-patch-name" title="' + title + '">' + title + '</span>' +
             '</div>' +
             '<div class="chime-card-actions">' +
@@ -664,6 +755,8 @@
 
     if (currentView === 'rack') {
       rebuildRackDOM(false);
+      var stages = (hooks.getSlotStages ? hooks.getSlotStages() : null) || {};
+      var lcdCfg = (Harmony.SynthLCD && Harmony.SynthLCD.getConfig) ? Harmony.SynthLCD.getConfig() : null;
       var canvases = document.querySelectorAll('#chimeRackCards canvas[data-chime-canvas]');
       for (var i = 0; i < canvases.length; i++) {
         var cv = canvases[i];
@@ -672,10 +765,18 @@
         var st = isAct ? liveState : (slots[key] ? buildEvalStateFromSnap(slots[key]) : null);
         if (!st) continue;
         var pts = isAct ? livePoints : getCachedPoints(st, 640);
+        var sm = stages[key] || null;
+        if (sm && lcdCfg) {
+          sm = Object.assign({}, sm, {
+            coalesce: liveState.lcdCoalesce != null ? liveState.lcdCoalesce : lcdCfg.coalesce,
+            harmorBinary: lcdCfg.harmorBinary
+          });
+        }
         drawFrontSphere(cv, st, pts, playT, {
           harmor: harmor,
           compact: false,
-          floorField: isAct ? floorFieldData : null
+          floorField: isAct ? floorFieldData : null,
+          stageMeta: sm
         });
 
         // Keep focused card's inline Phase/r readouts live if modulated by 5 · Mod & Logic!

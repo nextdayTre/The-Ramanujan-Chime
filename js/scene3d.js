@@ -33,6 +33,13 @@
   var floorSurfPos, floorSurfCol, floorWirePos, floorWireCol;
   var floorFrontPos, floorActivePos, floorEqPos, floorEqCol, floorTiltPos;
 
+  // Harmor / FAS Upright Front f(x) Synthetic LCD Spectrogram Plane (z = +0.008)
+  var lcdPlaneMesh = null;
+  var lcdCanvas = null;
+  var lcdCtx = null;
+  var lcdTex = null;
+  var lastLcdSig = '';
+
   var lastRendered = -1;
   var lastSphereSig = '';
   var lastResSliceKey = '';
@@ -265,6 +272,7 @@
     scene.add(conjugateChordLine);
 
     initFloorWt();
+    initSynthLcd();
 
     if (window.ResizeObserver) {
       resizeObs = new ResizeObserver(onResize);
@@ -637,6 +645,147 @@
     );
     floorTiltLine.visible = false;
     floorWtGroup.add(floorTiltLine);
+  }
+
+  // ---- Harmor / FAS Upright Front f(x) Synthetic LCD Plane (z = 0 Cartesian Slice) ----
+  function initSynthLcd() {
+    lcdCanvas = document.createElement('canvas');
+    lcdCanvas.width = 768;
+    lcdCanvas.height = 768;
+    lcdCtx = lcdCanvas.getContext('2d');
+    lcdTex = new THREE.CanvasTexture(lcdCanvas);
+    lcdTex.minFilter = THREE.LinearFilter;
+    lcdTex.magFilter = THREE.LinearFilter;
+
+    var mat = new THREE.MeshBasicMaterial({
+      map: lcdTex,
+      transparent: true,
+      opacity: 0.96,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false
+    });
+    lcdPlaneMesh = new THREE.Mesh(new THREE.CircleGeometry(1.0, 72), mat);
+    lcdPlaneMesh.position.set(0, 0, 0.01);
+    lcdPlaneMesh.renderOrder = 10;
+    lcdPlaneMesh.visible = false;
+    scene.add(lcdPlaneMesh);
+  }
+
+  function updateSynthLcd(playT, state) {
+    if (!lcdPlaneMesh || !lcdCtx || !lcdTex) return;
+    var lcd = Harmony.SynthLCD;
+    if (!lcd || !lcd.isEnabled()) {
+      lcdPlaneMesh.visible = false;
+      return;
+    }
+    lcdPlaneMesh.visible = true;
+    var R = Math.max(0.25, state.r || 1);
+    var rIn = Math.max(0, Math.min(R, state.rIn != null ? state.rIn : 0));
+    var eta = rIn / R;
+    lcdPlaneMesh.scale.set(R * 0.96, R * 0.96, 1);
+
+    var cfg = lcd.getConfig();
+    var coal = state.lcdCoalesce != null ? state.lcdCoalesce : cfg.coalesce;
+    var data = lcd.resolveLcdData(state, playT);
+    var bwMod = Harmony.BitWaveFeed;
+    var nibbles = null;
+    if (bwMod && typeof bwMod.getFeed === 'function') {
+      var fd = bwMod.getFeed();
+      if (fd && fd.active && fd.activeNibbles && fd.activeNibbles.length >= 2) {
+        nibbles = fd.activeNibbles;
+      }
+    }
+    if (!nibbles && data.hex) {
+      nibbles = [];
+      for (var ni = 0; ni < Math.min(data.hex.length, 64); ni++) {
+        nibbles.push(parseInt(data.hex.charAt(ni), 16) || 0);
+      }
+    }
+
+    var sig = [
+      data.text, data.encoding, cfg.harmorBinary ? 1 : 0,
+      coal.toFixed(3), eta.toFixed(3), playT.toFixed(4)
+    ].join('|');
+    if (sig === lastLcdSig) return;
+    lastLcdSig = sig;
+
+    var W = lcdCanvas.width, H = lcdCanvas.height;
+    var cx = W * 0.5, cy = H * 0.5, rad = W * 0.49;
+    var ctx = lcdCtx;
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Translucent dark disc so the hollow sphere vessel glows around the crisp #000000 LCD aperture
+    ctx.fillStyle = cfg.harmorBinary ? 'rgba(0, 0, 0, 0.32)' : 'rgba(4, 10, 18, 0.30)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle cavity reference ring inside the LCD disc
+    if (eta > 0.02) {
+      ctx.strokeStyle = cfg.harmorBinary ? 'rgba(56, 255, 114, 0.24)' : 'rgba(255, 107, 122, 0.32)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * eta, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Main equatorial Synthetic LCD spectrogram band (fixed-interval Base58/Hex glyphs!)
+    var bandW = W * 0.88;
+    var bandH = H * 0.24;
+    var bandX = (W - bandW) * 0.5;
+    var bandY = cy - bandH * 0.5;
+
+    // Frame border around the equatorial LCD aperture
+    ctx.fillStyle = cfg.harmorBinary ? '#000000' : 'rgba(3, 8, 14, 0.92)';
+    ctx.fillRect(bandX - 6, bandY - 6, bandW + 12, bandH + 12);
+    ctx.strokeStyle = cfg.harmorBinary ? 'rgba(56, 255, 114, 0.55)' : 'rgba(77, 243, 221, 0.52)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bandX - 6, bandY - 6, bandW + 12, bandH + 12);
+
+    var drawRes = lcd.drawSwooshLcd(
+      ctx,
+      { x: bandX, y: bandY, w: bandW, h: bandH },
+      data,
+      playT,
+      {
+        coalesce: coal,
+        harmorBinary: cfg.harmorBinary,
+        nibbles: nibbles,
+        fillBg: true
+      }
+    );
+
+    // Top aperture legend: encoding + Harmor Binary badge + Checksum badge
+    ctx.font = '700 18px "Cascadia Code", Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = cfg.harmorBinary ? '#38ff72' : '#4df3dd';
+    var topTag = 'SYNTH LCD · ' + data.encoding.toUpperCase() + (cfg.harmorBinary ? ' · HARMOR 0/1' : '');
+    if (data.checksumValid === true) topTag += ' · ✓ CHECKSUM';
+    ctx.fillText(topTag, cx, bandY - 30);
+
+    // Lower chord readout: decoded text + active playhead character highlight
+    ctx.font = '600 16px "Cascadia Code", Consolas, monospace';
+    ctx.fillStyle = cfg.harmorBinary ? 'rgba(184, 255, 208, 0.88)' : 'rgba(216, 232, 245, 0.88)';
+    var dispTxt = data.text.length > 36 ? (data.text.slice(0, 35) + '…') : data.text;
+    ctx.fillText(dispTxt, cx, bandY + bandH + 34);
+
+    if (drawRes && drawRes.activeChar) {
+      ctx.font = '700 14px "Cascadia Code", Consolas, monospace';
+      ctx.fillStyle = '#ffb84d';
+      ctx.fillText(
+        'SLOT ' + (drawRes.activeCharIdx + 1) + '/' + data.matrix.charCount + '  [' + drawRes.activeChar + ']  ·  COALESCE ' + Math.round(coal * 100) + '%',
+        cx,
+        bandY + bandH + 62
+      );
+    }
+
+    ctx.restore();
+    lcdTex.needsUpdate = true;
   }
 
   // MiniMeters vibrant spectrum ramp: deep violet -> magenta -> hot crimson (low/mid peaks) -> electric cyan (highs)
@@ -1370,9 +1519,11 @@
     updateFourBit(playT, state);
     updateResonance(playT, state);
     updateFloorWt(playT, state, floorFieldData);
+    updateSynthLcd(playT, state);
     controls.update();
 
-    var resActive = !!(state.toggles.resonanceMode || state.toggles.floorWt);
+    var lcdActive = !!(Harmony.SynthLCD && Harmony.SynthLCD.isEnabled());
+    var resActive = !!(state.toggles.resonanceMode || state.toggles.floorWt || lcdActive);
     if (state.toggles.autoRotate || state.toggles.animate || resActive || dirtyDidChange || cameraMoved) {
       renderer.render(scene, camera);
       cameraMoved = false;
