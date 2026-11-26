@@ -253,6 +253,113 @@ test('§§1–3 sphereResonance: time-stretch modulators, radial ladders, triple
   close(pair.R ** 3 - pair.rIn ** 3, r0 ** 3, 1e-12, 'pair conserves V_shell');
 });
 
+test('Stage 1: clefFactor (2-adic split) & pseudoMersenneDecomp (secp256k1 & Mersenne)', () => {
+  // Powers of 2 all collapse to oddKernel 1 (Root C)
+  const c1024 = Engine.clefFactor(1024);
+  assert.equal(c1024.oddKernel, 1);
+  assert.equal(c1024.octave, 10);
+  assert.equal(c1024.isPowerOfTwo, true);
+
+  // Composite prime-limit factorization: 60 and 120 share identical oddKernel 15 (3*5), 1 clef apart
+  const c60 = Engine.clefFactor(60);
+  const c120 = Engine.clefFactor(120);
+  assert.equal(c60.oddKernel, 15);
+  assert.equal(c60.octave, 2);
+  assert.deepEqual(c60.primeExponents, { '2': 2, '3': 1, '5': 1 });
+  assert.equal(c120.oddKernel, 15);
+  assert.equal(c120.octave, 3);
+
+  // Odd / prime even-neighbor Clef decomposition ("uncompleted wavecycle")
+  const p31 = Engine.clefFactor(31);
+  assert.equal(p31.isPrime, true);
+  assert.equal(p31.evenNeighbor.evenVal, 32);
+  assert.equal(p31.evenNeighbor.octave, 5);
+  assert.equal(p31.evenNeighbor.residual, -1);
+  assert.equal(p31.evenNeighbor.label, '2^5 − 1');
+
+  const p19 = Engine.clefFactor(19);
+  assert.equal(p19.evenNeighbor.evenVal, 20);
+  assert.equal(p19.evenNeighbor.oddKernel, 5);
+  assert.equal(p19.evenNeighbor.octave, 2);
+  assert.equal(p19.evenNeighbor.residual, -1);
+
+  const p17 = Engine.clefFactor(17);
+  assert.equal(p17.evenNeighbor.evenVal, 16);
+  assert.equal(p17.evenNeighbor.octave, 4);
+  assert.equal(p17.evenNeighbor.residual, 1);
+
+  // BigInt Pseudo-Mersenne: secp256k1 P = 2^256 - (2^32 + 977)
+  const secp = Engine.initSecp({});
+  const pmSecp = Engine.pseudoMersenneDecomp(secp.P);
+  assert.equal(pmSecp.valid, true);
+  assert.equal(pmSecp.upperSigma, 256);
+  assert.equal(pmSecp.upperDeficit, String((1n << 32n) + 977n));
+  assert.equal(pmSecp.nearestSigma, 256);
+
+  const pmM31 = Engine.pseudoMersenneDecomp((1n << 31n) - 1n);
+  assert.equal(pmM31.upperSigma, 31);
+  assert.equal(pmM31.upperDeficit, '1');
+  assert.equal(pmM31.residual, '-1');
+});
+
+test('Stage 1: lowestCommonStructure projective gcd reduction, Round closure & Period-1 Engine.sample', () => {
+  // (3072 : 5120) -> strips shared Clef 2^10 (1024) to primitive 3:5, lcm = 15360
+  const lcsBig = Engine.lowestCommonStructure(3072, 5120);
+  assert.equal(lcsBig.gcd, 1024);
+  assert.equal(lcsBig.sharedClefOctave, 10);
+  assert.equal(lcsBig.nPrim, 3);
+  assert.equal(lcsBig.mPrim, 5);
+  assert.equal(lcsBig.reducedLabel, '3:5');
+  assert.equal(lcsBig.roundClosure, 15360);
+
+  // Active-axis masking for 2-axis torus knot (k unused): (n=3, m=6, k=1) -> gcd=3, 1:2
+  const lcsTorus = Engine.lowestCommonStructure(3, 6, 1, { useK: false });
+  assert.equal(lcsTorus.gcd, 3);
+  assert.equal(lcsTorus.nPrim, 1);
+  assert.equal(lcsTorus.mPrim, 2);
+  assert.equal(lcsTorus.reducedLabel, '1:2');
+
+  // Engine.sample with lcsReduce=true renders (n=6, m=4, k=8) bit-identically to primitive (3, 2, 4)
+  const baseLiss = {
+    r: 1, rIn: 0.45, amp: 1, f: 1, n: 3, m: 2, k: 4, K: 6, orderN: 19, a: 0.5, b: 3, phaseRad: 0,
+    formulas: { x: 'r*sin(TAU*n*t)', y: 'r*sin(TAU*m*t)', z: 'r*cos(TAU*k*t)' }
+  };
+  const doubledLcs = Object.assign({}, baseLiss, { n: 6, m: 4, k: 8, lcsReduce: true });
+  const sPrim = Engine.sample(baseLiss, 128);
+  const sRed = Engine.sample(doubledLcs, 128);
+  assert.deepEqual(sRed.points, sPrim.points);
+});
+
+test('Stage 1: sentinelRegister (homothetic scale, 0-bit f32 mantissa drift, hysteresis & Edge-to-Infinity)', () => {
+  // Schmitt-trigger hysteresis deadband [0.42, 2.20]
+  assert.equal(Engine.sentinelHysteresisStep(1.0, 0, { rHi: 2.20, rLo: 0.42 }).action, 'hold');
+  const up = Engine.sentinelHysteresisStep(2.30, 0, { rHi: 2.20, rLo: 0.42 });
+  assert.equal(up.action, 'clef_up');
+  assert.equal(up.nextSigma, 1);
+  close(up.scaledRadius, 1.15, 1e-6, 'clef_up halves radius');
+
+  const down = Engine.sentinelHysteresisStep(0.38, 2, { rHi: 2.20, rLo: 0.42 });
+  assert.equal(down.action, 'clef_down');
+  assert.equal(down.nextSigma, 1);
+  close(down.scaledRadius, 0.76, 1e-6, 'clef_down doubles radius');
+
+  // Sentinel register at +10 octaves keeps eta invariant, flips pitch -10 oct, preserves float32 mantissa
+  const sr = Engine.sentinelRegister({
+    r: 1.55, rIn: 0.85, sentinelOctave: 10, f: 1, n: 3, m: 5, k: 1, orderN: 19,
+    clefRoundM: 9, lcsReduce: false,
+    formulas: { x: 'rIn*cos(TAU*m*t)*cos(TAU*n*t)', y: 'rIn*sin(TAU*m*t)', z: '0' }
+  }, { samples: 3200 });
+  assert.equal(sr.sigma, 10);
+  assert.equal(sr.scalePow2, 1024);
+  assert.equal(sr.pitchOctaveShift, -10);
+  assert.equal(sr.mantissaPreserved, true);
+  close(sr.eta, Math.fround(0.85 / 1.55), 1e-6, 'eta invariant under Sentinel octave jump');
+  // mEff = 5 * 2^9 = 2560 > Nyquist (1600) => Edge-to-Infinity beyond_nyquist
+  assert.equal(sr.lcs.mEff, 2560);
+  assert.equal(sr.horizon.maxObservableCycles, 1600);
+  assert.equal(sr.horizon.state, 'beyond_nyquist');
+});
+
 function stdPick(o) {
   const out = {};
   for (const k of Object.keys(o).sort()) out[k] = o[k];

@@ -72,7 +72,23 @@
       </div>
       <div class="preset-row">
         <select id="presetSelect" data-agent-input="preset"></select>
+        <button type="button" id="btnSavePreset" class="preset-save-btn mono" data-hint="savePreset" title="Save or manage persistent user presets">Save</button>
         <button type="button" id="btnPatchNote" class="preset-info-btn mono" title="Show / hide preset explanation" aria-expanded="false" aria-controls="patchNote">!</button>
+      </div>
+      <div id="savePresetBar" class="save-preset-bar" hidden>
+        <div class="save-preset-row">
+          <input type="text" id="savePresetName" class="save-preset-input" maxlength="48" placeholder="Preset name..." aria-label="Saved preset name" />
+          <button type="button" id="btnConfirmSavePreset" class="save-act-btn primary mono">Save</button>
+        </div>
+        <div class="save-preset-tools mono">
+          <span id="savePresetStatus" class="save-preset-status">0 saved</span>
+          <div class="save-preset-actions">
+            <button type="button" id="btnDeletePreset" class="save-act-btn danger" hidden title="Delete active saved preset">Del</button>
+            <button type="button" id="btnExportPresets" class="save-act-btn" title="Download all saved presets as a JSON backup">&darr; JSON</button>
+            <button type="button" id="btnImportPresets" class="save-act-btn" title="Import saved presets from a JSON file">&uarr; JSON</button>
+            <input type="file" id="importPresetsFile" accept=".json,application/json" hidden />
+          </div>
+        </div>
       </div>
       <div id="patchNote" class="note preset-explainer" hidden></div>
     </section>
@@ -135,6 +151,16 @@
           <button type="button" class="snap-chip" data-eta="0.6667" data-hint="snap_2_3">2/3</button>
           <button type="button" class="snap-chip" data-eta="0.7071" data-hint="snap_3db">&minus;3dB</button>
           <button type="button" class="snap-chip" data-eta="0.75" data-hint="snap_3_4">.75</button>
+        </div>
+
+        <div class="sentinel-row mono" data-hint="sentinel">
+          <span class="sentinel-lbl">Sentinel &sigma;</span>
+          <div class="sentinel-step">
+            <button type="button" id="btnSentinelDown" class="sent-btn" aria-label="Compact sentinel octave">&minus;</button>
+            <span id="sentinelOctOut" class="sent-val" title="Double-click to reset Sentinel octave to 0">0 oct</span>
+            <button type="button" id="btnSentinelUp" class="sent-btn" aria-label="Expand sentinel octave">+</button>
+          </div>
+          <button type="button" id="btnSentinelAuto" class="sent-auto-btn" data-hint="sentinel_auto">Auto</button>
         </div>
 
         <!-- Archimedes Axial Slice z/R (Routable Target) -->
@@ -290,24 +316,39 @@
                   <div class="mod-live-dot" data-mod-dot="n" hidden></div>
                 </div>
               </div>
-              <div class="param-row" data-hint="m">
+              <div class="param-row" data-mod-target="m" data-hint="m">
                 <div class="param-head">
-                  <label for="ratioM">m</label>
+                  <span class="param-lbl"><label for="ratioM">m</label><span class="mod-badges" data-mod-badges="m"></span></span>
                   <output id="ratioMOut" class="mono param-val">2</output>
                 </div>
                 <div class="slider-wrap">
+                  <div class="mod-range-bar" data-mod-bar="m"></div>
                   <input type="range" id="ratioM" data-agent-input="m" min="1" max="8" step="1" value="2" data-default="2" />
+                  <div class="mod-live-dot" data-mod-dot="m" hidden></div>
                 </div>
               </div>
-              <div class="param-row" data-hint="k">
+              <div class="param-row" data-mod-target="k" data-hint="k">
                 <div class="param-head">
-                  <label for="ratioK">k</label>
+                  <span class="param-lbl"><label for="ratioK">k</label><span class="mod-badges" data-mod-badges="k"></span></span>
                   <output id="ratioKOut" class="mono param-val">1</output>
                 </div>
                 <div class="slider-wrap">
+                  <div class="mod-range-bar" data-mod-bar="k"></div>
                   <input type="range" id="ratioK" data-agent-input="k" min="1" max="8" step="1" value="1" data-default="1" />
+                  <div class="mod-live-dot" data-mod-dot="k" hidden></div>
                 </div>
               </div>
+            </div>
+
+            <div class="clef-lcs-row mono">
+              <span class="clef-lbl" data-hint="clefM">Clef m</span>
+              <div class="sentinel-step" data-hint="clefM">
+                <button type="button" id="btnClefMDown" class="sent-btn" aria-label="Decrease m Clef octave">&minus;</button>
+                <span id="clefMOut" class="sent-val" title="Double-click to reset Clef m to 0">&times;2<sup>0</sup></span>
+                <button type="button" id="btnClefMUp" class="sent-btn" aria-label="Increase m Clef octave">+</button>
+              </div>
+              <button type="button" id="btnLcsReduce" class="sent-auto-btn" data-hint="lcsReduce">LCS</button>
+              <span id="lcsReadout" class="lcs-readout" data-hint="lcsReduce">3:2</span>
             </div>
 
             <div class="sub-field" data-hint="phaseExact">
@@ -544,6 +585,12 @@
             <b id="resWallMult">1.82&times;</b>
             <em id="resWallK">k&#8321;=5.71</em>
           </div>
+        </div>
+
+        <div id="resSentinelBar" class="res-sentinel-bar mono" hidden>
+          <span id="resSentinelScale">R<sub>sent</sub>=1.00</span>
+          <span id="resSentinelPitch">Pitch 0 oct</span>
+          <span id="resSentinelHorizon" class="horizon-chip">clear</span>
         </div>
 
         <div class="res-arch-head mono">

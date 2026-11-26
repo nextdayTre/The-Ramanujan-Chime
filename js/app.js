@@ -60,6 +60,10 @@
     lockVolume: false,     // §2.1 Constant-Volume Time-Stretch Lock: R(r) = (r^3 + R0^3)^(1/3)
     lockedR0: 0.96868,     // Reference solid radius R0 = (R^3 - rIn^3)^(1/3)
     stretchMode: 'off',    // 'off' | 'pitchLock' | 'tape' | 'jacobian' (§2.2 / §2.3)
+    sentinelOctave: 0,     // Unseen Sentinel Outer Sphere register σ ∈ [-24, +64] (R_sent = R · 2^σ)
+    sentinelAuto: false,   // Schmitt-trigger Clef-change hysteresis on R drags
+    clefRoundM: 0,         // Movable C-Clef Round octave for Ratio m (m_eff = m · 2^clefRoundM)
+    lcsReduce: false,      // Lowest-Common-Structure Period-1 gcd reduction for active (n, m, k)
     archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
     archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
     floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D)
@@ -448,6 +452,10 @@
     suppressAgentPublish = true;
     try {
       var d = (AgentCore && typeof AgentCore.defaultState === 'function') ? AgentCore.defaultState() : null;
+      state.sentinelOctave = 0;
+      state.sentinelAuto = false;
+      state.clefRoundM = 0;
+      state.lcsReduce = false;
       var targetPreset = (d && d.presetIndex != null) ? d.presetIndex : 12;
       applyPreset(targetPreset);
       if (d) {
@@ -558,7 +566,10 @@
     var prime = Engine.isPrimeInt(N);
     if (prime) {
       badge.textContent = 'prime';
-      badge.dataset.hintDetail = sub + '/' + N + ' · prime N (stride ' + stride + ')';
+      var evHint = (Engine.clefFactor && Engine.clefFactor(N).evenNeighbor)
+        ? (' · ' + N + ' = ' + Engine.clefFactor(N).evenNeighbor.label)
+        : '';
+      badge.dataset.hintDetail = sub + '/' + N + ' · prime N (stride ' + stride + ')' + evHint;
       badge.removeAttribute('title');
       badge.style.color = '#ffb04d';
       badge.style.background = 'rgba(255, 176, 77, 0.14)';
@@ -577,7 +588,72 @@
     }
   }
 
+  function updateSentinelReadout() {
+    if (!Engine.sentinelRegister) return;
+    var sent = Engine.sentinelRegister(state, { samples: SAMPLES });
+    var sig = sent.sigma;
+    var sigStr = (sig > 0 ? '+' : (sig < 0 ? '−' : '')) + Math.abs(sig) + ' oct';
+    var rSentTxt = (Math.abs(sig) <= 10)
+      ? sent.Rsent.toFixed(2)
+      : (sent.Runit.toFixed(2) + '·' + sent.scaleTag);
+    var kappaTxt = (Math.abs(sig) <= 8)
+      ? (sent.compaction.toFixed(sent.compaction < 0.1 ? 3 : 2) + '×')
+      : ('2^' + (-sig));
+
+    if ($('sentinelOctOut')) {
+      $('sentinelOctOut').textContent = sigStr;
+      $('sentinelOctOut').classList.toggle('nonzero', sig !== 0);
+      $('sentinelOctOut').dataset.hintDetail =
+        'R_sent=' + rSentTxt + ' · Pitch ' + (sent.pitchOctaveShift > 0 ? '+' : '') +
+        sent.pitchOctaveShift + ' oct · κ=' + kappaTxt +
+        (sent.mantissaPreserved ? ' · 0-bit f32 drift' : '');
+    }
+    if ($('btnSentinelAuto')) {
+      $('btnSentinelAuto').classList.toggle('active', !!state.sentinelAuto);
+    }
+
+    var rm = sent.roundM;
+    if ($('clefMOut')) {
+      $('clefMOut').innerHTML = '&times;2<sup>' + rm + '</sup>';
+      $('clefMOut').classList.toggle('nonzero', rm > 0);
+      var cm = sent.lcs.clefM;
+      var evStr = (cm && cm.evenNeighbor) ? (' · ' + cm.evenNeighbor.label) : '';
+      $('clefMOut').dataset.hintDetail =
+        'm_eff=' + sent.lcs.mEff + ' (' + (cm ? cm.clefLabel : '—') + ')' + evStr;
+    }
+    if ($('btnLcsReduce')) {
+      $('btnLcsReduce').classList.toggle('active', !!state.lcsReduce);
+    }
+    if ($('lcsReadout')) {
+      var lcs = sent.lcs;
+      $('lcsReadout').textContent = (state.lcsReduce && lcs.gcd > 1)
+        ? (lcs.reducedLabel + ' ÷' + lcs.gcd)
+        : lcs.reducedLabel;
+      $('lcsReadout').classList.toggle('reduced', !!(state.lcsReduce && lcs.gcd > 1));
+      $('lcsReadout').dataset.hintDetail =
+        'Raw ' + lcs.rawLabel + ' → LCS ' + lcs.reducedLabel +
+        ' · gcd=' + lcs.gcd + ' · Round lcm=' + lcs.roundClosure;
+    }
+  }
+
   function updateShellReadout(changedKey) {
+    if (state.sentinelAuto && changedKey === 'r' && Engine.sentinelHysteresisStep) {
+      var hStep = Engine.sentinelHysteresisStep(state.r, state.sentinelOctave, { rHi: 2.20, rLo: 0.42 });
+      if (hStep.action !== 'hold') {
+        var factor = (hStep.action === 'clef_up') ? 0.5 : 2.0;
+        state.sentinelOctave = hStep.nextSigma;
+        state.r = Engine.clamp(hStep.scaledRadius, 0.3, 2.6);
+        state.rIn = Engine.clamp(Math.fround((state.rIn || 0) * factor), 0, Math.min(2.4, state.r));
+        if (state.lockVolume && state.lockedR0) {
+          state.lockedR0 = Math.fround(state.lockedR0 * factor);
+        }
+        if ($('radius')) $('radius').value = state.r;
+        if ($('radiusOut')) $('radiusOut').textContent = state.r.toFixed(2);
+        if ($('innerRadius')) $('innerRadius').value = state.rIn;
+        if ($('innerRadiusOut')) $('innerRadiusOut').textContent = state.rIn.toFixed(2);
+      }
+    }
+
     if (state.lockVolume && Engine.solveConstantVolumeR) {
       if (changedKey === 'rIn') {
         var newR = Engine.clamp(Engine.solveConstantVolumeR(state.rIn, state.lockedR0), 0.3, 2.6);
@@ -656,6 +732,7 @@
     });
 
     updateOrderNBadge();
+    updateSentinelReadout();
   }
 
   function syncParamUI() {
@@ -694,6 +771,9 @@
         updateOrderNBadge();
       }
       if (d.key === 'n') updateOrderNBadge();
+      if (d.key === 'n' || d.key === 'm' || d.key === 'k' || d.key === 'f' || d.key === 'orderN') {
+        updateSentinelReadout();
+      }
       if (ModMatrix && typeof ModMatrix.captureBase === 'function') {
         ModMatrix.captureBase(state, d.key);
         if (d.key === 'r' || d.key === 'rIn') {
@@ -757,6 +837,51 @@
       bump();
     });
   });
+
+  // ---- Stage 1: Sentinel Outer Register (σ), Clef m Round & Lowest-Common-Structure ----
+  function stepSentinelOctave(delta) {
+    state.sentinelOctave = Engine.clamp((state.sentinelOctave || 0) + delta, -24, 64);
+    updateSentinelReadout();
+    bump();
+  }
+  if ($('btnSentinelDown')) $('btnSentinelDown').addEventListener('click', function () { stepSentinelOctave(-1); });
+  if ($('btnSentinelUp')) $('btnSentinelUp').addEventListener('click', function () { stepSentinelOctave(1); });
+  if ($('sentinelOctOut')) {
+    $('sentinelOctOut').addEventListener('dblclick', function () {
+      state.sentinelOctave = 0;
+      updateSentinelReadout();
+      bump();
+    });
+  }
+  if ($('btnSentinelAuto')) {
+    $('btnSentinelAuto').addEventListener('click', function () {
+      state.sentinelAuto = !state.sentinelAuto;
+      updateSentinelReadout();
+      bump();
+    });
+  }
+
+  function stepClefRoundM(delta) {
+    state.clefRoundM = Engine.clamp((state.clefRoundM || 0) + delta, 0, 12);
+    updateSentinelReadout();
+    bump();
+  }
+  if ($('btnClefMDown')) $('btnClefMDown').addEventListener('click', function () { stepClefRoundM(-1); });
+  if ($('btnClefMUp')) $('btnClefMUp').addEventListener('click', function () { stepClefRoundM(1); });
+  if ($('clefMOut')) {
+    $('clefMOut').addEventListener('dblclick', function () {
+      state.clefRoundM = 0;
+      updateSentinelReadout();
+      bump();
+    });
+  }
+  if ($('btnLcsReduce')) {
+    $('btnLcsReduce').addEventListener('click', function () {
+      state.lcsReduce = !state.lcsReduce;
+      updateSentinelReadout();
+      bump();
+    });
+  }
 
   function setArchimedesSliceZ(val) {
     state.archimedesAuto = false;
@@ -2251,8 +2376,247 @@
     bump();
   });
 
-  // ---- Presets Dropdown (with <optgroup> categories) ----
+  // ---- Presets Dropdown (with <optgroup> categories + Persistent User Presets) ----
+  var USER_PRESETS_KEY = 'ramanujan-chime:user-presets:v1';
   var presetSelect = $('presetSelect');
+  var userPresets = [];
+  var activeUserPresetId = null;
+  var userOptGroup = null;
+
+  function loadUserPresetsFromStorage() {
+    try {
+      var raw = window.localStorage && window.localStorage.getItem(USER_PRESETS_KEY);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(function (item) {
+        return item && typeof item === 'object' && typeof item.id === 'string' && typeof item.name === 'string' && item.patch;
+      });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function persistUserPresets() {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(userPresets));
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function findUserPreset(id) {
+    for (var i = 0; i < userPresets.length; i++) {
+      if (userPresets[i].id === id) return userPresets[i];
+    }
+    return null;
+  }
+
+  function rebuildUserPresetOptions() {
+    if (!presetSelect) return;
+    if (userOptGroup && userOptGroup.parentNode === presetSelect) {
+      presetSelect.removeChild(userOptGroup);
+    }
+    userOptGroup = null;
+    if (userPresets.length > 0) {
+      userOptGroup = document.createElement('optgroup');
+      userOptGroup.label = 'Saved Presets (' + userPresets.length + ')';
+      userPresets.forEach(function (up) {
+        var opt = document.createElement('option');
+        opt.value = 'user:' + up.id;
+        opt.textContent = '\u2605 ' + up.name;
+        userOptGroup.appendChild(opt);
+      });
+      presetSelect.insertBefore(userOptGroup, presetSelect.firstChild);
+    }
+    if (activeUserPresetId && findUserPreset(activeUserPresetId)) {
+      presetSelect.value = 'user:' + activeUserPresetId;
+    }
+    syncUserPresetControls();
+  }
+
+  function syncUserPresetControls(flashText) {
+    var statusEl = $('savePresetStatus');
+    var delBtn = $('btnDeletePreset');
+    var saveBtn = $('btnSavePreset');
+    var hasActive = !!(activeUserPresetId && findUserPreset(activeUserPresetId));
+    if (delBtn) delBtn.hidden = !hasActive;
+    if (saveBtn) {
+      saveBtn.classList.toggle('has-saved', userPresets.length > 0);
+      saveBtn.dataset.hintDetail = userPresets.length + ' saved preset' + (userPresets.length === 1 ? '' : 's');
+    }
+    if (statusEl) {
+      statusEl.textContent = flashText || (userPresets.length + ' saved');
+    }
+  }
+
+  function captureFullUserPatch() {
+    var modSnap = (ModMatrix && typeof ModMatrix.exportState === 'function')
+      ? ModMatrix.exportState()
+      : null;
+    var baseVals = (modSnap && modSnap.baseValues) ? modSnap.baseValues : {};
+    function baseOrState(key) {
+      if (modSnap && modSnap.routes && modSnap.routes.length && typeof baseVals[key] === 'number' && isFinite(baseVals[key])) {
+        return baseVals[key];
+      }
+      if (key === 'phaseDeg') return (state.phaseRad || 0) * 180 / Math.PI;
+      return state[key];
+    }
+    var togglesCopy = {};
+    for (var tk in state.toggles) {
+      if (hasOwn(state.toggles, tk)) togglesCopy[tk] = !!state.toggles[tk];
+    }
+    return {
+      v: 1,
+      basePreset: presetIndexNow(),
+      formulas: { x: state.formulas.x, y: state.formulas.y, z: state.formulas.z },
+      params: {
+        r: baseOrState('r'),
+        rIn: baseOrState('rIn'),
+        amp: baseOrState('amp'),
+        f: baseOrState('f'),
+        K: baseOrState('K'),
+        orderN: baseOrState('orderN'),
+        a: baseOrState('a'),
+        b: baseOrState('b'),
+        n: baseOrState('n'),
+        m: baseOrState('m'),
+        k: baseOrState('k'),
+        phaseDeg: baseOrState('phaseDeg')
+      },
+      twinMode: state.twinMode,
+      bitSource: state.bitSource,
+      magZoom: state.magZoom,
+      magFocus: state.magFocus,
+      lockVolume: !!state.lockVolume,
+      lockedR0: state.lockedR0,
+      stretchMode: state.stretchMode || 'off',
+      sentinelOctave: state.sentinelOctave || 0,
+      sentinelAuto: !!state.sentinelAuto,
+      clefRoundM: state.clefRoundM || 0,
+      lcsReduce: !!state.lcsReduce,
+      archimedesAuto: state.archimedesAuto !== false,
+      archimedesZNorm: state.archimedesZNorm || 0,
+      toggles: togglesCopy,
+      mod: modSnap
+    };
+  }
+
+  function applyUserPreset(id) {
+    var item = findUserPreset(id);
+    if (!item || !item.patch) return false;
+    var patch = item.patch;
+    activeUserPresetId = item.id;
+    isRestoringSlot = true;
+    try {
+      if (GroverLens && GroverLens.close) GroverLens.close();
+      var baseIdx = (typeof patch.basePreset === 'number' && Presets.list[patch.basePreset]) ? patch.basePreset : 13;
+      state.presetIndex = baseIdx;
+      state.note = 'Saved Preset: ' + item.name + (patch.mod && patch.mod.routes && patch.mod.routes.length
+        ? (' (' + patch.mod.routes.length + ' mod route' + (patch.mod.routes.length === 1 ? '' : 's') + ')')
+        : '');
+      if ($('patchNote')) $('patchNote').textContent = state.note;
+
+      if (patch.formulas) {
+        ['x', 'y', 'z'].forEach(function (axis) {
+          if (patch.formulas[axis] != null) {
+            state.formulas[axis] = String(patch.formulas[axis]);
+            var inp = $('formula' + axis.toUpperCase());
+            if (inp) {
+              inp.value = state.formulas[axis];
+              inp.classList.remove('invalid');
+            }
+            var err = $('err' + axis.toUpperCase());
+            if (err) err.textContent = '';
+          }
+        });
+      }
+
+      var pr = patch.params || {};
+      ['r', 'rIn', 'amp', 'f', 'K', 'orderN', 'a', 'b', 'n', 'm', 'k'].forEach(function (k) {
+        if (typeof pr[k] === 'number' && isFinite(pr[k])) state[k] = pr[k];
+      });
+      if (typeof pr.phaseDeg === 'number' && isFinite(pr.phaseDeg)) setPhaseFromDeg(pr.phaseDeg);
+      if (patch.twinMode) setTwinMode(patch.twinMode);
+      if (patch.bitSource) setBitSourceUI(patch.bitSource);
+      if (typeof patch.magZoom === 'number') state.magZoom = patch.magZoom;
+      if (patch.magFocus) state.magFocus = patch.magFocus;
+      state.lockVolume = !!patch.lockVolume;
+      if (typeof patch.lockedR0 === 'number' && isFinite(patch.lockedR0)) state.lockedR0 = patch.lockedR0;
+      state.stretchMode = patch.stretchMode || 'off';
+      state.sentinelOctave = Engine.clamp(Math.round(patch.sentinelOctave || 0), -24, 64);
+      state.sentinelAuto = !!patch.sentinelAuto;
+      state.clefRoundM = Engine.clamp(Math.round(patch.clefRoundM || 0), 0, 12);
+      state.lcsReduce = !!patch.lcsReduce;
+      state.archimedesAuto = patch.archimedesAuto !== false;
+      if (typeof patch.archimedesZNorm === 'number' && isFinite(patch.archimedesZNorm)) {
+        state.archimedesZNorm = Engine.clamp(patch.archimedesZNorm, -1, 1);
+      }
+      if ($('btnArchAuto')) $('btnArchAuto').classList.toggle('active', !!state.archimedesAuto);
+
+      if (patch.toggles && typeof patch.toggles === 'object') {
+        for (var tk in patch.toggles) {
+          if (hasOwn(state.toggles, tk)) state.toggles[tk] = !!patch.toggles[tk];
+        }
+      }
+
+      if (ModMatrix && typeof ModMatrix.importState === 'function') {
+        ModMatrix.importState(patch.mod || null, state);
+      }
+
+      syncParamUI();
+      syncHudToggles();
+      syncMagChips();
+      if (presetSelect) presetSelect.value = 'user:' + item.id;
+      syncUserPresetControls('Loaded "' + item.name + '"');
+    } finally {
+      isRestoringSlot = false;
+    }
+    if (slots && state.activeSlot) slots[state.activeSlot] = captureSnapshot();
+    if (ChimeRack && ChimeRack.refresh) ChimeRack.refresh();
+    bump();
+    return true;
+  }
+
+  function defaultSuggestedPresetName() {
+    if (activeUserPresetId) {
+      var cur = findUserPreset(activeUserPresetId);
+      if (cur) return cur.name;
+    }
+    var base = presetNameNow().split(' — ')[0] || 'Custom Patch';
+    var tag = (state.toggles.strobeN && state.orderN) ? (' N=' + Math.round(state.orderN)) : '';
+    return base.slice(0, 32) + tag;
+  }
+
+  function saveCurrentAsUserPreset(rawName) {
+    var name = String(rawName || '').trim() || defaultSuggestedPresetName();
+    var patch = captureFullUserPatch();
+    var existing = null;
+    for (var i = 0; i < userPresets.length; i++) {
+      if (userPresets[i].name.toLowerCase() === name.toLowerCase()) {
+        existing = userPresets[i];
+        break;
+      }
+    }
+    if (existing) {
+      existing.name = name;
+      existing.patch = patch;
+      existing.updatedAt = Date.now();
+      activeUserPresetId = existing.id;
+    } else {
+      var id = 'up-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e4).toString(36);
+      userPresets.unshift({ id: id, name: name, patch: patch, updatedAt: Date.now() });
+      activeUserPresetId = id;
+    }
+    var ok = persistUserPresets();
+    rebuildUserPresetOptions();
+    syncUserPresetControls(ok ? ('Saved "' + name + '"') : 'Saved (session only)');
+    return activeUserPresetId;
+  }
+
   var groupsMap = {};
   Presets.list.forEach(function (p, i) {
     var gName = p.group || 'Patches';
@@ -2268,9 +2632,14 @@
     groupsMap[gName].appendChild(opt);
   });
 
+  userPresets = loadUserPresetsFromStorage();
+  rebuildUserPresetOptions();
+
   function applyPreset(idx) {
     var p = Presets.list[Number(idx)];
     if (!p) return;
+    activeUserPresetId = null;
+    syncUserPresetControls();
     state.presetIndex = Number(idx);
     if (presetSelect) presetSelect.value = String(idx);
     state.note = p.note || '';
@@ -2324,7 +2693,129 @@
     bump();
   }
 
-  presetSelect.addEventListener('change', function () { applyPreset(presetSelect.value); });
+  presetSelect.addEventListener('change', function () {
+    var val = presetSelect.value;
+    if (val && val.indexOf('user:') === 0) {
+      applyUserPreset(val.slice(5));
+    } else {
+      applyPreset(val);
+    }
+  });
+
+  // ---- Save / Manage Persistent User Presets UI ----
+  if ($('btnSavePreset') && $('savePresetBar')) {
+    $('btnSavePreset').addEventListener('click', function () {
+      var bar = $('savePresetBar');
+      var opening = bar.hidden;
+      bar.hidden = !opening;
+      $('btnSavePreset').classList.toggle('active', opening);
+      if (opening && $('savePresetName')) {
+        $('savePresetName').value = defaultSuggestedPresetName();
+        $('savePresetName').focus();
+        $('savePresetName').select();
+        syncUserPresetControls();
+      }
+    });
+  }
+  if ($('btnConfirmSavePreset')) {
+    $('btnConfirmSavePreset').addEventListener('click', function () {
+      var inp = $('savePresetName');
+      saveCurrentAsUserPreset(inp ? inp.value : '');
+    });
+  }
+  if ($('savePresetName')) {
+    $('savePresetName').addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        saveCurrentAsUserPreset($('savePresetName').value);
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        if ($('savePresetBar')) $('savePresetBar').hidden = true;
+        if ($('btnSavePreset')) $('btnSavePreset').classList.remove('active');
+      }
+    });
+  }
+  if ($('btnDeletePreset')) {
+    $('btnDeletePreset').addEventListener('click', function () {
+      if (!activeUserPresetId) return;
+      var removed = findUserPreset(activeUserPresetId);
+      userPresets = userPresets.filter(function (u) { return u.id !== activeUserPresetId; });
+      activeUserPresetId = null;
+      persistUserPresets();
+      rebuildUserPresetOptions();
+      if (presetSelect) presetSelect.value = String(presetIndexNow());
+      syncUserPresetControls(removed ? ('Deleted "' + removed.name + '"') : null);
+    });
+  }
+  if ($('btnExportPresets')) {
+    $('btnExportPresets').addEventListener('click', function () {
+      if (!userPresets.length) {
+        syncUserPresetControls('No saved presets yet');
+        return;
+      }
+      try {
+        var payload = JSON.stringify({ app: 'ramanujan-chime', schemaVersion: 1, presets: userPresets }, null, 2);
+        var blob = new Blob([payload], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'ramanujan-chime-presets.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        syncUserPresetControls('Exported ' + userPresets.length + ' JSON');
+      } catch (e) {
+        syncUserPresetControls('Export failed');
+      }
+    });
+  }
+  if ($('btnImportPresets') && $('importPresetsFile')) {
+    $('btnImportPresets').addEventListener('click', function () {
+      $('importPresetsFile').value = '';
+      $('importPresetsFile').click();
+    });
+    $('importPresetsFile').addEventListener('change', function () {
+      var file = $('importPresetsFile').files && $('importPresetsFile').files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var doc = JSON.parse(String(reader.result || ''));
+          var list = Array.isArray(doc) ? doc : (doc && Array.isArray(doc.presets) ? doc.presets : []);
+          var added = 0;
+          for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+            if (!item || typeof item.name !== 'string' || !item.patch) continue;
+            var exists = false;
+            for (var j = 0; j < userPresets.length; j++) {
+              if (userPresets[j].name.toLowerCase() === item.name.toLowerCase()) {
+                userPresets[j].patch = item.patch;
+                userPresets[j].updatedAt = Date.now();
+                exists = true;
+                break;
+              }
+            }
+            if (!exists) {
+              userPresets.push({
+                id: item.id || ('up-' + Date.now().toString(36) + '-' + i),
+                name: item.name,
+                patch: item.patch,
+                updatedAt: Date.now()
+              });
+            }
+            added++;
+          }
+          persistUserPresets();
+          rebuildUserPresetOptions();
+          syncUserPresetControls('Imported ' + added + ' preset' + (added === 1 ? '' : 's'));
+        } catch (e) {
+          syncUserPresetControls('Invalid preset JSON');
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
 
   // ---- Canonical Sphere Snapshot + VST A/B/C Slots & URL Hash Sharing ----
   var SLOT_ORDER = ['A', 'B', 'C'];
@@ -2835,6 +3326,45 @@
     }
     if ($('resWallK')) {
       $('resWallK').textContent = res.modes.shell[0] ? ('k₁=' + res.modes.shell[0].toFixed(2)) : '—';
+    }
+
+    var sentBar = $('resSentinelBar');
+    if (sentBar && Engine.sentinelRegister) {
+      var showSent = (state.sentinelOctave !== 0) || (state.clefRoundM > 0) || !!state.lcsReduce;
+      sentBar.hidden = !showSent;
+      if (showSent) {
+        var sr = Engine.sentinelRegister(state, { samples: SAMPLES });
+        var rTxt = Math.abs(sr.sigma) <= 10
+          ? sr.Rsent.toFixed(2)
+          : (sr.Runit.toFixed(2) + '·' + sr.scaleTag);
+        if ($('resSentinelScale')) {
+          $('resSentinelScale').textContent = 'R_sent=' + rTxt;
+        }
+        if ($('resSentinelPitch')) {
+          if (sr.sigma !== 0) {
+            var pSign = sr.pitchOctaveShift > 0 ? '+' : '';
+            $('resSentinelPitch').textContent = 'Pitch ' + pSign + sr.pitchOctaveShift + ' oct';
+          } else {
+            $('resSentinelPitch').textContent = 'LCS ' + sr.lcs.reducedLabel;
+          }
+        }
+        var hEl = $('resSentinelHorizon');
+        if (hEl) {
+          if (sr.lcsReduce && sr.lcs.gcd > 1) {
+            hEl.textContent = 'LCS ÷' + sr.lcs.gcd;
+            hEl.className = 'horizon-chip lcs';
+          } else if (sr.horizon.state === 'beyond_nyquist') {
+            hEl.textContent = 'Edge→∞!';
+            hEl.className = 'horizon-chip warn';
+          } else if (sr.horizon.state === 'dense') {
+            hEl.textContent = 'dense';
+            hEl.className = 'horizon-chip dense';
+          } else {
+            hEl.textContent = sr.scaleTag;
+            hEl.className = 'horizon-chip';
+          }
+        }
+      }
     }
 
     var archBadge = $('resArchBadge');

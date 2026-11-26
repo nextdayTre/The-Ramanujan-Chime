@@ -127,3 +127,92 @@ test('ModMatrix q12 and fifths operators walk exact chromatic and Circle-of-Fift
   assert.deepEqual(chromaticSeen, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
   assert.deepEqual(fifthsSeen, [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5]);
 });
+
+test('Stage 0: ModMatrix routes LFOs to Ratio m and Ratio k and restores base cleanly', () => {
+  const st = {
+    r: 1.0,
+    rIn: 0.45,
+    archimedesZNorm: 0,
+    orderN: 19,
+    phaseRad: 0,
+    f: 1.0,
+    amp: 1.0,
+    K: 6,
+    a: 0.5,
+    b: 3,
+    n: 3,
+    m: 4,
+    k: 2,
+    lockVolume: false,
+    lockedR0: 0.96868,
+    archimedesAuto: true,
+    toggles: { animate: false, strobeN: false }
+  };
+
+  assert.ok(ModMatrix.TARGETS.m && ModMatrix.TARGETS.m.isInt === true);
+  assert.ok(ModMatrix.TARGETS.k && ModMatrix.TARGETS.k.isInt === true);
+
+  ModMatrix.clearRoutes();
+  ModMatrix.captureBase(st);
+  // LFO1 sine at playT=0.25 => +1; span for [1..8] is 3.5; depth=1.0 => m: 4+3.5=7.5->8, k: 2+3.5=5.5->6
+  ModMatrix.addRoute('lfo1', 'm', 'linear', 1.0);
+  ModMatrix.addRoute('lfo1', 'k', 'linear', 1.0);
+
+  const res = ModMatrix.evaluate(st, 0.25, 0.016);
+  assert.equal(res.active, true);
+  assert.equal(res.changed, true);
+  assert.equal(st.m, 8);
+  assert.equal(st.k, 6);
+
+  ModMatrix.clearRoutes();
+  ModMatrix.evaluate(st, 0.25, 0.016);
+  assert.equal(st.m, 4);
+  assert.equal(st.k, 2);
+});
+
+test('ModMatrix exportState and importState round-trip LFOs, routes, and baseValues cleanly', () => {
+  const st = {
+    r: 1.55,
+    rIn: 0.85,
+    archimedesZNorm: 0,
+    orderN: 27,
+    phaseRad: 0,
+    f: 1.0,
+    amp: 0.75,
+    K: 7,
+    a: 0.5,
+    b: 3,
+    n: 2,
+    m: 2,
+    k: 1,
+    lockVolume: false,
+    lockedR0: 0.96868,
+    archimedesAuto: true,
+    toggles: { animate: false, strobeN: true }
+  };
+
+  ModMatrix.clearRoutes();
+  ModMatrix.captureBase(st);
+  ModMatrix.addRoute('lfo1', 'm', 'linear', 0.75);
+  ModMatrix.addRoute('lfo2', 'phaseDeg', 'cos', 0.5);
+  ModMatrix.evaluate(st, 0.25, 0.016);
+
+  const exported = ModMatrix.exportState();
+  assert.equal(exported.routes.length, 2);
+  assert.equal(exported.baseValues.m, 2);
+
+  // Wipe and mutate state, then restore from exported snapshot
+  ModMatrix.clearRoutes();
+  st.m = 7;
+  st.orderN = 19;
+  ModMatrix.importState(exported, st);
+  assert.equal(ModMatrix.getRoutes().length, 2);
+  assert.equal(st.m, 2, 'importState restores true unmodulated base value of m');
+  assert.equal(st.orderN, 27, 'importState restores true base orderN');
+
+  // Re-evaluating at t=0.25 reproduces the routed m modulation identically
+  ModMatrix.evaluate(st, 0.25, 0.016);
+  assert.ok(st.m > 2, 'imported LFO1->m route actively modulates m again');
+
+  ModMatrix.clearRoutes();
+});

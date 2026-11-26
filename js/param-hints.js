@@ -33,6 +33,12 @@
       volText: $('shellVolOut') ? $('shellVolOut').textContent : '',
       orderDetail: $('orderNBadge') ? ($('orderNBadge').dataset.hintDetail || '') : '',
       syzygyDetail: $('syzygyBadge') ? ($('syzygyBadge').dataset.hintDetail || '') : '',
+      sentinelDetail: $('sentinelOctOut') ? ($('sentinelOctOut').dataset.hintDetail || '') : '',
+      sentinelAuto: !!($('btnSentinelAuto') && $('btnSentinelAuto').classList.contains('active')),
+      clefMDetail: $('clefMOut') ? ($('clefMOut').dataset.hintDetail || '') : '',
+      lcsDetail: $('lcsReadout') ? ($('lcsReadout').dataset.hintDetail || '') : '',
+      lcsActive: !!($('btnLcsReduce') && $('btnLcsReduce').classList.contains('active')),
+      savePresetDetail: $('btnSavePreset') ? ($('btnSavePreset').dataset.hintDetail || '') : '',
       el: el || null
     };
   }
@@ -46,6 +52,14 @@
         return ctx.lockVol
           ? { text: 'Locked · V invariant', tone: 'active' }
           : { text: 'Off · R & r independent', tone: 'info' };
+      }
+    },
+    savePreset: {
+      title: 'Save Persistent Preset',
+      accent: 'gold',
+      desc: 'Saves your complete patch — formulas, toggles, Sentinel/Clef registers, and active Mod & Logic routes — to local storage (plus JSON backup).',
+      check: function (ctx) {
+        return ctx.savePresetDetail ? { text: ctx.savePresetDetail, tone: 'info' } : null;
       }
     },
     r: {
@@ -130,6 +144,43 @@
       title: 'Snap .75 · Perfect Fourth',
       accent: 'emerald',
       desc: 'Sets r/R = 0.75 (α = 4:3 fourth · Triple Lock 3:4:12 thin-shell resonance).'
+    },
+    sentinel: {
+      title: 'Unseen Sentinel Outer Sphere (σ)',
+      accent: 'cyan',
+      desc: 'Dyadic octave register R_sent = R·2^σ — keeps 3D vessel at full 24-bit float32 precision while tracking external scale & pitch duality (0-bit mantissa drift).',
+      check: function (ctx) {
+        return ctx.sentinelDetail
+          ? { text: ctx.sentinelDetail, tone: ctx.sentinelDetail.indexOf('0 oct') >= 0 ? 'info' : 'active' }
+          : null;
+      }
+    },
+    sentinel_auto: {
+      title: 'Sentinel Auto Clef-Hysteresis',
+      accent: 'emerald',
+      desc: 'Schmitt-trigger deadband [0.42, 2.20]: dragging Outer R past a boundary jumps σ ± 1 and rescales R & r by 2^(∓1) with zero jitter.',
+      check: function (ctx) {
+        return ctx.sentinelAuto
+          ? { text: 'Active · quantized 2^±1 clef jumps', tone: 'active' }
+          : { text: 'Off · manual σ stepping', tone: 'info' };
+      }
+    },
+    clefM: {
+      title: 'Movable C-Clef · Ratio m Round',
+      accent: 'gold',
+      desc: 'Shifts Ratio m by dyadic octaves (m_eff = m·2^σ) so the bounded 1..8 slider reaches huge harmonic registers without losing resolution.',
+      check: function (ctx) {
+        return ctx.clefMDetail ? { text: ctx.clefMDetail, tone: 'active' } : null;
+      }
+    },
+    lcsReduce: {
+      title: 'Lowest-Common-Structure (LCS)',
+      accent: 'emerald',
+      desc: 'Strips shared g = gcd(n, m, k) before sampling so high-clef knots draw as alias-free Period-1 curves in O(1) while preserving Round lcm closure.',
+      check: function (ctx) {
+        if (!ctx.lcsDetail) return null;
+        return { text: ctx.lcsDetail, tone: ctx.lcsActive ? 'active' : 'info' };
+      }
     },
     sliceZ: {
       title: 'Archimedes Slice z/R',

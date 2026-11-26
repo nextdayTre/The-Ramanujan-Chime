@@ -277,8 +277,31 @@
     var a = s.a != null ? s.a : 0.5;
     var b = s.b != null ? s.b : 3;
     var effF = s.f;
+    var effN = s.n;
+    var effM = s.m;
+    var effK = s.k;
     var effPhase = s.phaseRad || 0;
     var fns = FNS;
+
+    // Optional Clef-Identity Round register & Lowest-Common-Structure (LCS) projective reduction
+    // (default clefRoundM=0, lcsReduce=false keeps all baseline presets 100% bit-exact)
+    var roundM = s.clefRoundM ? clamp(Math.round(s.clefRoundM), 0, 12) : 0;
+    if (roundM > 0 || s.lcsReduce) {
+      if (s.lcsReduce) {
+        var activeAx = detectRatioAxes(s.formulas);
+        var lcsRes = lowestCommonStructure(s.n, s.m, s.k, {
+          roundM: roundM,
+          useN: activeAx.useN,
+          useM: activeAx.useM,
+          useK: activeAx.useK
+        });
+        effN = lcsRes.nPrim;
+        effM = lcsRes.mPrim;
+        effK = lcsRes.kPrim;
+      } else if (roundM > 0 && effM != null) {
+        effM = effM * Math.pow(2, roundM);
+      }
+    }
 
     // Optional §2.2 / §2.3 Time-Stretch Modulation Coupling (default 'off' keeps all baseline presets bit-exact)
     var sm = s.stretchMode;
@@ -317,7 +340,7 @@
 
     return [
       t, u, TAU, PI,
-      s.r, rIn, s.amp, effF, s.n, s.m, s.k, K, N, a, b, effPhase
+      s.r, rIn, s.amp, effF, effN, effM, effK, K, N, a, b, effPhase
     ].concat(fns, [eta, alpha, ringArea]);
   }
 
@@ -642,11 +665,19 @@
     return rIn > 0.02 ? 'IN SHELL' : 'INSIDE';
   }
 
-  // Greatest common divisor & primality check for Finite Cyclic Order N Strobe
+  // Greatest common divisor, least common multiple & primality check
   function gcd(a, b) {
-    a = Math.abs(a | 0); b = Math.abs(b | 0);
+    a = Math.abs(Math.trunc(Number(a) || 0));
+    b = Math.abs(Math.trunc(Number(b) || 0));
     while (b !== 0) { var t = b; b = a % b; a = t; }
     return a || 1;
+  }
+
+  function lcm(a, b) {
+    a = Math.abs(Math.trunc(Number(a) || 0));
+    b = Math.abs(Math.trunc(Number(b) || 0));
+    if (a === 0 || b === 0) return 0;
+    return (a / gcd(a, b)) * b;
   }
 
   function isPrimeInt(n) {
@@ -657,6 +688,374 @@
       if (n % d === 0) return false;
     }
     return true;
+  }
+
+  // ---- Stage 1: Sentinel Outer Register (σ), Clef-Identity (2-adic) & Lowest-Common-Structure ----
+
+  function detectRatioAxes(formulas) {
+    if (!formulas || typeof formulas !== 'object') {
+      return { useN: true, useM: true, useK: true };
+    }
+    var joined = String(formulas.x || '') + ' ' + String(formulas.y || '') + ' ' + String(formulas.z || '');
+    var useN = /\bn\b/.test(joined);
+    var useM = /\bm\b/.test(joined);
+    var useK = /\bk\b/.test(joined);
+    if (!useN && !useM && !useK) {
+      return { useN: true, useM: true, useK: true };
+    }
+    return { useN: useN, useM: useM, useK: useK };
+  }
+
+  // Exact 2-adic Movable C-Clef decomposition: M = M_odd * 2^nu2(M)
+  // Plus small prime-limit lattice factors & even-neighbor Clef residual for odd/prime M.
+  function clefFactor(val) {
+    var M = Math.round(Number(val));
+    if (!isFinite(M) || M < 1) {
+      return {
+        valid: false,
+        value: 0,
+        oddKernel: 0,
+        octave: 0,
+        pow2: 1,
+        isPowerOfTwo: false,
+        isPrime: false,
+        primeExponents: {},
+        clefLabel: '—',
+        evenNeighbor: null
+      };
+    }
+
+    var odd = M;
+    var oct = 0;
+    while (odd % 2 === 0) {
+      odd = odd / 2;
+      oct++;
+    }
+    var pow2 = Math.pow(2, oct);
+
+    // Compact prime-limit factorization for composite lattice inspection (bounded trial division)
+    var primeExp = {};
+    if (oct > 0) primeExp['2'] = oct;
+    var rem = odd;
+    var limit = Math.min(Math.floor(Math.sqrt(rem)), 10000);
+    for (var d = 3; d <= limit && rem > 1; d += 2) {
+      var cnt = 0;
+      while (rem % d === 0) {
+        rem = rem / d;
+        cnt++;
+      }
+      if (cnt > 0) {
+        primeExp[String(d)] = cnt;
+        limit = Math.min(Math.floor(Math.sqrt(rem)), 10000);
+      }
+    }
+    if (rem > 1) {
+      primeExp[String(rem)] = (primeExp[String(rem)] || 0) + 1;
+    }
+
+    var isPrime = (M <= 1e9) ? isPrimeInt(M) : false;
+
+    // For odd M > 1 (especially primes), find nearest high-clef even neighbor E = odd_E * 2^oct_E
+    // Prefer greater even neighbor (M + 1) on ties so M = E - 1 ("uncompleted wavecycle").
+    var evenNeighbor = null;
+    if (oct === 0 && M > 1) {
+      var hi = M + 1, hiOct = 0, hiOdd = hi;
+      while (hiOdd % 2 === 0) { hiOdd /= 2; hiOct++; }
+      var lo = M - 1, loOct = 0, loOdd = lo;
+      while (loOdd > 0 && loOdd % 2 === 0) { loOdd /= 2; loOct++; }
+      var pickHi = (hiOct >= loOct);
+      var evVal = pickHi ? hi : lo;
+      var evOdd = pickHi ? hiOdd : loOdd;
+      var evOct = pickHi ? hiOct : loOct;
+      var resSign = pickHi ? -1 : 1;
+      var baseStr = (evOdd === 1) ? ('2^' + evOct) : (evOdd + '·2^' + evOct);
+      evenNeighbor = {
+        evenVal: evVal,
+        oddKernel: evOdd,
+        octave: evOct,
+        residual: resSign,
+        label: baseStr + (resSign < 0 ? ' − 1' : ' + 1')
+      };
+    }
+
+    var clefLabel = (odd === 1)
+      ? ('1·2^' + oct + ' (C)')
+      : (odd + '·2^' + oct);
+
+    return {
+      valid: true,
+      value: M,
+      oddKernel: odd,
+      octave: oct,
+      pow2: pow2,
+      isPowerOfTwo: odd === 1,
+      isPrime: isPrime,
+      primeExponents: primeExp,
+      clefLabel: clefLabel,
+      evenNeighbor: evenNeighbor
+    };
+  }
+
+  // BigInt-safe Pseudo-Mersenne / Solinas Even-Clef decomposition: P = 2^sigma - deficit
+  // Connects directly to secp256k1 (2^256 - 2^32 - 977) and Mersenne primes (2^p - 1).
+  function pseudoMersenneDecomp(val) {
+    var P;
+    try {
+      P = (typeof val === 'bigint') ? val : BigInt(val);
+    } catch (e) {
+      return { valid: false };
+    }
+    if (P < 1n) return { valid: false };
+    var bin = P.toString(2);
+    var bits = bin.length;
+    var lowPow = 1n << BigInt(bits - 1);
+    if (P === lowPow) {
+      return {
+        valid: true,
+        value: P.toString(),
+        bitLength: bits,
+        upperSigma: bits - 1,
+        upperDeficit: '0',
+        nearestSigma: bits - 1,
+        residual: '0',
+        isExactPowerOfTwo: true,
+        label: '2^' + (bits - 1)
+      };
+    }
+    var highPow = 1n << BigInt(bits);
+    var deficit = highPow - P;
+    var excess = P - lowPow;
+    var useHigh = deficit <= excess;
+    var nearSigma = useHigh ? bits : (bits - 1);
+    var residualStr = useHigh ? ('-' + deficit.toString()) : ('+' + excess.toString());
+    var label = useHigh
+      ? ('2^' + bits + ' − ' + deficit.toString())
+      : ('2^' + (bits - 1) + ' + ' + excess.toString());
+    return {
+      valid: true,
+      value: P.toString(),
+      bitLength: bits,
+      upperSigma: bits,
+      upperDeficit: deficit.toString(),
+      nearestSigma: nearSigma,
+      residual: residualStr,
+      isExactPowerOfTwo: false,
+      label: label
+    };
+  }
+
+  // Projective gcd-reduction ("Lowest-Common-Structure") + lcm Round closure + Observer Horizon
+  function lowestCommonStructure(n, m, k, opts) {
+    opts = opts || {};
+    var roundM = clamp(Math.round(opts.roundM || 0), 0, 16);
+    var samples = Math.max(64, Math.round(opts.samples || 3200));
+    var useN = opts.useN !== false;
+    var useM = opts.useM !== false;
+    var useK = (k != null) ? (opts.useK !== false) : false;
+
+    var nEff = Math.max(1, Math.round(n != null ? n : 1));
+    var mBase = Math.max(1, Math.round(m != null ? m : 1));
+    var mEff = mBase * Math.pow(2, roundM);
+    var kEff = Math.max(1, Math.round(k != null ? k : 1));
+
+    var active = [];
+    if (useN) active.push(nEff);
+    if (useM) active.push(mEff);
+    if (useK) active.push(kEff);
+    if (active.length === 0) active = [nEff, mEff];
+
+    var g = active[0];
+    for (var i = 1; i < active.length; i++) {
+      g = gcd(g, active[i]);
+    }
+    if (active.length === 1) g = 1;
+
+    var nPrim = useN ? Math.round(nEff / g) : nEff;
+    var mPrim = useM ? Math.round(mEff / g) : mEff;
+    var kPrim = useK ? Math.round(kEff / g) : kEff;
+
+    var closure = active[0];
+    for (var j = 1; j < active.length; j++) {
+      closure = lcm(closure, active[j]);
+    }
+    var primActive = [];
+    if (useN) primActive.push(nPrim);
+    if (useM) primActive.push(mPrim);
+    if (useK) primActive.push(kPrim);
+    if (primActive.length === 0) primActive = [nPrim, mPrim];
+    var primClosure = primActive[0];
+    for (var p = 1; p < primActive.length; p++) {
+      primClosure = lcm(primClosure, primActive[p]);
+    }
+
+    var maxEff = Math.max.apply(null, active);
+    var maxPrim = Math.max.apply(null, primActive);
+    var maxObservableCycles = Math.floor(samples / 2);
+    var smoothBudget = Math.floor(samples / 32);
+
+    var clefM = clefFactor(mEff);
+    var clefShared = clefFactor(g);
+
+    var rawParts = [];
+    var primParts = [];
+    if (useN) { rawParts.push(String(nEff)); primParts.push(String(nPrim)); }
+    if (useM) { rawParts.push(String(mEff)); primParts.push(String(mPrim)); }
+    if (useK) { rawParts.push(String(kEff)); primParts.push(String(kPrim)); }
+
+    return {
+      nEff: nEff,
+      mBase: mBase,
+      mEff: mEff,
+      kEff: kEff,
+      roundM: roundM,
+      useN: useN,
+      useM: useM,
+      useK: useK,
+      gcd: g,
+      sharedClefOctave: clefShared.octave,
+      sharedOddKernel: clefShared.oddKernel,
+      nPrim: nPrim,
+      mPrim: mPrim,
+      kPrim: kPrim,
+      roundClosure: closure,
+      primClosure: primClosure,
+      computeSavingRatio: g,
+      rawLabel: rawParts.join(':'),
+      reducedLabel: primParts.join(':'),
+      clefM: clefM,
+      maxEffective: maxEff,
+      maxPrimitive: maxPrim,
+      maxObservableCycles: maxObservableCycles,
+      smoothBudget: smoothBudget,
+      exceedsSmoothHorizon: maxEff > smoothBudget,
+      exceedsNyquist: maxEff > maxObservableCycles
+    };
+  }
+
+  // Schmitt-Trigger Clef-Change Hysteresis (Session 1 §6.2):
+  // Expands sigma -> sigma+1 above rHi (1.00), compacts sigma -> sigma-1 only below rLo (0.42).
+  // Exact 2^(+-1) scaling shifts only the float32 exponent (0-bit mantissa drift).
+  function sentinelHysteresisStep(normRadius, sigma, cfg) {
+    cfg = cfg || {};
+    var rHi = cfg.rHi != null ? cfg.rHi : 1.0;
+    var rLo = cfg.rLo != null ? cfg.rLo : 0.42;
+    var minOct = cfg.minOct != null ? cfg.minOct : -24;
+    var maxOct = cfg.maxOct != null ? cfg.maxOct : 64;
+    var curSig = clamp(Math.round(sigma || 0), minOct, maxOct);
+    var rVal = Number(normRadius);
+    if (!isFinite(rVal) || rVal < 0) rVal = 0;
+
+    if (rVal > rHi && curSig < maxOct) {
+      return {
+        nextSigma: curSig + 1,
+        action: 'clef_up',
+        scaledRadius: Math.fround(rVal * 0.5),
+        deadband: false,
+        rLo: rLo,
+        rHi: rHi
+      };
+    }
+    if (rVal > 0 && rVal < rLo && curSig > minOct) {
+      return {
+        nextSigma: curSig - 1,
+        action: 'clef_down',
+        scaledRadius: Math.fround(rVal * 2.0),
+        deadband: false,
+        rLo: rLo,
+        rHi: rHi
+      };
+    }
+    return {
+      nextSigma: curSig,
+      action: 'hold',
+      scaledRadius: Math.fround(rVal),
+      deadband: true,
+      rLo: rLo,
+      rHi: rHi
+    };
+  }
+
+  // Unified Unseen Sentinel Outer Register (σ) + Scale-Frequency Duality + Edge-to-Infinity Telemetry
+  function sentinelRegister(state, opts) {
+    state = state || {};
+    opts = opts || {};
+    var samples = Math.max(64, Math.round(opts.samples || 3200));
+    var sigma = clamp(Math.round(state.sentinelOctave || 0), -24, 64);
+    var Runit = Math.fround(Math.max(0.05, state.r != null ? state.r : 1));
+    var rInUnit = Math.fround(clamp(state.rIn != null ? state.rIn : 0, 0, Runit));
+    var scalePow2 = Math.pow(2, sigma);
+    var Rsent = Runit * scalePow2;
+    var rInSent = rInUnit * scalePow2;
+    var RsentLog2 = Math.fround((Math.log(Runit) / Math.LN2) + sigma);
+    var eta = Math.fround(rInUnit / Runit);
+    var compaction = Math.pow(2, -sigma);
+    var pitchOctaveShift = -sigma;
+    var pitchMultiplier = Math.pow(2, -sigma);
+
+    var sh = shellMetrics({ r: Runit, rIn: rInUnit });
+    var volShellLog2 = sh.volShell > 0
+      ? Math.fround((Math.log(sh.volShell) / Math.LN2) + 3 * sigma)
+      : -Infinity;
+
+    // Verify IEEE-754 float32 mantissa invariance across dyadic Clef jump
+    var rScaledF32 = Math.fround(Rsent);
+    var mantissaPreserved = Number.isFinite(rScaledF32) && rScaledF32 > 0
+      ? (bitInspect(Runit).mantBits === bitInspect(rScaledF32).mantBits)
+      : true;
+
+    var roundM = clamp(Math.round(state.clefRoundM || 0), 0, 12);
+    var activeAx = detectRatioAxes(state.formulas);
+    var lcs = lowestCommonStructure(state.n, state.m, state.k, {
+      roundM: roundM,
+      useN: activeAx.useN,
+      useM: activeAx.useM,
+      useK: activeAx.useK,
+      samples: samples
+    });
+    var orderNClef = clefFactor(Math.round(state.orderN != null ? state.orderN : 19));
+
+    var freqCycles = Math.abs(state.f != null ? state.f : 1);
+    var effCycles = Math.max(freqCycles, lcs.maxEffective);
+    var redCycles = state.lcsReduce ? Math.max(freqCycles, lcs.maxPrimitive) : effCycles;
+    var maxObs = Math.floor(samples / 2);
+    var smoothBudget = Math.floor(samples / 32);
+    var horizonState = redCycles > maxObs
+      ? 'beyond_nyquist'
+      : (redCycles > smoothBudget ? 'dense' : 'clear');
+
+    var scaleTag = (sigma === 0)
+      ? '1×'
+      : ('2^' + (sigma > 0 ? '+' + sigma : String(sigma)));
+
+    return {
+      sigma: sigma,
+      scalePow2: scalePow2,
+      scaleTag: scaleTag,
+      Runit: Runit,
+      rInUnit: rInUnit,
+      Rsent: Rsent,
+      rInSent: rInSent,
+      RsentLog2: RsentLog2,
+      eta: eta,
+      compaction: compaction,
+      pitchOctaveShift: pitchOctaveShift,
+      pitchMultiplier: pitchMultiplier,
+      volShellLog2: volShellLog2,
+      mantissaPreserved: mantissaPreserved,
+      roundM: roundM,
+      lcsReduce: !!state.lcsReduce,
+      lcs: lcs,
+      orderNClef: orderNClef,
+      horizon: {
+        samples: samples,
+        maxObservableCycles: maxObs,
+        smoothBudget: smoothBudget,
+        effectiveCycles: effCycles,
+        renderedCycles: redCycles,
+        ratio: Math.fround(redCycles / maxObs),
+        state: horizonState
+      }
+    };
   }
 
   // Discrete Order N Cyclic Group Strobe:
@@ -1586,7 +1985,12 @@
       solveConstantVolumeR: solveConstantVolumeR,
       solveConstantVolumeRIn: solveConstantVolumeRIn,
       solveConstantVolumePairForEta: solveConstantVolumePairForEta,
-      gcd: gcd, isPrimeInt: isPrimeInt, discreteGroup: discreteGroup,
+      gcd: gcd, lcm: lcm, isPrimeInt: isPrimeInt, discreteGroup: discreteGroup,
+      clefFactor: clefFactor,
+      pseudoMersenneDecomp: pseudoMersenneDecomp,
+      lowestCommonStructure: lowestCommonStructure,
+      sentinelHysteresisStep: sentinelHysteresisStep,
+      sentinelRegister: sentinelRegister,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,

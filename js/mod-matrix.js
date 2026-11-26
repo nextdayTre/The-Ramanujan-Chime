@@ -59,6 +59,8 @@
     a:               { key: 'a',               label: 'Decay a',    min: 0.15, max: 0.85, isInt: false, inputId: 'fractalA',        outId: 'fractalAOut',        fmt: function (v) { return v.toFixed(2); } },
     b:               { key: 'b',               label: 'Lacunarity b', min: 2,  max: 9,    isInt: true,  inputId: 'fractalB',        outId: 'fractalBOut',        fmt: function (v) { return String(Math.round(v)); } },
     n:               { key: 'n',               label: 'Ratio n',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioN',          outId: 'ratioNOut',          fmt: function (v) { return String(Math.round(v)); } },
+    m:               { key: 'm',               label: 'Ratio m',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioM',          outId: 'ratioMOut',          fmt: function (v) { return String(Math.round(v)); } },
+    k:               { key: 'k',               label: 'Ratio k',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioK',          outId: 'ratioKOut',          fmt: function (v) { return String(Math.round(v)); } },
     floorZoomLog:    { key: 'floorZoomLog',    label: 'Floor Zoom', min: 0.0,  max: 1.0,  isInt: false, inputId: 'floorZoomSlider', outId: 'floorZoomOut',       fmt: function (v) { var E = Harmony.engine; return (E && E.fmtZoomSec && E.floorZoomSec) ? E.fmtZoomSec(E.floorZoomSec(v)) : v.toFixed(2); } }
   };
 
@@ -997,6 +999,132 @@
     applyMatrixPreset('clear');
   }
 
+  // Full deterministic state export/import for persistent User Presets
+  function exportState() {
+    var lfoCopies = [];
+    for (var i = 0; i < lfos.length; i++) {
+      var l = lfos[i];
+      lfoCopies.push({
+        id: l.id,
+        name: l.name,
+        short: l.short,
+        wave: l.wave,
+        ratio: l.ratio,
+        phaseOff: l.phaseOff || 0,
+        color: l.color
+      });
+    }
+    var routeCopies = [];
+    for (var j = 0; j < routes.length; j++) {
+      var r = routes[j];
+      routeCopies.push({
+        src: r.src,
+        dst: r.dst,
+        op: r.op,
+        depth: r.depth,
+        enabled: !!r.enabled
+      });
+    }
+    var baseCopy = {};
+    for (var k in baseValues) {
+      if (Object.prototype.hasOwnProperty.call(baseValues, k) && typeof baseValues[k] === 'number' && isFinite(baseValues[k])) {
+        baseCopy[k] = baseValues[k];
+      }
+    }
+    return {
+      clockMode: clockMode,
+      freeRate: freeRate,
+      lfos: lfoCopies,
+      routes: routeCopies,
+      baseValues: baseCopy
+    };
+  }
+
+  function importState(saved, state) {
+    if (!saved || typeof saved !== 'object') {
+      routes = [];
+      selectedRouteId = null;
+      hadActiveRoutes = false;
+      if (state) captureBaseFromState(state);
+      if (typeof document !== 'undefined') {
+        renderSourcesUI();
+        renderMatrixUI();
+        if (state) syncRackOverlays(state);
+      }
+      return;
+    }
+
+    clockMode = (saved.clockMode === 'free') ? 'free' : 'playT';
+    if (typeof saved.freeRate === 'number' && isFinite(saved.freeRate) && saved.freeRate > 0) {
+      freeRate = saved.freeRate;
+    }
+
+    if (Array.isArray(saved.lfos) && saved.lfos.length > 0) {
+      var nextLfos = [];
+      var maxL = Math.min(4, saved.lfos.length);
+      for (var i = 0; i < maxL; i++) {
+        var sl = saved.lfos[i] || {};
+        nextLfos.push({
+          id: typeof sl.id === 'string' && sl.id ? sl.id : ('lfo' + (i + 1)),
+          name: typeof sl.name === 'string' && sl.name ? sl.name : ('LFO ' + (i + 1)),
+          short: typeof sl.short === 'string' && sl.short ? sl.short : ('L' + (i + 1)),
+          wave: (sl.wave === 'sine' || sl.wave === 'tri' || sl.wave === 'saw' || sl.wave === 'sq') ? sl.wave : 'sine',
+          ratio: (typeof sl.ratio === 'number' && isFinite(sl.ratio) && sl.ratio > 0) ? sl.ratio : 1,
+          phaseOff: (typeof sl.phaseOff === 'number' && isFinite(sl.phaseOff)) ? sl.phaseOff : 0,
+          color: typeof sl.color === 'string' && sl.color ? sl.color : LFO_COLORS[i % LFO_COLORS.length]
+        });
+      }
+      lfos = nextLfos;
+    }
+
+    var nextRoutes = [];
+    if (Array.isArray(saved.routes)) {
+      for (var j = 0; j < saved.routes.length; j++) {
+        var sr = saved.routes[j];
+        if (!sr || !TARGETS[sr.dst] || typeof sr.src !== 'string') continue;
+        nextRoutes.push({
+          id: 'rt-' + (routeSeq++),
+          src: sr.src,
+          dst: sr.dst,
+          op: typeof sr.op === 'string' ? sr.op : 'linear',
+          depth: clamp(typeof sr.depth === 'number' && isFinite(sr.depth) ? sr.depth : 0.5, -1, 1),
+          enabled: sr.enabled !== false
+        });
+      }
+    }
+    routes = nextRoutes;
+    selectedRouteId = routes.length ? routes[0].id : null;
+    hadActiveRoutes = hasActiveRoutes();
+
+    if (state) {
+      if (saved.baseValues && typeof saved.baseValues === 'object') {
+        for (var bk in TARGETS) {
+          if (!Object.prototype.hasOwnProperty.call(TARGETS, bk)) continue;
+          var bv = saved.baseValues[bk];
+          if (typeof bv === 'number' && isFinite(bv)) {
+            var meta = TARGETS[bk];
+            var clamped = clamp(bv, meta.min, meta.max);
+            if (meta.isInt) clamped = Math.round(clamped);
+            writeStateParam(state, bk, clamped);
+            baseValues[bk] = clamped;
+          }
+        }
+      }
+      captureBaseFromState(state);
+    }
+
+    if (typeof document !== 'undefined') {
+      document.querySelectorAll('.mod-clk-btn[data-clk]').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-clk') === clockMode);
+      });
+      var spd = document.getElementById('modMasterSpeed');
+      if (spd) spd.value = String(freeRate);
+      renderSourcesUI();
+      renderMatrixUI();
+      if (state) syncRackOverlays(state);
+    }
+  }
+
   function init(hooks) {
     appHooks = hooks || {};
     if (appHooks.getState) captureBaseFromState(appHooks.getState());
@@ -1087,6 +1215,8 @@
     addRoute: addOrActivateRoute,
     applyPreset: applyMatrixPreset,
     getRoutes: function () { return routes.slice(); },
+    exportState: exportState,
+    importState: importState,
     evalWave: evalWave,
     applyOperator: applyOperator
   };
