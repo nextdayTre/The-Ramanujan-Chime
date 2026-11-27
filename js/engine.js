@@ -1058,6 +1058,493 @@
     };
   }
 
+  // ---- The Vessel Calculus (docs/VESSEL-CALCULUS.md) ----
+  // Pure single-source derivations rooted in V(R, r) = (4/3)*pi*(R^3 - r^3):
+  //   1. Spatial Derivative Ladder V^(0..4) & unit-time complex-frequency law dP/P = dV/V + i*dTheta
+  //   2. Hypergeometric constant-volume series & exact 3rd-order cubic perturbation
+  //   3. Telescoping multitudes (N+1)V, base-8 Sentinel shell decomposition & Cuban/Taxicab locks
+  //   4. RX 11 Time-Zoom vector with exact BigInt dyadic modular entry phase
+  //   5. Parallel Perspective Bus (P / -P / Conj / -Conj / E+ / E- / ~P) with bus-null pole guard
+
+  var UNIT_SPHERE_V0 = (4 / 3) * PI;
+
+  function log2BigInt(n) {
+    if (typeof n !== 'bigint' || n <= 0n) return -Infinity;
+    var bl = n.toString(2).length;
+    if (bl <= 53) return Math.log(Number(n)) / Math.LN2;
+    var top = Number(n >> BigInt(bl - 53));
+    return (Math.log(top) / Math.LN2) + (bl - 53);
+  }
+
+  function vesselCalculus(state, opts) {
+    state = state || {};
+    opts = opts || {};
+    var R = Math.max(0, Number(state.r != null ? state.r : 1));
+    var rInRaw = Math.max(0, Number(state.rIn != null ? state.rIn : 0));
+    var inverted = rInRaw > R;
+    var rIn = rInRaw;
+    var dR = Number(opts.dR || 0);
+    var dr = Number(opts.dr || 0);
+    var theta = Number(opts.theta != null ? opts.theta : (state.phaseRad || 0));
+    var dTheta = Number(opts.dTheta || 0);
+    var epsBoundary = opts.epsBoundary != null ? opts.epsBoundary : 1e-6;
+
+    var vUnit = R * R * R - rIn * rIn * rIn;
+    var V = UNIT_SPHERE_V0 * vUnit;
+    var eta = R > 0 ? (rIn / R) : 0;
+    var eta2 = eta * eta;
+    var volFrac = 1 - eta * eta * eta;
+    var thickness = R - rIn;
+
+    // 1st spatial derivatives: dV/dR = 4*pi*R^2, dV/dr = -4*pi*r^2
+    var d1R = 4 * PI * R * R;
+    var d1r = -4 * PI * rIn * rIn;
+    var archimedesRing = (d1R + d1r) * 0.25; // exact pi*(R^2 - r^2)
+
+    // 2nd spatial derivatives: d2V/dR2 = 8*pi*R, d2V/dr2 = -8*pi*r
+    var d2R = 8 * PI * R;
+    var d2r = -8 * PI * rIn;
+    var wallFromD2 = (d2R + d2r) / (8 * PI);
+    var alpha = rIn > epsBoundary ? (-d2R / d2r) : Infinity;
+
+    // 3rd & 4th spatial derivatives: exact +-8*pi antipodal null, exact 0 closure
+    var d3R = 8 * PI;
+    var d3r = -8 * PI;
+
+    // Boundary classification (Edge Case 1: eta -> 0+ solid ball, eta -> 1- thin shell)
+    var boundaryState = 'normal';
+    if (R <= epsBoundary) {
+      boundaryState = 'degenerate_R0';
+    } else if (inverted) {
+      boundaryState = 'inverted_polarity';
+    } else if (eta <= epsBoundary) {
+      boundaryState = 'solid_ball';
+    } else if (Math.abs(volFrac) <= epsBoundary || Math.abs(thickness) <= epsBoundary) {
+      boundaryState = 'thin_shell_sentinel';
+    }
+
+    // Raw unit-time volume derivative dV/dt = 4*pi*(R^2*dR - r^2*dr) is ALWAYS finite!
+    var dV = d1R * dR + d1r * dr;
+    var dEta = R > epsBoundary ? ((dr - eta * dR) / R) : 0;
+    var scaleRate = R > epsBoundary ? (3 * (dR / R)) : 0;
+    var sigmaRate = scaleRate / (3 * Math.LN2);
+
+    var sensitivity, shapeRate, dVOverV, tuningOctVel;
+    if (boundaryState === 'solid_ball') {
+      sensitivity = 0;
+      shapeRate = 0;
+      dVOverV = scaleRate;
+      tuningOctVel = 0;
+    } else if (boundaryState === 'thin_shell_sentinel' || Math.abs(V) <= 1e-12) {
+      sensitivity = Infinity;
+      shapeRate = dEta === 0 ? 0 : (dEta > 0 ? -Infinity : Infinity);
+      dVOverV = dV === 0 ? 0 : (dV > 0 ? Infinity : -Infinity);
+      tuningOctVel = -dEta / (eta * Math.LN2);
+    } else {
+      sensitivity = (3 * eta2) / volFrac;
+      shapeRate = -sensitivity * dEta;
+      dVOverV = scaleRate + shapeRate;
+      tuningOctVel = -dEta / (eta * Math.LN2);
+    }
+
+    var isLockedV = Math.abs(dV) <= 1e-9 || (Number.isFinite(dVOverV) && Math.abs(dVOverV) <= 1e-7);
+    var triadOuter = R > epsBoundary ? (8 * PI) / d2R : Infinity;
+    var triadInner = rIn > epsBoundary ? (8 * PI) / (-d2r) : Infinity;
+    var triadWall = Math.abs(thickness) > epsBoundary ? (8 * PI) / (d2R + d2r) : Infinity;
+
+    return {
+      R: R,
+      rIn: rIn,
+      eta: eta,
+      alpha: alpha,
+      thickness: thickness,
+      volFrac: volFrac,
+      vUnit: vUnit,
+      V: V,
+      boundaryState: boundaryState,
+      invertedPolarity: inverted,
+      d1: {
+        dR: d1R,
+        dr: d1r,
+        jacobian: eta2,
+        archimedesRing: archimedesRing
+      },
+      d2: {
+        dR2: d2R,
+        dr2: d2r,
+        mixed: 0,
+        wallDelta: wallFromD2,
+        ratioAlpha: alpha,
+        triad: {
+          outer: triadOuter,
+          inner: triadInner,
+          wall: triadWall
+        }
+      },
+      d3: {
+        dR3: d3R,
+        dr3: d3r,
+        antipodalSum: d3R + d3r
+      },
+      d4: 0,
+      dynamics: {
+        dR: dR,
+        dr: dr,
+        dEta: dEta,
+        dV: dV,
+        scaleRate: scaleRate,
+        sigmaRate: sigmaRate,
+        sensitivity: sensitivity,
+        shapeRate: shapeRate,
+        dVOverV: dVOverV,
+        tuningOctVel: tuningOctVel,
+        isLockedV: isLockedV,
+        theta: theta,
+        dTheta: dTheta,
+        complexFreq: { re: dVOverV, im: dTheta },
+        dVOverVSentinel: Number.isFinite(dVOverV) ? null : bitInspect(dVOverV).hex
+      }
+    };
+  }
+
+  // Exact 3rd-order Taylor perturbation around (R0, r0) — zero truncation remainder!
+  function vesselPerturbation(R0, r0, dR, dr) {
+    var o1 = 4 * PI * (R0 * R0 * dR - r0 * r0 * dr);
+    var o2 = 4 * PI * (R0 * dR * dR - r0 * dr * dr);
+    var o3 = UNIT_SPHERE_V0 * (dR * dR * dR - dr * dr * dr);
+    var total = o1 + o2 + o3;
+    var exact = UNIT_SPHERE_V0 * (Math.pow(R0 + dR, 3) - Math.pow(r0 + dr, 3)) -
+                UNIT_SPHERE_V0 * (R0 * R0 * R0 - r0 * r0 * r0);
+    return {
+      order1: o1,
+      order2: o2,
+      order3: o3,
+      total: total,
+      exact: exact,
+      residual: Math.abs(total - exact)
+    };
+  }
+
+  // Hypergeometric constant-volume series: R(eta) = R0 * (1 - eta^3)^(-1/3) = R0 * sum (1/3)_k / k! * eta^(3k)
+  function hypergeometricLockV(r0, eta, maxK) {
+    var K = clamp(Math.round(maxK == null ? 6 : maxK), 0, 32);
+    var x = eta * eta * eta;
+    var exact = (1 - x) > 0 ? (r0 / cbrtFn(1 - x)) : Infinity;
+    var coeff = 1;
+    var xPow = 1;
+    var sum = 0;
+    var terms = [];
+    for (var k = 0; k <= K; k++) {
+      var term = r0 * coeff * xPow;
+      sum += term;
+      terms.push({
+        k: k,
+        coeff: coeff,
+        term: term,
+        partialSum: sum,
+        relError: Number.isFinite(exact) && exact > 0 ? Math.abs(sum - exact) / exact : NaN
+      });
+      coeff = coeff * ((k + 1 / 3) / (k + 1));
+      xPow *= x;
+    }
+    return { r0: r0, eta: eta, eta3: x, exact: exact, approx: sum, terms: terms };
+  }
+
+  // Telescoping concentric equal-volume multitude stack: m * V0 = (4/3)*pi*(R_m^3 - r0^3)
+  function multitudeShell(r0, count) {
+    var inner = Math.max(0, Number(r0 || 0));
+    var m = Math.max(0, Number(count || 0));
+    var R = cbrtFn(inner * inner * inner + m);
+    var Rnext = cbrtFn(inner * inner * inner + m + 1);
+    var deltaNext = Rnext - R;
+    var d1Approx = R > 1e-9 ? (1 / (3 * R * R)) : Infinity;
+    return {
+      r0: inner,
+      count: m,
+      R: R,
+      Rnext: Rnext,
+      volume: m * UNIT_SPHERE_V0,
+      deltaNext: deltaNext,
+      d1InverseApprox: d1Approx
+    };
+  }
+
+  // BigInt-safe Base-8 (Octal) Sentinel Volume Shell Decomposition:
+  // Stepping Sentinel radius by +1 octave scales volume by 2^3 = 8.
+  function sentinelOctalDecomp(val) {
+    var P;
+    try {
+      P = (typeof val === 'bigint') ? val : BigInt(val);
+    } catch (e) {
+      return { valid: false };
+    }
+    if (P < 1n) return { valid: false };
+
+    var bits = P.toString(2).length;
+    var lowPow = 1n << BigInt(bits - 1);
+    var isExactPow2 = (P === lowPow);
+    var ceilBits = isExactPow2 ? (bits - 1) : bits;
+    var outerSigma = Math.floor(ceilBits / 3);
+    var outerMultitude = 1 << (ceilBits % 3); // 1, 2, or 4
+    var outerVolume = BigInt(outerMultitude) << BigInt(3 * outerSigma);
+    var cavityDeficit = outerVolume - P;
+
+    // Unsigned octal shells (d_sigma in 0..7)
+    var octalDigits = [];
+    var rem = P;
+    while (rem > 0n) {
+      octalDigits.push(Number(rem & 7n));
+      rem >>= 3n;
+    }
+
+    // Balanced signed octal shells (d_sigma in -4..+4; negative = nested cavity)
+    var signedDigits = [];
+    var sRem = P;
+    while (sRem > 0n) {
+      var d = Number(sRem & 7n);
+      sRem >>= 3n;
+      if (d > 4) {
+        d -= 8;
+        sRem += 1n;
+      }
+      signedDigits.push(d);
+    }
+
+    var etaLog2 = cavityDeficit > 0n ? ((log2BigInt(cavityDeficit) - ceilBits) / 3) : -Infinity;
+    var etaApprox = cavityDeficit > 0n ? Math.pow(2, etaLog2) : 0;
+
+    return {
+      valid: true,
+      value: P.toString(),
+      bitLength: bits,
+      outerSigma: outerSigma,
+      outerMultitude: outerMultitude,
+      outerVolume: outerVolume.toString(),
+      cavityDeficit: cavityDeficit.toString(),
+      etaLog2: etaLog2,
+      etaApprox: etaApprox,
+      octalDigits: octalDigits,
+      signedDigits: signedDigits,
+      label: outerMultitude + 'V·8^' + outerSigma + (cavityDeficit > 0n ? (' − ' + cavityDeficit.toString() + 'V') : '')
+    };
+  }
+
+  // Unit-wall integer-cube shell & Cuban prime detector: R^3 - r^3 = (R - r)(R^2 + Rr + r^2)
+  // Plus Ramanujan Taxicab 1729 / Lock-V twin shell (728 = 12^3 - 10^3 = 9^3 - 1^3) recognition.
+  function cubeLatticeCheck(val) {
+    var n = Math.round(Number(val));
+    if (!isFinite(n) || n < 1) return { valid: false };
+    var disc = 12 * n - 3;
+    var s = Math.round(Math.sqrt(disc));
+    var isUnitWall = (s * s === disc) && ((s - 3) % 6 === 0) && ((s - 3) >= 6);
+    var r = isUnitWall ? ((s - 3) / 6) : null;
+    var R = isUnitWall ? (r + 1) : null;
+    var prime = (n <= 1e9) ? isPrimeInt(n) : false;
+    var taxicabTwins = (n === 1729 || n === 728)
+      ? {
+          shellA: { R: 1, rIn: 5 / 6, volUnit: 91 / 216 },
+          shellB: { R: 3 / 4, rIn: 1 / 12, volUnit: 91 / 216 },
+          diffCubes: 728,
+          taxicab: 1729
+        }
+      : null;
+    return {
+      valid: true,
+      value: n,
+      isUnitWallShell: isUnitWall,
+      isPrime: prime,
+      isCubanPrime: isUnitWall && prime,
+      R: R,
+      r: r,
+      formula: isUnitWall ? (R + '^3 − ' + r + '^3 = ' + n) : null,
+      taxicabTwins: taxicabTwins
+    };
+  }
+
+  // RX 11 Time-Zoom Vector: t(tau) = t0 + T*tau with exact BigInt dyadic t0 = t0Num / 2^t0Shift, T = 2^zoomShift.
+  // Eliminates catastrophic float32/float64 phase cancellation even for 256-bit primes!
+  function modularZoomPhase(MVal, t0NumVal, t0Shift, zoomShift, tau, opts) {
+    opts = opts || {};
+    var M = (typeof MVal === 'bigint') ? MVal : BigInt(Math.round(Number(MVal || 0)));
+    var t0Num = (typeof t0NumVal === 'bigint') ? t0NumVal : BigInt(Math.round(Number(t0NumVal || 0)));
+    var shiftT0 = Math.max(0, Math.round(Number(t0Shift || 0)));
+    var zShift = Math.round(Number(zoomShift || 0));
+    var tauVal = clamp(Number(tau || 0), 0, 1);
+    var samples = Math.max(64, Math.round(opts.samples || 3200));
+    var maxObs = Math.floor(samples / 2);
+
+    // 1. Exact modular entry phase: frac(M * t0Num / 2^shiftT0) in [0, 1)
+    var entryPhase = 0;
+    if (shiftT0 > 0) {
+      var maskT0 = (1n << BigInt(shiftT0)) - 1n;
+      var prod = M * t0Num;
+      var remT0 = prod & maskT0;
+      if (remT0 < 0n) remT0 += (maskT0 + 1n);
+      if (shiftT0 <= 53) {
+        entryPhase = Number(remT0) / Math.pow(2, shiftT0);
+      } else {
+        entryPhase = Number(remT0 >> BigInt(shiftT0 - 53)) / Math.pow(2, 53);
+      }
+    }
+
+    // 2. Exact cycles visible in viewport: |M| * 2^zShift + strobe fractional deficit
+    var absM = M < 0n ? -M : M;
+    var mSign = M < 0n ? -1 : 1;
+    var cyclesInView = 0;
+    var strobeResidualFrac = 0;
+    var cyclesLog2 = absM > 0n ? (log2BigInt(absM) + zShift) : -Infinity;
+
+    if (absM > 0n) {
+      if (zShift >= 0) {
+        cyclesInView = (cyclesLog2 < 1020) ? (Number(absM) * Math.pow(2, zShift)) : Infinity;
+      } else {
+        var s = -zShift;
+        var q = absM >> BigInt(s);
+        var maskZ = (1n << BigInt(s)) - 1n;
+        var rZ = absM & maskZ;
+        var fracZ = (s <= 53)
+          ? (Number(rZ) / Math.pow(2, s))
+          : (Number(rZ >> BigInt(s - 53)) / Math.pow(2, 53));
+        strobeResidualFrac = fracZ;
+        var qBits = q > 0n ? q.toString(2).length : 0;
+        cyclesInView = qBits < 1000 ? (Number(q) + fracZ) : Infinity;
+      }
+    }
+
+    var regime = 'meso';
+    if (cyclesInView > maxObs) regime = 'macro_beyond_horizon';
+    else if (cyclesInView <= 4) regime = 'micro';
+
+    var signedCycles = mSign * cyclesInView;
+    var phaseAtTau = Number.isFinite(signedCycles)
+      ? frac(entryPhase + signedCycles * tauVal)
+      : frac(entryPhase);
+
+    return {
+      entryPhase: entryPhase,
+      entryPhaseF32: Math.fround(entryPhase),
+      cyclesInView: cyclesInView,
+      cyclesLog2: cyclesLog2,
+      strobeResidualFrac: strobeResidualFrac,
+      phaseAtTau: phaseAtTau,
+      phaseAtTauF32: Math.fround(phaseAtTau),
+      maxObservableCycles: maxObs,
+      regime: regime
+    };
+  }
+
+  // Parallel Perspective Bus (docs/VESSEL-CALCULUS.md §5):
+  // Sums K parallel modulated sends B(t) = sum w_j * O_j(P_j(t)) and exact linear delta dB/dt,
+  // separating always-finite raw delta dB from sentinel-guarded normalized rate dB/B across nulls.
+  function parallelVesselBus(sends, opts) {
+    opts = opts || {};
+    var epsNull = opts.epsNull != null ? opts.epsNull : 1e-9;
+    var list = Array.isArray(sends) ? sends : [];
+    var bx = 0, by = 0, dbx = 0, dby = 0;
+    var realSum = 0;
+    var allReal = true;
+    var perSend = [];
+
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i] || {};
+      var w = s.weight != null ? Number(s.weight) : 1;
+      var R = Math.max(0, Number(s.R != null ? s.R : (s.r != null ? s.r : 1)));
+      var rIn = Math.max(0, Number(s.rIn != null ? s.rIn : 0));
+      var dR = Number(s.dR || 0);
+      var dr = Number(s.dr || 0);
+      var theta = Number(s.theta || 0);
+      var dTheta = Number(s.dTheta || 0);
+      var op = s.op || 'P';
+
+      var V = UNIT_SPHERE_V0 * (R * R * R - rIn * rIn * rIn);
+      var dV = 4 * PI * (R * R * dR - rIn * rIn * dr);
+      var c = Math.cos(theta);
+      var sn = Math.sin(theta);
+
+      // P = V * e^(i*theta), dP/dt = (dV + i*V*dTheta) * e^(i*theta) — always finite even at V = 0!
+      var px = V * c;
+      var py = V * sn;
+      var dpx = dV * c - V * dTheta * sn;
+      var dpy = dV * sn + V * dTheta * c;
+
+      // Apply perspective operator O_j in {P, -P, conj, -conj, real (E+), imag (E-)}
+      var ox = px, oy = py, dox = dpx, doy = dpy;
+      if (op === '-P' || op === 'antipodal') {
+        ox = -px; oy = -py; dox = -dpx; doy = -dpy;
+      } else if (op === 'conj' || op === 'Pbar') {
+        ox = px; oy = -py; dox = dpx; doy = -dpy;
+      } else if (op === '-conj') {
+        ox = -px; oy = py; dox = -dpx; doy = dpy;
+      } else if (op === 'real' || op === 'E+') {
+        ox = px; oy = 0; dox = dpx; doy = 0;
+      } else if (op === 'imag' || op === 'E-') {
+        ox = 0; oy = py; dox = 0; doy = dpy;
+      }
+
+      ox *= w; oy *= w; dox *= w; doy *= w;
+      bx += ox; by += oy; dbx += dox; dby += doy;
+      if (Math.abs(oy) > 1e-12) allReal = false;
+      realSum += ox;
+
+      perSend.push({ op: op, weight: w, V: V, dV: dV, re: ox, im: oy, dre: dox, dim: doy });
+    }
+
+    var magSq = bx * bx + by * by;
+    var mag = Math.sqrt(magSq);
+    var isBusNull = mag <= epsNull;
+    var thetaBus = isBusNull ? 0 : Math.atan2(by, bx);
+    var validity = 'coherent';
+    var rateRe, rateIm, sentinelHex = null;
+
+    if (isBusNull) {
+      validity = 'null_crossing_pole';
+      var dMag = Math.sqrt(dbx * dbx + dby * dby);
+      rateRe = dMag > epsNull ? Infinity : 0;
+      rateIm = 0;
+      sentinelHex = dMag > epsNull ? bitInspect(Infinity).hex : bitInspect(0).hex;
+    } else {
+      // Complex division dB / B = (dB * conj(B)) / |B|^2
+      rateRe = (dbx * bx + dby * by) / magSq;
+      rateIm = (dby * bx - dbx * by) / magSq;
+    }
+
+    var invertedReal = allReal && (realSum < -epsNull);
+    return {
+      B: { re: bx, im: by },
+      dB: { re: dbx, im: dby },
+      Vbus: mag,
+      thetaBus: thetaBus,
+      dBOverB: { re: rateRe, im: rateIm },
+      isBusNull: isBusNull,
+      invertedPolarity: invertedReal,
+      validity: validity,
+      sentinelHex: sentinelHex,
+      sends: perSend
+    };
+  }
+
+  // Exact +1 unit-quantum bridge between Bitwise NOT (~P) and Two's-Complement Null (-P)
+  function bitwiseNotNullBridge(val, bits) {
+    var width = clamp(Math.round(Number(bits || 4)), 1, 512);
+    var mod = 1n << BigInt(width);
+    var mask = mod - 1n;
+    var P = ((typeof val === 'bigint' ? val : BigInt(val)) % mod + mod) % mod;
+    var notP = mask - P;
+    var nullP = (mod - P) & mask;
+    return {
+      width: width,
+      P: P.toString(),
+      notP: notP.toString(),
+      nullP: nullP.toString(),
+      sumNot: (P + notP).toString(),
+      sumNullMod: ((P + nullP) & mask).toString(),
+      deltaNullMinusNotMod: ((nullP - notP + mod) & mask).toString(),
+      saturated: (P + notP) === mask,
+      exactNull: ((P + nullP) & mask) === 0n,
+      unitDelta: ((nullP - notP + mod) & mask) === 1n
+    };
+  }
+
   // Discrete Order N Cyclic Group Strobe:
   // Quantizes the continuous curve into N discrete states P_0 .. P_{N-1},
   // and traces the cyclic subgroup generated by stride g = round(n):
@@ -1991,6 +2478,15 @@
       lowestCommonStructure: lowestCommonStructure,
       sentinelHysteresisStep: sentinelHysteresisStep,
       sentinelRegister: sentinelRegister,
+      vesselCalculus: vesselCalculus,
+      vesselPerturbation: vesselPerturbation,
+      hypergeometricLockV: hypergeometricLockV,
+      multitudeShell: multitudeShell,
+      sentinelOctalDecomp: sentinelOctalDecomp,
+      cubeLatticeCheck: cubeLatticeCheck,
+      modularZoomPhase: modularZoomPhase,
+      parallelVesselBus: parallelVesselBus,
+      bitwiseNotNullBridge: bitwiseNotNullBridge,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,

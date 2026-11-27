@@ -335,9 +335,10 @@
       if (!Object.prototype.hasOwnProperty.call(TARGETS, k2)) continue;
       var prev = readStateParam(state, k2);
       var eff = effValues[k2];
-      if (Math.abs(prev - eff) > 1e-5) {
+      var diff = Math.abs(prev - eff);
+      if (diff > 1e-12) {
         writeStateParam(state, k2, eff);
-        changed = true;
+        if (diff > 1e-5) changed = true;
       }
     }
 

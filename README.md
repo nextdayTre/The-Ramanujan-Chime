@@ -24,13 +24,19 @@ All 3D dependencies (`vendor/three.min.js` and `vendor/OrbitControls.js`) are ve
 
 ## Mathematical & Audio-DSP Pillars
 
-Detailed proofs and derivations live in [`HARMONY_ENGINE.md`](./HARMONY_ENGINE.md) and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+Detailed proofs and derivations live in [`HARMONY_ENGINE.md`](./HARMONY_ENGINE.md) (complex phasors, twins, Morlet & Frobenius), [`docs/VESSEL-CALCULUS.md`](./docs/VESSEL-CALCULUS.md) (the Vessel Calculus & parallel master-bus unification), and [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
-### 1. Constant Hollow Sphere Vessel — $V = \frac{4}{3}\pi(R^3 - r^3)$
-- **Outer Carrier ($R$)** bounds unit-amplitude quadrature oscillators ($x^2 + y^2 + z^2 = R^2$).
-- **Inner Cavity ($r$)** defines a nested core (ideal for sub-carrier modulation or bounding a finite-field order-$N$ torus).
-- **4-Zone Live Telemetry:** Every sample along the trajectory is vertex-colored and metered in real time as **On Sphere** ($|P| \approx R$), **In Shell** ($r < |P| < R$), **In Cavity** ($|P| < r$), or **Outside** ($|P| > R$, e.g., $\tan$ `#DIV/0!` sentinel explosions).
-- **Cutaway Shell Mode (`C`):** Slices the upper hemisphere into gossamer wireframe to expose the glowing annular wall $\Delta r = R - r$ and inner red cavity bowl.
+### 1. The Vessel Calculus & Parallel Bus Seed — $V = \frac{4}{3}\pi(R^3 - r^3)$
+Promoting the hollow-sphere vessel volume $V(t) = \frac{4}{3}\pi(R^3 - r^3)$ into a complexified state $\mathcal{P}(t) = V(t)\,e^{i\theta(t)}$ unifies the radial geometry and angular phasor engine in **one master expression**:
+
+$$
+\frac{\dot{\mathcal{P}}(t)}{\mathcal{P}(t)} \;=\; \underbrace{3\,\frac{\dot{R}(t)}{R(t)} - \frac{3\eta(t)^2}{1 - \eta(t)^3}\,\dot{\eta}(t)}_{\text{Vessel Calculus } (\dot{V}/V)} \;+\; i\,\underbrace{\dot{\theta}(t)}_{\text{Harmony Engine } (\omega)}, \qquad \mathcal{B}(t) \;=\; \sum_{j=1}^{K} w_j\,\mathcal{O}_j\big(\mathcal{P}_j(t)\big)
+$$
+
+- **Exact Spatial Derivative Ladder ($V^{(0..4)}$):** Differentiating $V = \frac{4}{3}\pi(R^3 - r^3)$ directly generates `Lock V` conservation ($\dot{V} = 0$), the radial Jacobian $\eta^2 = dR/dr|_V$, Archimedes' constant-area ring $(\partial_R + \partial_r)V = 4\,A_{\text{ring}}$, the full Dual-Sphere triad (`OSC A : OSC B : Wall` $= 1/R : 1/r : 1/\Delta$) from $V^{(2)}$, and the pure antipodal null $\pm 8\pi$ at $V^{(3)}$.
+- **Multitudes, Base-8 Sentinel Shells & Cuban/Taxicab Locks:** Telescoping concentric stacks $(N+1)V$ invert $\partial_R V$; dyadic Sentinel octaves ($R \mapsto 2^\sigma R$) scale volume by $8^\sigma$ (`secp256k1`'s 256-bit prime lives cleanly as a `$2V$` chime at $\sigma = 85$ minus its inner cavity $2^{32}+977$); and unit-wall differences of cubes $R^3 - r^3 = 3r^2 + 3r + 1$ hit `7`, `19` (default `Order N`), `37`, `61`, `127`, and Ramanujan's Taxicab `1729 = (3³ − 2³)(6³ − 5³)`.
+- **Parallel Perspective Bus (`P / −P / P̄ / ~P`) & RX 11 Time-Zoom ($T$):** Independent modulated sends sum linearly back to one coherent bus ($\dot{\mathcal{B}} = \sum w_j \mathcal{O}_j(\dot{\mathcal{P}}_j)$) with orthogonal energy conservation ($|E_+\mathcal{P}|^2 + |E_-\mathcal{P}|^2 = V^2$), while observer time-zoom $t(\tau) = t_0 + T\tau$ inspects any granularity from macro envelopes down to single 256-bit prime cycles without stretching the underlying chime.
+- **Outer Carrier ($R$), Inner Cavity ($r$), 4-Zone Telemetry & Cutaway (`C`):** Every sample is vertex-colored and metered live as **On Sphere** ($|P| \approx R$), **In Shell** ($r < |P| < R$), **In Cavity** ($|P| < r$), or **Outside** ($|P| > R$). See [`docs/VESSEL-CALCULUS.md`](./docs/VESSEL-CALCULUS.md) for the complete proofs.
 
 ### 2. Two Distinct Twins: Antipodal ($-P$) vs. Conjugate ($\bar{P}$)
 Audio engineering and complex analysis use two different symmetries that are separated explicitly in the **TWIN** selector:
@@ -131,6 +137,7 @@ Ramanujan Sphere/
 ├── README.md               # Quick start, mathematical pillars, preset catalog, and keyboard shortcuts
 ├── docs/
 │   ├── ARCHITECTURE.md     # Module boundaries, Float32 contract, and bloat-free extension guide
+│   ├── VESSEL-CALCULUS.md  # Foundational paper: derivatives, multitudes, RX 11 time-zoom & parallel bus of V
 │   ├── 4bitOrbit.png       # Reference diagram: Front f(x) view of the 1000 (8) ↔ 0001 (1) orbit
 │   └── 4bitOrbitTop.png    # Reference diagram: Top XZ view with 1111/F apex and 8 ↔ 1 equatorial orbit
 ├── css/
