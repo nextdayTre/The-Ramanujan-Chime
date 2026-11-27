@@ -66,6 +66,9 @@
     lcsReduce: false,      // Lowest-Common-Structure Period-1 gcd reduction for active (n, m, k)
     tunerMode: 'ratio',    // Stage 2 hairline vessel tuner mode: 'ratio' (V^(2) alpha) | 'note' (chromatic + Sentinel σ)
     helicalTurbine: false, // Stage 3 optional rotating Helical Turbine & 1x/2x Pollard-rho lock detector on Auto z(t)
+    collapseLambda: 0,     // Stage 5A (§5.6) 3D hollow vessel -> 2D BitWave spline collapse λ ∈ [0, 1]
+    attractKappa: 0,       // Stage 5A (§5.6) Resonant Attraction κ ∈ [0, 1] (BitWave <-> Shell carrier)
+    bowCrystallize: false, // Stage 5A (§5.7) live 4-Bit Violin Bow -> BitWave hex crystallizer
     archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
     archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
     floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D)
@@ -460,7 +463,12 @@
       state.lcsReduce = false;
       state.tunerMode = 'ratio';
       state.helicalTurbine = false;
+      state.collapseLambda = 0;
+      state.attractKappa = 0;
+      state.bowCrystallize = false;
       if ($('btnArchHelix')) $('btnArchHelix').classList.remove('active');
+      if ($('btnFloorBwBow')) $('btnFloorBwBow').classList.remove('active');
+      if ($('floorBwNullBadge')) $('floorBwNullBadge').hidden = true;
       var targetPreset = (d && d.presetIndex != null) ? d.presetIndex : 12;
       applyPreset(targetPreset);
       if (d) {
@@ -556,9 +564,11 @@
     { id: 'harmonicsK',  out: 'harmonicsKOut',  key: 'K',      fmt: function (v) { return String(Math.round(v)); } },
     { id: 'fractalA',    out: 'fractalAOut',    key: 'a',      fmt: function (v) { return v.toFixed(2); } },
     { id: 'fractalB',    out: 'fractalBOut',    key: 'b',      fmt: function (v) { return String(Math.round(v)); } },
-    { id: 'ratioN',      out: 'ratioNOut',      key: 'n',      fmt: function (v) { return String(Math.round(v)); } },
-    { id: 'ratioM',      out: 'ratioMOut',      key: 'm',      fmt: function (v) { return String(Math.round(v)); } },
-    { id: 'ratioK',      out: 'ratioKOut',      key: 'k',      fmt: function (v) { return String(Math.round(v)); } }
+    { id: 'ratioN',               out: 'ratioNOut',         key: 'n',              fmt: function (v) { return String(Math.round(v)); } },
+    { id: 'ratioM',               out: 'ratioMOut',         key: 'm',              fmt: function (v) { return String(Math.round(v)); } },
+    { id: 'ratioK',               out: 'ratioKOut',         key: 'k',              fmt: function (v) { return String(Math.round(v)); } },
+    { id: 'collapseLambdaSlider', out: 'collapseLambdaOut', key: 'collapseLambda', fmt: function (v) { return v.toFixed(2); } },
+    { id: 'attractKappaSlider',   out: 'attractKappaOut',   key: 'attractKappa',   fmt: function (v) { return v.toFixed(2); } }
   ];
 
   function updateOrderNBadge() {
@@ -2076,6 +2086,7 @@
         $('floorBwRule').value = twinCfg.rule || 'twin';
       }
     }
+    if ($('btnFloorBwBow')) $('btnFloorBwBow').classList.toggle('active', !!state.bowCrystallize);
   }
 
   function activateFloorForBitWave(switchScope) {
@@ -2240,8 +2251,66 @@
       activateFloorForBitWave(true);
     });
   });
+  var lastBowCrystAt = 0;
+  var lastBowHex = '';
+
+  function runBowCrystallizeStep(forceNow) {
+    if (!BitWaveFeed || !Engine.fourBitLockInYaw) return;
+    var bowRes = Engine.fourBitLockInYaw(state, state.playT, {
+      points: (state.points && state.points.length) ? state.points : undefined,
+      sweepNibbles: 16,
+      modular: !!state.toggles.strobeN,
+      orderN: state.orderN,
+      stride: state.n,
+      gain: 1.8
+    });
+    if (bowRes && bowRes.extractedHex && (forceNow || bowRes.extractedHex !== lastBowHex)) {
+      lastBowHex = bowRes.extractedHex;
+      BitWaveFeed.ingest(lastBowHex, { transport: 'bow', name: 'Violin Bow 64b', preserveSelection: true });
+      if (typeof BitWaveFeed.broadcastOut === 'function') {
+        BitWaveFeed.broadcastOut(lastBowHex, {
+          preset: presetIndexNow(),
+          lambda: state.collapseLambda || 0,
+          kappa: state.attractKappa || 0,
+          contact: !!bowRes.cavityContact
+        });
+      }
+      var inp = $('floorBwInput');
+      if (inp && document.activeElement !== inp) inp.value = lastBowHex;
+    }
+  }
+
+  if ($('btnFloorBwBow')) {
+    $('btnFloorBwBow').addEventListener('click', function () {
+      state.bowCrystallize = !state.bowCrystallize;
+      if (state.bowCrystallize) {
+        if ($('floorBwBar')) $('floorBwBar').hidden = false;
+        runBowCrystallizeStep(true);
+        activateFloorForBitWave(true);
+      } else {
+        syncBitWaveUI();
+      }
+    });
+  }
+  if ($('btnFloorBwExpand')) {
+    $('btnFloorBwExpand').addEventListener('click', function () {
+      if (!BitWaveFeed || !Engine.cavityCollapseProfile) return;
+      var fd = BitWaveFeed.getFeed ? BitWaveFeed.getFeed() : null;
+      var curHex = (fd && fd.active && fd.activeHex) ? fd.activeHex : '8ADEFEDA85210125';
+      var col = Engine.cavityCollapseProfile(state, { hex: curHex, lambda: state.collapseLambda || 0, kappa: state.attractKappa || 0, bins: 32 });
+      if (col && col.expandedHex) {
+        BitWaveFeed.ingest(col.expandedHex, { transport: 'expand', name: 'Expanded ' + col.nextOuterBits + 'b', preserveSelection: true });
+        if (typeof BitWaveFeed.broadcastOut === 'function') {
+          BitWaveFeed.broadcastOut(col.expandedHex, { expandedFromBits: col.registerBits, nextOuterBits: col.nextOuterBits });
+        }
+        if ($('floorBwInput')) $('floorBwInput').value = col.expandedHex;
+        activateFloorForBitWave(true);
+      }
+    });
+  }
   if ($('btnFloorBwClear')) {
     $('btnFloorBwClear').addEventListener('click', function () {
+      state.bowCrystallize = false;
       exitBitWaveDisplay({ disableSync: true, clearFeed: true, hideBar: true });
       syncFloorUI();
       bump();
@@ -2519,6 +2588,9 @@
       lcsReduce: !!state.lcsReduce,
       tunerMode: state.tunerMode || 'ratio',
       helicalTurbine: !!state.helicalTurbine,
+      collapseLambda: baseOrState('collapseLambda') || 0,
+      attractKappa: baseOrState('attractKappa') || 0,
+      bowCrystallize: !!state.bowCrystallize,
       archimedesAuto: state.archimedesAuto !== false,
       archimedesZNorm: state.archimedesZNorm || 0,
       toggles: togglesCopy,
@@ -2575,6 +2647,12 @@
       state.tunerMode = (patch.tunerMode === 'note') ? 'note' : 'ratio';
       state.helicalTurbine = !!patch.helicalTurbine;
       if ($('btnArchHelix')) $('btnArchHelix').classList.toggle('active', !!state.helicalTurbine);
+      state.collapseLambda = (typeof patch.collapseLambda === 'number' && isFinite(patch.collapseLambda))
+        ? Engine.clamp(patch.collapseLambda, 0, 1) : 0;
+      state.attractKappa = (typeof patch.attractKappa === 'number' && isFinite(patch.attractKappa))
+        ? Engine.clamp(patch.attractKappa, 0, 1) : 0;
+      state.bowCrystallize = !!patch.bowCrystallize;
+      if ($('btnFloorBwBow')) $('btnFloorBwBow').classList.toggle('active', !!state.bowCrystallize);
       state.archimedesAuto = patch.archimedesAuto !== false;
       if (typeof patch.archimedesZNorm === 'number' && isFinite(patch.archimedesZNorm)) {
         state.archimedesZNorm = Engine.clamp(patch.archimedesZNorm, -1, 1);
@@ -4066,6 +4144,10 @@
 
     // §10 Cutaway Floor 3D Wavetable / MiniMeters 3D Spectrogram field (computed only when active)
     var floorFieldData = null;
+    if (state.bowCrystallize && !state.staticMode && (now - lastBowCrystAt >= 160)) {
+      lastBowCrystAt = now;
+      runBowCrystallizeStep(false);
+    }
     if ((state.toggles.floorWt || state.activeTab === 'floorwt') && Engine.floorField) {
       var audioOpts = (FloorView && FloorView.getAudioOptions) ? FloorView.getAudioOptions(state) : null;
       floorFieldData = Engine.floorField(state, state.playT, audioOpts || undefined);
@@ -4073,6 +4155,16 @@
 
     // Always render Hero 3D Sphere + Zoom Lens (when open) + Multi-Chime Front f(x) Rack/Menu (when active)
     Scene3D.update(state, state.playT, state.points, lastRendered, floorFieldData);
+    var nullBadge = $('floorBwNullBadge');
+    if (nullBadge) {
+      var cp = state._lastCollapseProfile;
+      if (cp) {
+        nullBadge.hidden = false;
+        nullBadge.textContent = 'λ ' + cp.lambda.toFixed(2) + ' · ' + (cp.isExactNull ? '−∞ dB ★' : (cp.nullDb.toFixed(1) + ' dB'));
+      } else {
+        nullBadge.hidden = true;
+      }
+    }
     Magnifier2D.update(state, state.playT);
     if (ChimeRack && typeof ChimeRack.update === 'function') {
       ChimeRack.update(state, state.points, state.playT, floorFieldData);

@@ -337,3 +337,48 @@ test('Stage 2: Vessel Calculus taps (tap_detune & tap_dV) and Tuner Sweep / Prim
   ModMatrix.setLfoClef('lfo2', 0);
   ModMatrix.clearRoutes();
 });
+
+test('Stage 5A: Collapse λ and Attract κ are routable ModMatrix targets with bwCollapse preset & clean base restore', () => {
+  assert.ok(ModMatrix.TARGETS.collapseLambda, 'collapseLambda target registered');
+  assert.ok(ModMatrix.TARGETS.attractKappa, 'attractKappa target registered');
+
+  const st = {
+    r: 1.0, rIn: 0.45, archimedesZNorm: 0, orderN: 19, phaseRad: 0,
+    f: 1, amp: 1, K: 6, a: 0.5, b: 3, n: 3, m: 2, k: 1,
+    collapseLambda: 0, attractKappa: 0,
+    lockVolume: false, lockedR0: Engine.cbrt(1 - 0.45 ** 3), archimedesAuto: true,
+    toggles: { animate: false, strobeN: false }
+  };
+
+  ModMatrix.clearRoutes();
+  ModMatrix.setLfoClef('lfo1', 0);
+  ModMatrix.captureBase(st);
+  ModMatrix.applyPreset('bwCollapse');
+  // Seed base collapse values explicitly as the preset does when wired to appHooks
+  st.collapseLambda = 0.5;
+  st.attractKappa = 0.35;
+  ModMatrix.captureBase(st, 'collapseLambda');
+  ModMatrix.captureBase(st, 'attractKappa');
+
+  const seenLam = new Set();
+  const seenKap = new Set();
+  for (let i = 0; i < 16; i++) {
+    ModMatrix.evaluate(st, i / 16, 0);
+    assert.ok(st.collapseLambda >= 0 && st.collapseLambda <= 1, 'collapseLambda stays in [0, 1]');
+    assert.ok(st.attractKappa >= 0 && st.attractKappa <= 1, 'attractKappa stays in [0, 1]');
+    seenLam.add(st.collapseLambda.toFixed(2));
+    seenKap.add(st.attractKappa.toFixed(2));
+  }
+  assert.ok(seenLam.size >= 4, 'bwCollapse sweeps Collapse λ dynamically across [0, 1]');
+  assert.ok(seenKap.size >= 4, 'bwCollapse sweeps Attract κ dynamically across [0, 1]');
+
+  // Export & import preserve collapse routes cleanly
+  const snap = ModMatrix.exportState();
+  ModMatrix.clearRoutes();
+  ModMatrix.importState(snap, st);
+  assert.equal(ModMatrix.getRoutes().some(r => r.dst === 'collapseLambda'), true);
+  assert.equal(ModMatrix.getRoutes().some(r => r.dst === 'attractKappa'), true);
+
+  ModMatrix.setLfoClef('lfo1', 0);
+  ModMatrix.clearRoutes();
+});

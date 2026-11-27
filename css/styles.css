@@ -3533,6 +3533,29 @@ body.mod-dragging .floor-zoom-ctl[data-mod-target].drop-hover {
   border-color: rgba(54, 214, 200, 0.62) !important;
   color: var(--accent-bright) !important;
 }
+.floor-bw-bow.active {
+  background: rgba(255, 209, 102, 0.2) !important;
+  border-color: rgba(255, 209, 102, 0.72) !important;
+  color: #ffd166 !important;
+  box-shadow: 0 0 8px rgba(255, 209, 102, 0.22);
+}
+.floor-bw-expand {
+  color: #ffd166 !important;
+  border-color: rgba(255, 209, 102, 0.42) !important;
+}
+.floor-bw-null {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 209, 102, 0.12);
+  border: 1px solid rgba(255, 209, 102, 0.36);
+  color: #ffd166;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+.floor-bw-null[hidden] { display: none !important; }
+.collapse-grid { margin-top: 4px; }
+.val-emerald { color: #6ee7a0; }
 .floor-readouts[hidden] { display: none !important; }
 .floor-twin-readouts b {
   max-width: 170px;

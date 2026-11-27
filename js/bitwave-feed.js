@@ -1001,12 +1001,30 @@
     };
   }
 
+  function broadcastOut(hexStr, meta) {
+    if (!bcChannel || !hexStr) return false;
+    try {
+      var clean = String(hexStr).replace(/^0[xX]/, '').toUpperCase();
+      bcChannel.postMessage({
+        type: 'bitwave-chime-out',
+        source: 'ramanujan-chime',
+        hex: clean,
+        width: clean.length * 4,
+        meta: meta || null
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   var api = {
     CHANNEL_NAME: 'bitwave-feed',
     DEFAULT_LFO_NIBBLES: DEFAULT_LFO_NIBBLES,
     TWIN_RULES: TWIN_RULES,
     parseInput: parseInput,
     ingest: ingest,
+    broadcastOut: broadcastOut,
     loadPreset: loadPreset,
     clear: clear,
     isActive: function () { return active; },

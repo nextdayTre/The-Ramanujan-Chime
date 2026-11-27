@@ -178,6 +178,39 @@
             <div class="mod-live-dot" data-mod-dot="archimedesZNorm" hidden></div>
           </div>
         </div>
+
+        <!-- Stage 5A: Harmor Void Cavity Collapse (λ) & Resonant Attraction (κ) — routable in ModMatrix -->
+        <div class="param-grid-2 collapse-grid">
+          <div class="param-row" data-mod-target="collapseLambda" data-hint="collapseLambda">
+            <div class="param-head">
+              <span class="param-lbl">
+                <label for="collapseLambdaSlider">Collapse &lambda;</label>
+                <span class="mod-badges" data-mod-badges="collapseLambda"></span>
+              </span>
+              <output id="collapseLambdaOut" class="mono param-val val-emerald">0.00</output>
+            </div>
+            <div class="slider-wrap">
+              <div class="mod-range-bar" data-mod-bar="collapseLambda"></div>
+              <input type="range" id="collapseLambdaSlider" min="0" max="1" step="0.01" value="0" data-default="0" />
+              <div class="mod-live-dot" data-mod-dot="collapseLambda" hidden></div>
+            </div>
+          </div>
+
+          <div class="param-row" data-mod-target="attractKappa" data-hint="attractKappa">
+            <div class="param-head">
+              <span class="param-lbl">
+                <label for="attractKappaSlider">Attract &kappa;</label>
+                <span class="mod-badges" data-mod-badges="attractKappa"></span>
+              </span>
+              <output id="attractKappaOut" class="mono param-val val-gold">0.00</output>
+            </div>
+            <div class="slider-wrap">
+              <div class="mod-range-bar" data-mod-bar="attractKappa"></div>
+              <input type="range" id="attractKappaSlider" min="0" max="1" step="0.01" value="0" data-default="0" />
+              <div class="mod-live-dot" data-mod-dot="attractKappa" hidden></div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- 3. Oscillator & Order (Clean sliders — modulation indicators replace inline Ping/Repeat) -->
@@ -964,6 +997,7 @@
             <button type="button" class="mini-btn mod-preset-btn" data-mpreset="volBreath">Lock-V Breather</button>
             <button type="button" class="mini-btn mod-preset-btn" data-mpreset="tunerSweep" title="Lock V + slow Clef LFO sweeping Cavity r across harmonic locks while Tuner Δ¢ sympathetically bends Phase">Tuner Sweep</button>
             <button type="button" class="mini-btn mod-preset-btn" data-mpreset="primeGears" title="Step Order N strictly across cofactor-1 Prime Keys while Ratio m clicks along Composite Divisors">Prime Gears</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="bwCollapse" title="Breathe 3D Hollow Cavity Collapse λ ↔ 2D BitWave spline while modulating Resonant Attraction κ & Phase">BW Collapse</button>
             <button type="button" class="mini-btn mod-preset-btn mod-clear-btn" data-mpreset="clear">Clear</button>
           </div>
         </div>
@@ -1099,6 +1133,9 @@
           <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="dipole8" title="Load minimal 8-bit dipole (A5 ⊕ FF = 5A)">8b</button>
           <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="canonical64" title="Load canonical 64-bit A ⊕ B → Z1 register">64b</button>
           <button type="button" class="mini-btn floor-bw-preset" data-bwpreset="pulse256" title="Load 256-bit edge-pulse register">256b</button>
+          <button type="button" id="btnFloorBwBow" class="mini-btn floor-bw-bow" title="4-Bit Violin Bow Crystallizer (§5.7): continuously extract a live 64-bit BitWave hex register from the sweeping 1000↔0001 bow &amp; broadcast over bitwave-feed">Bow&rarr;BW</button>
+          <button type="button" id="btnFloorBwExpand" class="mini-btn floor-bw-expand" title="Step Out S_k → S_{k+1}: double active BitWave register width (×2 bits up to 256-bit)">&times;2b</button>
+          <span id="floorBwNullBadge" class="floor-bw-null mono" hidden title="§5.6 Resonant Attraction Null (Shell − BitWave)">&lambda; 0.00</span>
           <button type="button" id="btnFloorBwClear" class="mini-btn" title="Disconnect BitWave feed &amp; return to synth">Clear</button>
         </div>
 

@@ -35,6 +35,7 @@
 
   var lastRendered = -1;
   var lastSphereSig = '';
+  var lastCollapseSig = '';
   var lastResSliceKey = '';
   var cameraMoved = true;
 
@@ -383,6 +384,14 @@
           })));
         }
         sphereGroup.add(makeCircleLoop(rIn, 72, colCutInner, 0.88, 'xz'));
+      }
+    }
+
+    // Store base opacities so §5.6 Cavity Collapse (λ) can fade shells into void without rebuilding geometry
+    for (var sm = 0; sm < sphereGroup.children.length; sm++) {
+      var ch = sphereGroup.children[sm];
+      if (ch && ch.material && typeof ch.material.opacity === 'number') {
+        ch.userData.baseOpacity = ch.material.opacity;
       }
     }
 
@@ -1362,17 +1371,56 @@
       state.toggles.harmorVoid ? 1 : 0
     ].join('|');
 
-    var dirtyDidChange = (dirty !== lastRendered) || (sphereSig !== lastSphereSig);
+    var lam = (state && typeof state.collapseLambda === 'number') ? Math.max(0, Math.min(1, state.collapseLambda)) : 0;
+    var kap = (state && typeof state.attractKappa === 'number') ? Math.max(0, Math.min(1, state.attractKappa)) : 0;
+    var collapseActive = (lam > 1e-4 || kap > 1e-4) && Harmony.engine && typeof Harmony.engine.cavityCollapseProfile === 'function';
+    var activeBwHex = '8ADEFEDA85210125';
+    if (collapseActive && Harmony.BitWaveFeed && typeof Harmony.BitWaveFeed.getFeed === 'function') {
+      var bwFd = Harmony.BitWaveFeed.getFeed();
+      if (bwFd && bwFd.active && bwFd.activeHex) activeBwHex = bwFd.activeHex;
+    }
+    var collapseSig = collapseActive ? (lam.toFixed(3) + '|' + kap.toFixed(3) + '|' + activeBwHex) : '0';
+
+    var dirtyDidChange = (dirty !== lastRendered) || (sphereSig !== lastSphereSig) || (collapseSig !== lastCollapseSig);
     if (dirtyDidChange) {
       if (sphereSig !== lastSphereSig) {
         rebuildVesselAndSlice(state);
         lastSphereSig = sphereSig;
       }
-      updateCurve(points, state);
-      updateTwins(points, state);
+      if (sphereGroup) {
+        var zFlat = collapseActive ? Math.max(0.003, 1 - lam) : 1;
+        sphereGroup.scale.set(1, 1, zFlat);
+        var fadeMul = collapseActive ? Math.max(0.04, 1 - lam * 0.90) : 1;
+        for (var fi = 0; fi < sphereGroup.children.length; fi++) {
+          var fch = sphereGroup.children[fi];
+          if (fch && fch.material && typeof fch.userData.baseOpacity === 'number') {
+            fch.material.opacity = fch.userData.baseOpacity * fadeMul;
+          }
+        }
+      }
+      var renderPoints = points;
+      if (collapseActive) {
+        var colProf = Harmony.engine.cavityCollapseProfile(state, {
+          hex: activeBwHex,
+          lambda: lam,
+          kappa: kap,
+          bins: 256
+        });
+        state._lastCollapseProfile = colProf;
+        var colPts = new Array(colProf.bins);
+        for (var ci = 0; ci < colProf.bins; ci++) {
+          colPts[ci] = { x: colProf.outX[ci], y: colProf.outY[ci], z: colProf.outZ[ci], valid: true };
+        }
+        renderPoints = colPts;
+      } else {
+        state._lastCollapseProfile = null;
+      }
+      updateCurve(renderPoints, state);
+      updateTwins(renderPoints, state);
       updateGhost(state);
       updateStrobe(points, state);
       lastRendered = dirty;
+      lastCollapseSig = collapseSig;
     }
 
     if (sliceGroup) sliceGroup.visible = state.toggles.sliceGrid !== false;

@@ -20,10 +20,14 @@
     var formulas = fx + ' ' + fy + ' ' + fz;
     var rInEl = $('innerRadius');
     var rInVal = rInEl ? parseFloat(rInEl.value) : 0;
+    var lamEl = $('collapseLambdaSlider');
+    var kapEl = $('attractKappaSlider');
     var activeStretchEl = document.querySelector('.route-chip[data-stretch].active');
     return {
       formulas: formulas,
       rInVal: isFinite(rInVal) ? rInVal : 0,
+      collapseLambda: lamEl ? (parseFloat(lamEl.value) || 0) : 0,
+      attractKappa: kapEl ? (parseFloat(kapEl.value) || 0) : 0,
       lockVol: !!($('btnLockVol') && $('btnLockVol').classList.contains('active')),
       resonanceOn: !!($('btnResonance') && $('btnResonance').classList.contains('active')),
       strobeOn: !!($('btnStrobeN') && $('btnStrobeN').classList.contains('active')),
@@ -190,6 +194,26 @@
         return ctx.resonanceOn
           ? { text: 'Resonance on', tone: 'active' }
           : { text: 'Enable Resonance to view ring', tone: 'unused' };
+      }
+    },
+    collapseLambda: {
+      title: 'Cavity Collapse λ (§5.6)',
+      accent: 'emerald',
+      desc: 'Continuously flattens the 3D hollow sphere (λ=0) into the live 2D BitWave register spline (λ=1) while preserving P / −P / P̄ twin symmetry. Drop any ModMatrix LFO here to breathe 3D ↔ 2D!',
+      check: function (ctx) {
+        return ctx.collapseLambda > 0.005
+          ? { text: 'Collapsing 3D → 2D (λ=' + ctx.collapseLambda.toFixed(2) + ')', tone: 'active' }
+          : { text: 'Full 3D vessel (λ=0)', tone: 'info' };
+      }
+    },
+    attractKappa: {
+      title: 'Resonant Attraction κ (§5.6)',
+      accent: 'gold',
+      desc: 'Pulls the discrete 4-bit BitWave vector toward the continuous spherical shell carrier (κ=1 hits exact −∞ dB null lock). Drop an LFO or Vessel Tap here to morph between BitWave and Chime!',
+      check: function (ctx) {
+        return ctx.attractKappa > 0.005
+          ? { text: 'Attracting κ=' + ctx.attractKappa.toFixed(2), tone: 'active' }
+          : { text: 'Pure BitWave spline (κ=0)', tone: 'info' };
       }
     },
     orderN: {

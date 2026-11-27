@@ -66,6 +66,8 @@
     n:               { key: 'n',               label: 'Ratio n',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioN',          outId: 'ratioNOut',          fmt: function (v) { return String(Math.round(v)); } },
     m:               { key: 'm',               label: 'Ratio m',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioM',          outId: 'ratioMOut',          fmt: function (v) { return String(Math.round(v)); } },
     k:               { key: 'k',               label: 'Ratio k',    min: 1,    max: 8,    isInt: true,  inputId: 'ratioK',          outId: 'ratioKOut',          fmt: function (v) { return String(Math.round(v)); } },
+    collapseLambda:  { key: 'collapseLambda',  label: 'Collapse λ', min: 0.0,  max: 1.0,  isInt: false, inputId: 'collapseLambdaSlider', outId: 'collapseLambdaOut', fmt: function (v) { return v.toFixed(2); } },
+    attractKappa:    { key: 'attractKappa',    label: 'Attract κ',  min: 0.0,  max: 1.0,  isInt: false, inputId: 'attractKappaSlider',   outId: 'attractKappaOut',   fmt: function (v) { return v.toFixed(2); } },
     floorZoomLog:    { key: 'floorZoomLog',    label: 'Floor Zoom', min: 0.0,  max: 1.0,  isInt: false, inputId: 'floorZoomSlider', outId: 'floorZoomOut',       fmt: function (v) { var E = Harmony.engine; return (E && E.fmtZoomSec && E.floorZoomSec) ? E.fmtZoomSec(E.floorZoomSec(v)) : v.toFixed(2); } }
   };
 
@@ -1158,6 +1160,25 @@
       routes = [
         { id: 'rt-' + (routeSeq++), src: 'lfo1', dst: 'orderN', op: 'qPrime',   depth: 0.70, enabled: true },
         { id: 'rt-' + (routeSeq++), src: 'lfo2', dst: 'm',      op: 'qDivisor', depth: 0.65, enabled: true }
+      ];
+      selectedRouteId = routes[0].id;
+      if (typeof document !== 'undefined') renderSourcesUI();
+    } else if (presetName === 'bwCollapse') {
+      if (lfos[0]) lfos[0].clef = -1;
+      if (st) {
+        if (st.collapseLambda == null || st.collapseLambda < 0.05) {
+          st.collapseLambda = 0.50;
+          baseValues.collapseLambda = 0.50;
+        }
+        if (st.attractKappa == null || st.attractKappa < 0.05) {
+          st.attractKappa = 0.35;
+          baseValues.attractKappa = 0.35;
+        }
+      }
+      routes = [
+        { id: 'rt-' + (routeSeq++), src: 'lfo1',        dst: 'collapseLambda', op: 'linear', depth: 0.95, enabled: true },
+        { id: 'rt-' + (routeSeq++), src: 'lfo2',        dst: 'attractKappa',   op: 'linear', depth: 0.65, enabled: true },
+        { id: 'rt-' + (routeSeq++), src: 'tap_bitwave', dst: 'phaseDeg',       op: 'linear', depth: 0.40, enabled: true }
       ];
       selectedRouteId = routes[0].id;
       if (typeof document !== 'undefined') renderSourcesUI();
