@@ -7,6 +7,19 @@ release artifact in this repo is the agent layer (commit `78386a9`, tag `agent-l
 Open any page directly (`file://` works — classic scripts, no server needed) or serve the repo
 root and browse `/spike/`.
 
+## `viscoelastic-slice.html` — Stage 4 viscoelastic cross-Chime 2D slice tank
+
+Interactive R&D prototype driven by the pure Stage 4 math in `js/engine.js` (`sliceCalculus2D`,
+`crossChimeSlice`, `createViscoelasticTank`, `pollardRhoSlice`):
+
+- **Top XZ Viscoelastic Eikonal Floor (`y = 0`):** CFL-stable `float32` 2D damped/refractive wave
+  tank bounded inside the circular slice $A = \pi(R^2 - r^2) = \frac{1}{4}(\partial_R + \partial_r)V$,
+  where the inner cavity and outer shell act as a two-index medium ($c_{\text{in}}/c_{\text{out}} = \alpha = R/r$)
+  with selectable **Osmosis (open absorbing)** vs. **Wavefold (reflective nonlinear)** rim and click/drag ripples.
+- **Front $f(x)$ Cross-Chime Differential (`z = 0`):** Differentiates **Chime A** (`Front XY`)
+  against **Chime B** (`Top XZ` slice) via `A + B`, `A − B Null` (with dBFS null meter and peak
+  IEEE-754 hex), and `A · B̄` Conjugate Cross-Phase alongside live MiniMeters propagation velocity $\partial u/\partial t$.
+
 ## `bitwave-viewer.html` — read-only BitWave import viewer
 
 The first shipped slice of [`docs/BITWAVE-IMPORT.md`](../docs/BITWAVE-IMPORT.md): import a

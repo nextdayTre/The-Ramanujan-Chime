@@ -1989,6 +1989,391 @@
     };
   }
 
+  // ---- Stage 4: 2D Slice Dimensional Descent, Cross-Chime Differential & Viscoelastic Eikonal Tank ----
+
+  // Exact 2D Annular Slice Seed A(R, r) = pi*(R^2 - r^2) = (1/4)*(dR + dr)V (1st directional derivative of 3D seed)
+  function sliceCalculus2D(state, opts) {
+    state = state || {};
+    opts = opts || {};
+    var R = Math.max(0, Number(state.r != null ? state.r : 1));
+    var rIn = Math.max(0, Number(state.rIn != null ? state.rIn : 0));
+    var dR = Number(opts.dR || 0);
+    var dr = Number(opts.dr || 0);
+    var eps = opts.epsBoundary != null ? opts.epsBoundary : 1e-6;
+
+    var A = PI * (R * R - rIn * rIn);
+    var eta = R > eps ? (rIn / R) : 0;
+    var eta2 = eta * eta;
+    var areaFrac = 1 - eta2;
+
+    // 1st spatial derivatives: dA/dR = 2*pi*R, dA/dr = -2*pi*r (exact great circles!)
+    var d1R = TAU * R;
+    var d1r = -TAU * rIn;
+    // 2nd spatial derivatives: exact +-2*pi (+-TAU) antipodal null!
+    var d2R = TAU;
+    var d2r = -TAU;
+
+    var dA = d1R * dR + d1r * dr;
+    var dEta = R > eps ? ((dr - eta * dR) / R) : 0;
+    var scaleRate = R > eps ? (2 * (dR / R)) : 0;
+    var boundaryState = (R <= eps) ? 'degenerate_R0'
+      : (rIn > R ? 'inverted_polarity'
+        : (eta <= eps ? 'solid_disc'
+          : (Math.abs(areaFrac) <= eps ? 'thin_ring_sentinel' : 'normal')));
+
+    var sensitivity, shapeRate, dAOverA;
+    if (boundaryState === 'solid_disc') {
+      sensitivity = 0;
+      shapeRate = 0;
+      dAOverA = scaleRate;
+    } else if (boundaryState === 'thin_ring_sentinel' || Math.abs(A) <= 1e-12) {
+      sensitivity = Infinity;
+      shapeRate = dEta === 0 ? 0 : (dEta > 0 ? -Infinity : Infinity);
+      dAOverA = dA === 0 ? 0 : (dA > 0 ? Infinity : -Infinity);
+    } else {
+      sensitivity = (2 * eta) / areaFrac;
+      shapeRate = -sensitivity * dEta;
+      dAOverA = scaleRate + shapeRate;
+    }
+
+    return {
+      R: R,
+      rIn: rIn,
+      eta: eta,
+      areaFrac: areaFrac,
+      A: A,
+      boundaryState: boundaryState,
+      d1: { dR: d1R, dr: d1r, jacobian2D: eta },
+      d2: { dR2: d2R, dr2: d2r, antipodalSum: d2R + d2r },
+      d3: 0,
+      dynamics: {
+        dA: dA,
+        dEta: dEta,
+        scaleRate: scaleRate,
+        sensitivity: sensitivity,
+        shapeRate: shapeRate,
+        dAOverA: dAOverA,
+        isLockedA: Math.abs(dA) <= 1e-9
+      }
+    };
+  }
+
+  // Cavalieri / Radon vertical integral of 2D Archimedes slices A_ring(z) over [-R, +R] -> recovers exact 3D V!
+  function cavalieriVolume(R, rIn, steps) {
+    var outer = Math.max(0, Number(R || 0));
+    var inner = clamp(Number(rIn || 0), 0, outer);
+    var N = Math.max(16, Math.round(steps || 256));
+    if (N % 2 === 1) N++;
+    var dz = (2 * outer) / N;
+    var sum = 0;
+    for (var i = 0; i <= N; i++) {
+      var z = -outer + i * dz;
+      var aO = PI * Math.max(0, outer * outer - z * z);
+      var aI = (Math.abs(z) <= inner) ? (PI * Math.max(0, inner * inner - z * z)) : 0;
+      var w = (i === 0 || i === N) ? 1 : (i % 2 === 1 ? 4 : 2);
+      sum += w * (aO - aI);
+    }
+    var integral = (dz / 3) * sum;
+    var exactV = UNIT_SPHERE_V0 * (outer * outer * outer - inner * inner * inner);
+    return {
+      integral: integral,
+      exactV: exactV,
+      relError: exactV > 1e-12 ? Math.abs(integral - exactV) / exactV : Math.abs(integral)
+    };
+  }
+
+  // Cross-Chime 2D Slice Differential (A ⊖ B): differentiates Chime A (Front XY) against Chime B (Top XZ slice)
+  // Produces Osmosis Sum (A+B), Antipodal Null Propagation Delta (A-B + dBFS), and Conjugate Cross-Phase (A*conj(B))
+  function crossChimeSlice(stateA, stateB, playT, opts) {
+    opts = opts || {};
+    var bins = clamp(Math.round(opts.bins || 128), 16, 512);
+    var tShift = Number(playT || 0);
+    var sA = sample(stateA, bins);
+    var sB = sample(stateB, bins);
+    var ptsA = sA.points;
+    var ptsB = sB.points;
+    var len = bins + 1;
+
+    var profA = new Float32Array(len);
+    var profB = new Float32Array(len);
+    var sumArr = new Float32Array(len);
+    var diffArr = new Float32Array(len);
+    var conjRe = new Float32Array(len);
+    var conjIm = new Float32Array(len);
+
+    var sqA = 0, sqB = 0, sqDiff = 0, dotRe = 0, normASq = 0, normBSq = 0;
+    var peakDiff = 0, peakAbsDiff = -1;
+    var shiftIdx = Math.round(frac(tShift) * bins);
+
+    for (var i = 0; i < len; i++) {
+      var idx = (i + shiftIdx) % bins;
+      var pA = ptsA[idx];
+      var pB = ptsB[idx];
+      var ax = (pA && pA.valid) ? pA.x : 0;
+      var ay = (pA && pA.valid) ? pA.y : 0;
+      var bx = (pB && pB.valid) ? pB.x : 0;
+      var by = (pB && pB.valid) ? pB.y : 0;
+
+      var sVal = Math.fround(0.5 * (ay + by));
+      var dVal = Math.fround(ay - by);
+      var cRe = Math.fround(ax * bx + ay * by);
+      var cIm = Math.fround(ay * bx - ax * by);
+
+      profA[i] = Math.fround(ay);
+      profB[i] = Math.fround(by);
+      sumArr[i] = sVal;
+      diffArr[i] = dVal;
+      conjRe[i] = cRe;
+      conjIm[i] = cIm;
+
+      sqA += ay * ay;
+      sqB += by * by;
+      sqDiff += dVal * dVal;
+      dotRe += cRe;
+      normASq += ax * ax + ay * ay;
+      normBSq += bx * bx + by * by;
+
+      var ad = Math.abs(dVal);
+      if (ad > peakAbsDiff) { peakAbsDiff = ad; peakDiff = dVal; }
+    }
+
+    var rmsA = Math.sqrt(sqA / len);
+    var rmsB = Math.sqrt(sqB / len);
+    var rmsDiff = Math.sqrt(sqDiff / len);
+    var refRms = Math.max(rmsA, rmsB, 1e-9);
+    var nullDb = rmsDiff <= 1e-9 ? -Infinity : (20 * Math.log10(rmsDiff / refRms));
+    var denom = Math.sqrt(normASq * normBSq);
+    var crossCoherence = denom > 1e-12 ? clamp(dotRe / denom, -1, 1) : 0;
+
+    return {
+      bins: len,
+      profA: profA,
+      profB: profB,
+      sum: sumArr,
+      diff: diffArr,
+      conjRe: conjRe,
+      conjIm: conjIm,
+      rmsA: Math.fround(rmsA),
+      rmsB: Math.fround(rmsB),
+      rmsDiff: Math.fround(rmsDiff),
+      nullDb: Number.isFinite(nullDb) ? Math.fround(nullDb) : -Infinity,
+      isExactNull: rmsDiff <= 1e-9,
+      crossCoherence: Math.fround(crossCoherence),
+      peakResidual: peakDiff,
+      peakResidualBits: bitInspect(peakDiff)
+    };
+  }
+
+  // Stage 4: CFL-Stable 2D Viscoelastic Eikonal Wave-Tank Solver inside Circular Vessel (rho <= 1)
+  // Two-medium refractive wave speed: c_in / c_out = alpha = R/r across cavity ring rho = eta = r/R,
+  // viscoelastic shear damping gamma(eta), and Osmosis (open absorbing) vs Wavefold (reflective nonlinear) rim.
+  function createViscoelasticTank(opts) {
+    opts = opts || {};
+    var N = clamp(Math.round(opts.size || 64), 24, 128);
+    var total = N * N;
+    var u = new Float32Array(total);
+    var uPrev = new Float32Array(total);
+    var uNext = new Float32Array(total);
+    var vel = new Float32Array(total);
+    var rhoMap = new Float32Array(total);
+    var insideMask = new Uint8Array(total);
+    var stepCount = 0;
+
+    for (var j = 0; j < N; j++) {
+      var nz = (j / (N - 1)) * 2 - 1;
+      for (var i = 0; i < N; i++) {
+        var nx = (i / (N - 1)) * 2 - 1;
+        var rho = Math.sqrt(nx * nx + nz * nz);
+        var idx = j * N + i;
+        rhoMap[idx] = rho;
+        insideMask[idx] = rho <= 1.0 ? 1 : 0;
+      }
+    }
+
+    function reset() {
+      u.fill(0);
+      uPrev.fill(0);
+      uNext.fill(0);
+      vel.fill(0);
+      stepCount = 0;
+    }
+
+    function injectPulse(nx, nz, amp, rad) {
+      var cx = clamp(Number(nx || 0), -0.95, 0.95);
+      var cz = clamp(Number(nz || 0), -0.95, 0.95);
+      var a = clamp(Number(amp != null ? amp : 0.9), -2.5, 2.5);
+      var r2 = Math.pow(Math.max(0.03, Number(rad || 0.09)), 2);
+      for (var j = 1; j < N - 1; j++) {
+        var pz = (j / (N - 1)) * 2 - 1;
+        var dz = pz - cz;
+        for (var i = 1; i < N - 1; i++) {
+          var idx = j * N + i;
+          if (!insideMask[idx]) continue;
+          var px = (i / (N - 1)) * 2 - 1;
+          var dx = px - cx;
+          var d2 = dx * dx + dz * dz;
+          if (d2 < r2 * 9) {
+            var g = a * Math.exp(-d2 / (2 * r2));
+            u[idx] = Math.fround(clamp(u[idx] + g, -3, 3));
+            uPrev[idx] = Math.fround(clamp(uPrev[idx] + g, -3, 3));
+          }
+        }
+      }
+    }
+
+    function step(cfg) {
+      cfg = cfg || {};
+      var eta = clamp(Number(cfg.eta != null ? cfg.eta : 0.5), 0, 0.95);
+      var alpha = eta > 0.01 ? clamp(1 / eta, 1.0, 3.2) : 1.0;
+      var refractive = cfg.refractive !== false;
+      var boundary = cfg.boundary === 'wavefold' ? 'wavefold' : 'osmosis';
+      var baseVisc = clamp(Number(cfg.viscosity != null ? cfg.viscosity : 0.028), 0, 0.35);
+
+      // Unconditionally CFL-stable two-medium wave speeds (c_max = 0.48 < 1/sqrt(2) = 0.7071)
+      var cMax = 0.48;
+      var cIn2 = refractive ? (cMax * cMax) : (0.36 * 0.36);
+      var cOut = refractive ? (cMax / alpha) : 0.36;
+      var cOut2 = cOut * cOut;
+
+      // Optional continuous line/helix source injection along Front (z=0) or rotated Helix chord
+      var driveLine = cfg.driveLine;
+      var driveGain = clamp(Number(cfg.driveGain != null ? cfg.driveGain : 0.14), 0, 0.6);
+      var helixAng = Number(cfg.helixAngle || 0);
+      var hasDrive = !!(driveLine && driveLine.length >= 4 && driveGain > 0);
+      var midRow = Math.floor(N * 0.5);
+
+      if (hasDrive) {
+        var ca = Math.cos(helixAng), sa = Math.sin(helixAng);
+        var dLen = driveLine.length;
+        for (var s = 0; s < N; s++) {
+          var su = (s / (N - 1)) * 2 - 1; // -1..+1 along chord
+          var gx = Math.round(((su * ca * 0.92 + 1) * 0.5) * (N - 1));
+          var gz = Math.round(((su * sa * 0.92 + 1) * 0.5) * (N - 1));
+          if (gx > 0 && gx < N - 1 && gz > 0 && gz < N - 1) {
+            var dIdx = gz * N + gx;
+            if (insideMask[dIdx]) {
+              var srcIdx = Math.min(dLen - 1, Math.floor((s / (N - 1)) * (dLen - 1)));
+              var dVal = driveLine[srcIdx] || 0;
+              u[dIdx] = Math.fround(u[dIdx] * (1 - driveGain) + clamp(dVal, -1.5, 1.5) * driveGain);
+            }
+          }
+        }
+      }
+
+      for (var j = 1; j < N - 1; j++) {
+        var rowOff = j * N;
+        for (var i = 1; i < N - 1; i++) {
+          var idx = rowOff + i;
+          if (!insideMask[idx]) {
+            uNext[idx] = 0;
+            vel[idx] = 0;
+            continue;
+          }
+          var rho = rhoMap[idx];
+          var inCav = eta > 0.01 && rho <= eta;
+          var c2 = inCav ? cIn2 : cOut2;
+
+          // Self-adjoint divergence form div(c^2 grad u) across the refractive cavity interface rho = eta,
+          // with Neumann zero-flux mirror for Wavefold and Dirichlet zero for Osmosis rim.
+          var uC = u[idx];
+          var iL = idx - 1, iR = idx + 1, iD = idx - N, iU = idx + N;
+          var c2L = (eta > 0.01 && rhoMap[iL] <= eta) ? cIn2 : cOut2;
+          var c2R = (eta > 0.01 && rhoMap[iR] <= eta) ? cIn2 : cOut2;
+          var c2D = (eta > 0.01 && rhoMap[iD] <= eta) ? cIn2 : cOut2;
+          var c2U = (eta > 0.01 && rhoMap[iU] <= eta) ? cIn2 : cOut2;
+          var fluxL = insideMask[iL] ? (0.5 * (c2 + c2L) * (u[iL] - uC)) : (boundary === 'wavefold' ? 0 : (-c2 * uC));
+          var fluxR = insideMask[iR] ? (0.5 * (c2 + c2R) * (u[iR] - uC)) : (boundary === 'wavefold' ? 0 : (-c2 * uC));
+          var fluxD = insideMask[iD] ? (0.5 * (c2 + c2D) * (u[iD] - uC)) : (boundary === 'wavefold' ? 0 : (-c2 * uC));
+          var fluxU = insideMask[iU] ? (0.5 * (c2 + c2U) * (u[iU] - uC)) : (boundary === 'wavefold' ? 0 : (-c2 * uC));
+          var divGrad = fluxL + fluxR + fluxD + fluxU;
+
+          // Viscoelastic shear damping: increases in thin shell walls and in absorbing Osmosis sponge rim
+          var shellShear = inCav ? 0.55 : (1.0 + 0.85 * eta * eta);
+          var rimSponge = (boundary === 'osmosis' && rho > 0.84)
+            ? (0.28 * Math.pow((rho - 0.84) / 0.16, 2))
+            : 0;
+          var damp = clamp(baseVisc * shellShear + rimSponge, 0, 0.45);
+
+          var nextVal = (2 * uC - (1 - damp) * uPrev[idx] + divGrad) / (1 + damp);
+
+          // Strictly passive C1-smooth sine wavefolding in Wavefold regime (|f(x)| <= |x| everywhere)
+          if (boundary === 'wavefold' && Math.abs(nextVal) > 0.85) {
+            var foldT = 0.85;
+            var foldW = 0.40;
+            var sgn = nextVal >= 0 ? 1 : -1;
+            var exc = Math.abs(nextVal) - foldT;
+            nextVal = sgn * (foldT + foldW * Math.sin(exc / foldW));
+          } else {
+            nextVal = clamp(nextVal, -2.5, 2.5);
+          }
+
+          uNext[idx] = Math.fround(nextVal);
+          vel[idx] = Math.fround(nextVal - uC);
+        }
+      }
+
+      // Rotate buffers cleanly with zero per-frame allocations
+      var tmp = uPrev;
+      uPrev = u;
+      u = uNext;
+      uNext = tmp;
+      stepCount++;
+
+      return { step: stepCount, midRow: midRow };
+    }
+
+    function centerSlice() {
+      var mid = Math.floor(N * 0.5);
+      var off = mid * N;
+      var disp = new Float32Array(N);
+      var delta = new Float32Array(N);
+      for (var i = 0; i < N; i++) {
+        disp[i] = u[off + i];
+        delta[i] = vel[off + i];
+      }
+      return { size: N, disp: disp, delta: delta };
+    }
+
+    function metrics(etaVal) {
+      var eta = clamp(Number(etaVal != null ? etaVal : 0.5), 0, 0.95);
+      var eCav = 0, eShell = 0, velSq = 0, count = 0, peak = 0;
+      for (var idx = 0; idx < total; idx++) {
+        if (!insideMask[idx]) continue;
+        var val = u[idx];
+        var av = Math.abs(val);
+        if (av > peak) peak = av;
+        var e = val * val + vel[idx] * vel[idx];
+        if (eta > 0.01 && rhoMap[idx] <= eta) eCav += e;
+        else eShell += e;
+        velSq += vel[idx] * vel[idx];
+        count++;
+      }
+      var eTot = eCav + eShell;
+      return {
+        steps: stepCount,
+        energyTotal: Math.fround(eTot),
+        energyCavity: Math.fround(eCav),
+        energyShell: Math.fround(eShell),
+        transmissionRatio: Math.fround(eTot > 1e-12 ? (eShell / eTot) : 0),
+        velRms: Math.fround(count > 0 ? Math.sqrt(velSq / count) : 0),
+        peakAbs: Math.fround(peak)
+      };
+    }
+
+    return {
+      size: N,
+      getField: function () { return u; },
+      getVelocity: function () { return vel; },
+      getMask: function () { return insideMask; },
+      getRho: function () { return rhoMap; },
+      reset: reset,
+      injectPulse: injectPulse,
+      step: step,
+      centerSlice: centerSlice,
+      metrics: metrics
+    };
+  }
+
   // Discrete Order N Cyclic Group Strobe:
   // Quantizes the continuous curve into N discrete states P_0 .. P_{N-1},
   // and traces the cyclic subgroup generated by stride g = round(n):
@@ -2937,6 +3322,10 @@
       diatonicModeConjugate: diatonicModeConjugate,
       clockworkCoupling: clockworkCoupling,
       pollardRhoSlice: pollardRhoSlice,
+      sliceCalculus2D: sliceCalculus2D,
+      cavalieriVolume: cavalieriVolume,
+      crossChimeSlice: crossChimeSlice,
+      createViscoelasticTank: createViscoelasticTank,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,

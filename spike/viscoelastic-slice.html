@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stage 4 Spike — Viscoelastic Cross-Chime 2D Slice Tank</title>
+<style>
+  :root {
+    --bg: #070b11;
+    --panel: #0d131d;
+    --panel2: #111927;
+    --line: rgba(130, 160, 195, 0.16);
+    --line2: rgba(130, 160, 195, 0.28);
+    --text: #e3ecf7;
+    --muted: #8495ad;
+    --cyan: #4df3dd;
+    --emerald: #6ee7a0;
+    --gold: #ffd166;
+    --coral: #ff6b7a;
+    --magenta: #ff5ca8;
+    --mono: "Cascadia Code", Consolas, ui-monospace, monospace;
+    --sans: "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+  body.harmor-void {
+    --bg: #000000;
+    --panel: #030705;
+    --panel2: #060d08;
+    --line: rgba(0, 255, 102, 0.18);
+    --line2: rgba(0, 255, 102, 0.36);
+    --cyan: #00ff66;
+    --emerald: #39ff14;
+    --coral: #00ff66;
+  }
+  .mono { font-family: var(--mono); }
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  .topbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+  .brand h1 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.03em; }
+  .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--cyan);
+    background: rgba(77, 243, 221, 0.12);
+    border: 1px solid rgba(77, 243, 221, 0.38);
+  }
+  .premise { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    appearance: none;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .pill:hover { color: var(--text); border-color: var(--cyan); }
+  .pill.active {
+    color: var(--emerald);
+    background: rgba(110, 231, 160, 0.16);
+    border-color: rgba(110, 231, 160, 0.6);
+    font-weight: 600;
+  }
+  .pill.gold.active {
+    color: var(--gold);
+    background: rgba(255, 209, 102, 0.16);
+    border-color: rgba(255, 209, 102, 0.62);
+  }
+  .pill.coral.active {
+    color: var(--coral);
+    background: rgba(255, 107, 122, 0.16);
+    border-color: rgba(255, 107, 122, 0.62);
+  }
+
+  .main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 300px 1fr 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .card-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--panel2);
+    border-bottom: 1px solid var(--line);
+  }
+  .kicker {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cyan);
+  }
+  .tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--emerald);
+    background: rgba(110, 231, 160, 0.12);
+    border: 1px solid rgba(110, 231, 160, 0.42);
+  }
+  .controls {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sec-title {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 3px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+  }
+  .field-head span { color: var(--muted); }
+  .field-head b { color: var(--text); }
+  select, input[type="range"] { width: 100%; }
+  select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line2);
+    border-radius: 5px;
+    padding: 5px 7px;
+    font-size: 11px;
+  }
+  input[type="range"] { accent-color: var(--cyan); cursor: pointer; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .btn-row .pill { flex: 1 1 auto; text-align: center; padding: 3px 5px; font-size: 10px; }
+
+  .canvas-box {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #tankCanvas { cursor: crosshair; }
+
+  .telemetry-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 6px 12px;
+    background: var(--panel2);
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .telemetry-bar b { color: var(--text); }
+  .telemetry-bar .hl-green { color: var(--emerald); }
+  .telemetry-bar .hl-gold { color: var(--gold); }
+  .telemetry-bar .hl-cyan { color: var(--cyan); }
+  .telemetry-bar .hl-coral { color: var(--coral); }
+
+  .scope-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+    background: var(--line);
+  }
+  .scope-cell {
+    position: relative;
+    background: var(--bg);
+    min-height: 0;
+  }
+  .scope-lbl {
+    position: absolute;
+    left: 10px;
+    top: 7px;
+    font-size: 10px;
+    color: var(--muted);
+    pointer-events: none;
+    background: rgba(7, 11, 17, 0.72);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .hint-note {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.45;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px;
+  }
+  @media (max-width: 1040px) {
+    .main { grid-template-columns: 260px 1fr; grid-template-rows: 1fr 1fr; }
+    .controls-card { grid-row: span 2; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Stage 4 Spike &middot; Viscoelastic Cross-Chime 2D Slice Tank</h1>
+      <span class="badge mono">A = &pi;(R&sup2;&minus;r&sup2;) = &frac14;(&part;<sub>R</sub>+&part;<sub>r</sub>)V</span>
+      <span class="premise">2D Eikonal dispersion floor (Top XZ) &times; Orthogonal Cross-Chime Wave-Propagation Delta (Front f(x))</span>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="btnPlay" class="pill active">&#9654; Run</button>
+      <button type="button" id="btnHelix" class="pill gold active">Helix 1&times;/2&times;</button>
+      <button type="button" id="btnRefract" class="pill active">Refract c<sub>in</sub>=&alpha;&middot;c<sub>out</sub></button>
+      <button type="button" id="btnHarmor" class="pill">Harmor Void</button>
+      <button type="button" id="btnPulse" class="pill">Drop Ripple</button>
+      <button type="button" id="btnClear" class="pill">Clear Tank</button>
+      <a href="../index.html" class="pill" style="text-decoration:none">&larr; Main Chime</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Left Controls -->
+    <section class="card controls-card">
+      <div class="card-head">
+        <span class="kicker">2D Slice &amp; Medium Controls</span>
+        <button type="button" id="btnLockV" class="pill active">Lock V</button>
+      </div>
+      <div class="controls">
+        <div class="sec-title mono">Cross-Chime Sources (Front A &ominus; Top B)</div>
+        <div class="field">
+          <div class="field-head"><span>Chime A (Front XY)</span><b id="chimeATag" class="mono">Preset 5</b></div>
+          <select id="selA"></select>
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Chime B (Top XZ Slice)</span><b id="chimeBTag" class="mono">Preset 12</b></div>
+          <select id="selB"></select>
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Chime B Phase &Delta;&phi;</span><b id="outPhaseB" class="mono">0&deg;</b></div>
+          <input type="range" id="slPhaseB" min="-180" max="180" step="1" value="0" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Chime B Freq f<sub>B</sub></span><b id="outFreqB" class="mono">1.5</b></div>
+          <input type="range" id="slFreqB" min="0.5" max="6" step="0.25" value="1.5" />
+        </div>
+
+        <div class="sec-title mono">Slice Operator &amp; Rim Boundary</div>
+        <div class="btn-row" role="group" aria-label="Cross-Chime slice operator">
+          <button type="button" class="pill op-btn" data-op="sum">A + B</button>
+          <button type="button" class="pill op-btn active" data-op="diff">A &minus; B Null</button>
+          <button type="button" class="pill op-btn" data-op="conj">A &middot; B&#772;</button>
+        </div>
+        <div class="btn-row" role="group" aria-label="Outer boundary scattering">
+          <button type="button" class="pill bnd-btn active" data-bnd="osmosis">Osmosis (Open)</button>
+          <button type="button" class="pill bnd-btn coral" data-bnd="wavefold">Wavefold (Reflect)</button>
+        </div>
+
+        <div class="sec-title mono">Hollow Vessel &amp; Viscosity Medium</div>
+        <div class="field">
+          <div class="field-head"><span>Outer R</span><b id="outR" class="mono">1.00</b></div>
+          <input type="range" id="slR" min="0.4" max="2.2" step="0.01" value="1.00" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Cavity r (&eta; = r/R)</span><b id="outRIn" class="mono">0.50</b></div>
+          <input type="range" id="slRIn" min="0" max="1.95" step="0.01" value="0.50" />
+        </div>
+        <div class="btn-row" role="group" aria-label="Modal snaps">
+          <button type="button" class="pill snap-btn" data-eta="0">0</button>
+          <button type="button" class="pill snap-btn active" data-eta="0.5">.50</button>
+          <button type="button" class="pill snap-btn" data-eta="0.6667">2/3</button>
+          <button type="button" class="pill snap-btn" data-eta="0.7071">&minus;3dB</button>
+          <button type="button" class="pill snap-btn" data-eta="0.75">.75</button>
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Viscosity &gamma;(&eta;)</span><b id="outVisc" class="mono">0.024</b></div>
+          <input type="range" id="slVisc" min="0.002" max="0.16" step="0.002" value="0.024" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Injection Drive</span><b id="outDrive" class="mono">18%</b></div>
+          <input type="range" id="slDrive" min="0" max="0.45" step="0.01" value="0.18" />
+        </div>
+
+        <div class="hint-note">
+          <b>Try this:</b> Click or drag directly inside the circular <b>Top XZ Tank</b> to drop ripples and watch waves refract across the red inner cavity ring (<i>c<sub>in</sub> / c<sub>out</sub> = &alpha; = R/r</i>). Set Chime A &amp; B to the same preset with <code>A &minus; B Null</code> to watch the floor collapse to <code>&minus;&infin; dB</code>, then nudge <code>&Delta;&phi;</code> to isolate the pure propagating difference wave!
+        </div>
+      </div>
+    </section>
+
+    <!-- Center: 2D Viscoelastic Eikonal Floor Tank (Top XZ) -->
+    <section class="card">
+      <div class="card-head">
+        <span class="kicker">Top XZ &middot; Viscoelastic Eikonal Floor (y = 0)</span>
+        <span id="tankRegimeTag" class="tag mono">OSMOSIS &middot; n=2.00&times;</span>
+      </div>
+      <div class="canvas-box">
+        <canvas id="tankCanvas"></canvas>
+      </div>
+      <div class="telemetry-bar mono">
+        <span>A<sub>2D</sub>=<b id="telArea" class="hl-cyan">2.36</b></span>
+        <span>&alpha;=<b id="telAlpha" class="hl-green">2.00&times;</b></span>
+        <span>Shell Trans=<b id="telTrans" class="hl-gold">0%</b></span>
+        <span>|&part;u/&part;t|=<b id="telVel">0.000</b></span>
+      </div>
+    </section>
+
+    <!-- Right: Orthogonal Front f(x) Cross-Chime Delta & Wave Propagation -->
+    <section class="card">
+      <div class="card-head">
+        <span class="kicker">Front f(x) &middot; Cross-Chime Delta &amp; Wave Propagation (z = 0)</span>
+        <span id="nullDbTag" class="tag mono">NULL 0.0 dB</span>
+      </div>
+      <div class="scope-split">
+        <div class="scope-cell">
+          <span class="scope-lbl mono" id="topScopeLbl">Cross-Chime Slice: Chime A (cyan) &middot; Chime B (coral) &middot; A &minus; B Delta (gold)</span>
+          <canvas id="crossCanvas"></canvas>
+        </div>
+        <div class="scope-cell">
+          <span class="scope-lbl mono">Floor Center Slice (z = 0): Displacement u(x, 0) &amp; Propagation Delta &part;u/&part;t (MiniMeters)</span>
+          <canvas id="propCanvas"></canvas>
+        </div>
+      </div>
+      <div class="telemetry-bar mono">
+        <span>Coherence <b id="telCoh" class="hl-green">0.00</b></span>
+        <span>Null <b id="telNullDb" class="hl-gold">&mdash;</b></span>
+        <span>Peak f32 <b id="telHex" class="hl-cyan">0x00000000</b></span>
+        <span id="telRho" class="hl-gold">Helix 1&times;/2&times;</span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="../js/engine.js"></script>
+<script src="../js/presets.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var Engine = window.Harmony.engine;
+  var Presets = window.Harmony.Presets.list;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var tank = Engine.createViscoelasticTank({ size: 80 });
+  var GRID = tank.size;
+
+  var ui = {
+    playing: true,
+    helix: true,
+    refractive: true,
+    harmor: false,
+    lockV: true,
+    lockedR0: Engine.cbrt(1.0 * 1.0 * 1.0 - 0.5 * 0.5 * 0.5),
+    r: 1.0,
+    rIn: 0.5,
+    viscosity: 0.024,
+    driveGain: 0.18,
+    op: 'diff',          // 'sum' | 'diff' | 'conj'
+    boundary: 'osmosis', // 'osmosis' | 'wavefold'
+    presetA: 5,          // Analytic Morlet 3D Helix
+    presetB: 12,         // Four-Bit Orbit
+    phaseB: 0,
+    freqB: 1.5,
+    playT: 0
+  };
+
+  function buildChimeState(presetIdx, overrides) {
+    var pr = Presets[presetIdx] || Presets[12];
+    var p = pr.params || {};
+    var f = pr.formulas || { x: 'r*cos(TAU*f*t+phase)', y: 'r*sin(TAU*f*t+phase)', z: '0' };
+    var st = {
+      r: ui.r,
+      rIn: ui.rIn,
+      amp: p.amp != null ? p.amp : 1,
+      f: p.f != null ? p.f : 1,
+      n: p.n != null ? p.n : 3,
+      m: p.m != null ? p.m : 2,
+      k: p.k != null ? p.k : 1,
+      K: p.K != null ? p.K : 6,
+      orderN: p.orderN != null ? p.orderN : 19,
+      a: p.a != null ? p.a : 0.5,
+      b: p.b != null ? p.b : 3,
+      phaseRad: ((p.phaseDeg || 0) * Math.PI) / 180,
+      formulas: { x: f.x, y: f.y, z: f.z }
+    };
+    if (overrides) {
+      for (var k in overrides) st[k] = overrides[k];
+    }
+    return st;
+  }
+
+  // Populate preset dropdowns from shared Harmony.Presets
+  function populateSelect(sel, defaultIdx) {
+    sel.innerHTML = '';
+    for (var i = 0; i < Presets.length; i++) {
+      if (!Presets[i] || !Presets[i].formulas) continue;
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = '#' + i + ' · ' + Presets[i].name.split(' — ')[0];
+      if (i === defaultIdx) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+  populateSelect($('selA'), ui.presetA);
+  populateSelect($('selB'), ui.presetB);
+
+  function syncLabels() {
+    $('outR').textContent = ui.r.toFixed(2);
+    $('outRIn').textContent = ui.rIn.toFixed(2);
+    $('slR').value = ui.r.toFixed(2);
+    $('slRIn').value = ui.rIn.toFixed(2);
+    $('outVisc').textContent = ui.viscosity.toFixed(3);
+    $('outDrive').textContent = Math.round(ui.driveGain * 100) + '%';
+    $('outPhaseB').textContent = Math.round(ui.phaseB) + '°';
+    $('outFreqB').textContent = ui.freqB.toFixed(2);
+    $('chimeATag').textContent = 'Preset ' + ui.presetA;
+    $('chimeBTag').textContent = 'Preset ' + ui.presetB;
+    var eta = ui.r > 0 ? ui.rIn / ui.r : 0;
+    document.querySelectorAll('.snap-btn[data-eta]').forEach(function (b) {
+      b.classList.toggle('active', Math.abs(eta - parseFloat(b.getAttribute('data-eta'))) <= 0.01);
+    });
+    var opNames = { sum: 'A + B Osmosis', diff: 'A − B Null Delta', conj: 'A · B̄ Conj Cross' };
+    $('topScopeLbl').textContent = 'Cross-Chime Slice: Chime A (cyan) · Chime B (coral) · ' + opNames[ui.op] + ' (gold)';
+  }
+
+  $('selA').addEventListener('change', function () { ui.presetA = parseInt($('selA').value, 10); syncLabels(); });
+  $('selB').addEventListener('change', function () { ui.presetB = parseInt($('selB').value, 10); syncLabels(); });
+  $('slPhaseB').addEventListener('input', function () { ui.phaseB = parseFloat($('slPhaseB').value); syncLabels(); });
+  $('slFreqB').addEventListener('input', function () { ui.freqB = parseFloat($('slFreqB').value); syncLabels(); });
+  $('slVisc').addEventListener('input', function () { ui.viscosity = parseFloat($('slVisc').value); syncLabels(); });
+  $('slDrive').addEventListener('input', function () { ui.driveGain = parseFloat($('slDrive').value); syncLabels(); });
+
+  $('slR').addEventListener('input', function () {
+    ui.r = parseFloat($('slR').value);
+    if (ui.lockV) {
+      if (ui.r < ui.lockedR0) { ui.lockedR0 = ui.r; ui.rIn = 0; }
+      else ui.rIn = Engine.clamp(Engine.solveConstantVolumeRIn(ui.r, ui.lockedR0), 0, Math.min(1.95, ui.r));
+    } else if (ui.rIn > ui.r) ui.rIn = ui.r;
+    syncLabels();
+  });
+  $('slRIn').addEventListener('input', function () {
+    ui.rIn = parseFloat($('slRIn').value);
+    if (ui.lockV) {
+      ui.r = Engine.clamp(Engine.solveConstantVolumeR(ui.rIn, ui.lockedR0), 0.4, 2.2);
+    } else if (ui.rIn > ui.r) ui.rIn = ui.r;
+    syncLabels();
+  });
+
+  document.querySelectorAll('.snap-btn[data-eta]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var targetEta = parseFloat(btn.getAttribute('data-eta'));
+      if (ui.lockV) {
+        var pair = Engine.solveConstantVolumePairForEta(targetEta, ui.lockedR0);
+        ui.r = Engine.clamp(pair.R, 0.4, 2.2);
+        ui.rIn = Engine.clamp(pair.rIn, 0, Math.min(1.95, ui.r));
+      } else {
+        ui.rIn = Engine.clamp(ui.r * targetEta, 0, Math.min(1.95, ui.r));
+      }
+      syncLabels();
+    });
+  });
+
+  $('btnLockV').addEventListener('click', function () {
+    ui.lockV = !ui.lockV;
+    if (ui.lockV) ui.lockedR0 = Engine.cbrt(Math.max(0.01, ui.r * ui.r * ui.r - ui.rIn * ui.rIn * ui.rIn));
+    $('btnLockV').classList.toggle('active', ui.lockV);
+  });
+  $('btnPlay').addEventListener('click', function () {
+    ui.playing = !ui.playing;
+    $('btnPlay').classList.toggle('active', ui.playing);
+    $('btnPlay').innerHTML = ui.playing ? '&#9654; Run' : '&#10074;&#10074; Paused';
+  });
+  $('btnHelix').addEventListener('click', function () {
+    ui.helix = !ui.helix;
+    $('btnHelix').classList.toggle('active', ui.helix);
+  });
+  $('btnRefract').addEventListener('click', function () {
+    ui.refractive = !ui.refractive;
+    $('btnRefract').classList.toggle('active', ui.refractive);
+  });
+  $('btnHarmor').addEventListener('click', function () {
+    ui.harmor = !ui.harmor;
+    document.body.classList.toggle('harmor-void', ui.harmor);
+    $('btnHarmor').classList.toggle('active', ui.harmor);
+  });
+  $('btnPulse').addEventListener('click', function () {
+    tank.injectPulse(0.18, -0.12, 1.35, 0.08);
+  });
+  $('btnClear').addEventListener('click', function () {
+    tank.reset();
+  });
+
+  document.querySelectorAll('.op-btn[data-op]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      ui.op = b.getAttribute('data-op');
+      document.querySelectorAll('.op-btn[data-op]').forEach(function (x) { x.classList.toggle('active', x === b); });
+      syncLabels();
+    });
+  });
+  document.querySelectorAll('.bnd-btn[data-bnd]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      ui.boundary = b.getAttribute('data-bnd');
+      document.querySelectorAll('.bnd-btn[data-bnd]').forEach(function (x) { x.classList.toggle('active', x === b); });
+    });
+  });
+
+  // Interactive click/drag ripple injection on Top XZ Tank
+  var tankCv = $('tankCanvas');
+  var dragging = false;
+  function pointerToDisk(ev) {
+    var rect = tankCv.getBoundingClientRect();
+    var w = rect.width, h = rect.height;
+    var rad = Math.min(w, h) * 0.44;
+    var cx = w * 0.5, cy = h * 0.5;
+    var nx = (ev.clientX - rect.left - cx) / rad;
+    var nz = (ev.clientY - rect.top - cy) / rad;
+    if (nx * nx + nz * nz <= 0.96) {
+      tank.injectPulse(nx, nz, 1.25, 0.075);
+    }
+  }
+  tankCv.addEventListener('pointerdown', function (ev) { dragging = true; pointerToDisk(ev); });
+  window.addEventListener('pointermove', function (ev) { if (dragging) pointerToDisk(ev); });
+  window.addEventListener('pointerup', function () { dragging = false; });
+
+  // Offscreen image buffer for crisp 60fps viscoelastic field rendering
+  var imgCv = document.createElement('canvas');
+  imgCv.width = GRID;
+  imgCv.height = GRID;
+  var imgCtx = imgCv.getContext('2d');
+  var imgData = imgCtx.createImageData(GRID, GRID);
+
+  function sizeCanvas(cv) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return null;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(h * dpr);
+    }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function drawTank(eta, rhoInfo) {
+    var box = sizeCanvas(tankCv);
+    if (!box) return;
+    var ctx = box.ctx, w = box.w, h = box.h;
+    ctx.fillStyle = ui.harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    var u = tank.getField();
+    var vel = tank.getVelocity();
+    var mask = tank.getMask();
+    var rhoMap = tank.getRho();
+    var px = imgData.data;
+
+    for (var k = 0; k < GRID * GRID; k++) {
+      var o = k * 4;
+      if (!mask[k]) {
+        px[o] = px[o + 1] = px[o + 2] = px[o + 3] = 0;
+        continue;
+      }
+      var val = u[k];
+      var spd = Math.min(1, Math.abs(vel[k]) * 4.2);
+      var inCav = eta > 0.01 && rhoMap[k] <= eta;
+      var pos = Math.max(0, Math.min(1, val * 1.15));
+      var neg = Math.max(0, Math.min(1, -val * 1.15));
+
+      if (ui.harmor) {
+        var lum = Math.min(1, (pos + neg) * 0.95 + spd * 0.55);
+        px[o]     = Math.round(18 * pos + 60 * spd);
+        px[o + 1] = Math.round((inCav ? 38 : 16) + 217 * lum);
+        px[o + 2] = Math.round(40 * neg + 100 * spd);
+        px[o + 3] = 255;
+      } else {
+        var baseR = inCav ? 34 : 12;
+        var baseG = inCav ? 18 : 26;
+        var baseB = inCav ? 36 : 46;
+        px[o]     = Math.min(255, Math.round(baseR + 230 * neg + 95 * spd + 30 * pos));
+        px[o + 1] = Math.min(255, Math.round(baseG + 215 * pos + 135 * spd + 35 * neg));
+        px[o + 2] = Math.min(255, Math.round(baseB + 210 * pos + 110 * neg + 70 * spd));
+        px[o + 3] = 255;
+      }
+    }
+    imgCtx.putImageData(imgData, 0, 0);
+
+    var cx = w * 0.5, cy = h * 0.5;
+    var rad = Math.min(w, h) * 0.44;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(imgCv, cx - rad, cy - rad, rad * 2, rad * 2);
+
+    // Subtle concentric octahedral bloom reference guides
+    ctx.strokeStyle = ui.harmor ? 'rgba(0, 255, 102, 0.14)' : 'rgba(77, 243, 221, 0.14)';
+    ctx.lineWidth = 1;
+    for (var ring = 1; ring <= 3; ring++) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * (ring / 4), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Center z=0 Front f(x) slice line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cx - rad, cy); ctx.lineTo(cx + rad, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Active Helix scanning chord + Pollard-ρ lock highlight
+    if (ui.helix && rhoInfo) {
+      var ang = rhoInfo.helixAngleRad;
+      var dx = Math.cos(ang) * rad, dy = Math.sin(ang) * rad;
+      ctx.strokeStyle = rhoInfo.locked ? '#ffd166' : 'rgba(255, 209, 102, 0.55)';
+      ctx.lineWidth = rhoInfo.locked ? 2.2 : 1.25;
+      ctx.beginPath();
+      ctx.moveTo(cx - dx, cy - dy);
+      ctx.lineTo(cx + dx, cy + dy);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Inner Cavity r refractive boundary ring
+    if (eta > 0.01) {
+      ctx.strokeStyle = ui.harmor ? '#00ff66' : '#ff6b7a';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * eta, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Outer Carrier R rim
+    ctx.strokeStyle = ui.boundary === 'wavefold' ? '#ffd166' : (ui.harmor ? '#39ff14' : '#4df3dd');
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function drawWaveLine(ctx, arr, w, h, scaleY, color, width, dash) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath();
+    var n = arr.length;
+    for (var i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * w;
+      var y = h * 0.5 - Engine.clamp(arr[i] * scaleY, -0.92, 0.92) * (h * 0.44);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    if (dash) ctx.setLineDash([]);
+  }
+
+  function drawCrossScope(cross) {
+    var box = sizeCanvas($('crossCanvas'));
+    if (!box) return;
+    var ctx = box.ctx, w = box.w, h = box.h;
+    ctx.fillStyle = ui.harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.5); ctx.lineTo(w, h * 0.5);
+    ctx.stroke();
+
+    var norm = 1 / Math.max(0.5, ui.r * 1.15);
+    drawWaveLine(ctx, cross.profA, w, h, norm, ui.harmor ? 'rgba(0,255,102,0.55)' : 'rgba(77,243,221,0.58)', 1.3, [3, 3]);
+    drawWaveLine(ctx, cross.profB, w, h, norm, ui.harmor ? 'rgba(57,255,20,0.42)' : 'rgba(255,107,122,0.55)', 1.3, [2, 3]);
+
+    var activeArr = ui.op === 'sum' ? cross.sum : (ui.op === 'conj' ? cross.conjRe : cross.diff);
+    drawWaveLine(ctx, activeArr, w, h, norm, '#ffd166', 2.2);
+  }
+
+  function drawPropScope(sl, eta) {
+    var box = sizeCanvas($('propCanvas'));
+    if (!box) return;
+    var ctx = box.ctx, w = box.w, h = box.h;
+    ctx.fillStyle = ui.harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    // Highlight inner cavity corridor [-r..+r]
+    if (eta > 0.01) {
+      var xL = (0.5 - eta * 0.5) * w;
+      var xR = (0.5 + eta * 0.5) * w;
+      ctx.fillStyle = ui.harmor ? 'rgba(0,255,102,0.08)' : 'rgba(255,107,122,0.09)';
+      ctx.fillRect(xL, 0, xR - xL, h);
+    }
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.5); ctx.lineTo(w, h * 0.5);
+    ctx.stroke();
+
+    // Filled MiniMeters-style propagation delta |∂u/∂t|
+    var dArr = sl.delta;
+    var n = dArr.length;
+    ctx.fillStyle = ui.harmor ? 'rgba(0,255,102,0.22)' : 'rgba(110,231,160,0.22)';
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.5);
+    for (var i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * w;
+      var y = h * 0.5 - Engine.clamp(dArr[i] * 3.8, -0.9, 0.9) * (h * 0.44);
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    drawWaveLine(ctx, sl.disp, w, h, 0.9, ui.harmor ? '#39ff14' : '#4df3dd', 1.7);
+    drawWaveLine(ctx, sl.delta, w, h, 3.8, ui.harmor ? '#00ff66' : '#6ee7a0', 1.6);
+  }
+
+  // Initial ripple so tank opens alive
+  syncLabels();
+  tank.injectPulse(0, 0, 1.1, 0.11);
+
+  var lastNow = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.05, (now - lastNow) / 1000);
+    lastNow = now;
+    if (ui.playing) ui.playT = (ui.playT + dt * 0.12) % 1;
+
+    var stA = buildChimeState(ui.presetA);
+    var stB = buildChimeState(ui.presetB, {
+      f: ui.freqB,
+      phaseRad: (ui.phaseB * Math.PI) / 180
+    });
+
+    var cross = Engine.crossChimeSlice(stA, stB, ui.playT, { bins: 128 });
+    var slice2d = Engine.sliceCalculus2D({ r: ui.r, rIn: ui.rIn });
+    var rho = Engine.pollardRhoSlice({ r: ui.r, rIn: ui.rIn, orderN: stA.orderN }, ui.playT);
+    var driveArr = ui.op === 'sum' ? cross.sum : (ui.op === 'conj' ? cross.conjRe : cross.diff);
+
+    if (ui.playing) {
+      tank.step({
+        eta: slice2d.eta,
+        refractive: ui.refractive,
+        boundary: ui.boundary,
+        viscosity: ui.viscosity,
+        driveLine: driveArr,
+        driveGain: ui.driveGain,
+        helixAngle: ui.helix ? rho.helixAngleRad : 0
+      });
+    }
+
+    var sl = tank.centerSlice();
+    var met = tank.metrics(slice2d.eta);
+    var alpha = slice2d.eta > 0.01 ? (1 / slice2d.eta) : 1;
+
+    drawTank(slice2d.eta, rho);
+    drawCrossScope(cross);
+    drawPropScope(sl, slice2d.eta);
+
+    $('telArea').textContent = slice2d.A.toFixed(2);
+    $('telAlpha').textContent = slice2d.eta > 0.01 ? (alpha.toFixed(2) + '×') : 'solid';
+    $('telTrans').textContent = Math.round(met.transmissionRatio * 100) + '%';
+    $('telVel').textContent = met.velRms.toFixed(3);
+    $('telCoh').textContent = cross.crossCoherence.toFixed(2);
+    var dbStr = cross.isExactNull ? '−∞ dB (LOCK)' : (cross.nullDb.toFixed(1) + ' dB');
+    $('telNullDb').textContent = dbStr;
+    $('nullDbTag').textContent = 'NULL ' + dbStr;
+    $('telHex').textContent = cross.peakResidualBits.hex;
+    $('telRho').textContent = ui.helix ? (rho.locked ? '★ ρ-LOCK' : 'Helix 1×/2×') : 'Static z=0';
+    $('tankRegimeTag').textContent = (ui.boundary === 'wavefold' ? 'WAVEFOLD' : 'OSMOSIS') +
+      ' · n=' + (ui.refractive && slice2d.eta > 0.01 ? alpha.toFixed(2) + '×' : '1.00×');
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

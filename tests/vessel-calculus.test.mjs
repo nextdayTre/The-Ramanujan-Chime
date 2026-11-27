@@ -366,3 +366,85 @@ test('Stage 3: Pollard-ρ 1x/2x cycle-lock detector catches hexagonal poles (t=1
   assert.equal(comp.hasCompositeFactor, true);
   assert.equal(comp.factorHit, 5);
 });
+
+test('Stage 4: sliceCalculus2D dimensional descent matches (dR+dr)V/4, exact dA/A & Cavalieri 3D reconstruction', () => {
+  const R = 1.25, rIn = 0.55;
+  const vc = Engine.vesselCalculus({ r: R, rIn });
+  const s2 = Engine.sliceCalculus2D({ r: R, rIn }, { dR: 0.14, dr: -0.09 });
+
+  // A = pi*(R^2 - r^2) === (1/4)*(dR V + dr V) === Archimedes ring!
+  close(s2.A, vc.d1.archimedesRing, 1e-12, '2D slice seed equals 1st directional derivative of 3D seed');
+  close(s2.d1.dR, 2 * Math.PI * R, 1e-12, 'dA/dR = 2*pi*R');
+  close(s2.d1.dr, -2 * Math.PI * rIn, 1e-12, 'dA/dr = -2*pi*r');
+  assert.equal(s2.d2.antipodalSum, 0, '2nd derivative +-TAU antipodal null');
+  assert.equal(s2.d3, 0);
+
+  // Analytic dA/A = 2(dR/R) - (2η/(1-η²))dη matches central finite difference
+  const h = 1e-6;
+  const aP = Math.log(Engine.sliceCalculus2D({ r: R + 0.14 * h, rIn: rIn - 0.09 * h }).A);
+  const aM = Math.log(Engine.sliceCalculus2D({ r: R - 0.14 * h, rIn: rIn + 0.09 * h }).A);
+  close(s2.dynamics.dAOverA, (aP - aM) / (2 * h), 1e-7, 'analytic dA/A matches FD');
+
+  // Cavalieri / Radon vertical integral of A_ring(z) over [-R, +R] reconstructs exact 3D volume V!
+  const cav = Engine.cavalieriVolume(R, rIn, 256);
+  assert.ok(cav.relError < 1e-5, `Cavalieri integral reconstructs 3D V (relErr=${cav.relError})`);
+});
+
+test('Stage 4: crossChimeSlice computes exact -Infinity dB null on identical chimes & cross-phase coherence', () => {
+  const stA = {
+    r: 1, rIn: 0.5, amp: 1, f: 1, n: 3, m: 2, k: 1, K: 6, orderN: 19, a: 0.5, b: 3, phaseRad: 0,
+    formulas: { x: 'r*cos(TAU*f*t+phase)', y: 'r*sin(TAU*f*t+phase)', z: '0' }
+  };
+
+  // Identical chimes -> exact 0x00000000 null (-Infinity dB) & +1.0 coherence
+  const same = Engine.crossChimeSlice(stA, stA, 0.25, { bins: 64 });
+  assert.equal(same.isExactNull, true);
+  assert.equal(same.nullDb, -Infinity);
+  assert.equal(same.peakResidualBits.hex, '0x00000000');
+  close(same.crossCoherence, 1.0, 1e-5, 'identical chimes have +1.0 coherence');
+
+  // 90° quadrature shift -> coherence ≈ 0, nonzero propagation residual
+  const quad = Engine.crossChimeSlice(stA, Object.assign({}, stA, { phaseRad: Math.PI / 2 }), 0, { bins: 64 });
+  assert.equal(quad.isExactNull, false);
+  close(quad.crossCoherence, 0.0, 1e-4, '90° quadrature chimes have 0 cross-coherence');
+
+  // 180° antipodal shift -> coherence ≈ -1.0, sum cancels while diff doubles!
+  const anti = Engine.crossChimeSlice(stA, Object.assign({}, stA, { phaseRad: Math.PI }), 0, { bins: 64 });
+  close(anti.crossCoherence, -1.0, 1e-4, '180° antipodal chimes have -1.0 coherence');
+});
+
+test('Stage 4: createViscoelasticTank is CFL-stable, dissipates under viscosity & refracts across cavity ring', () => {
+  const tank = Engine.createViscoelasticTank({ size: 48 });
+
+  // 1. Zero-input stays identically zero
+  tank.step({ eta: 0.5, viscosity: 0.03, refractive: true, boundary: 'osmosis' });
+  assert.equal(tank.metrics(0.5).energyTotal, 0);
+
+  // 2. Drop impulse at center -> energy stays strictly finite (no CFL blow-up) & decays under viscosity
+  tank.injectPulse(0, 0, 1.2, 0.1);
+  const eStart = tank.metrics(0.5).energyTotal;
+  assert.ok(eStart > 0.1);
+
+  for (let s = 0; s < 120; s++) {
+    tank.step({ eta: 0.5, viscosity: 0.035, refractive: true, boundary: 'wavefold' });
+  }
+  const mAfter = tank.metrics(0.5);
+  assert.ok(Number.isFinite(mAfter.energyTotal) && Number.isFinite(mAfter.peakAbs), 'CFL-stable across 120 wavefold steps');
+  assert.ok(mAfter.energyTotal < eStart, 'viscoelastic damping strictly dissipates free-decay energy');
+  assert.ok(mAfter.transmissionRatio > 0.05, 'energy propagates across cavity ring into outer shell');
+
+  // 3. Refractive two-medium wave speed differs measurably from uniform speed
+  const tankRef = Engine.createViscoelasticTank({ size: 40 });
+  const tankUni = Engine.createViscoelasticTank({ size: 40 });
+  tankRef.injectPulse(0, 0, 1.0, 0.1);
+  tankUni.injectPulse(0, 0, 1.0, 0.1);
+  for (let k = 0; k < 25; k++) {
+    tankRef.step({ eta: 0.5, viscosity: 0.01, refractive: true, boundary: 'osmosis' });
+    tankUni.step({ eta: 0.5, viscosity: 0.01, refractive: false, boundary: 'osmosis' });
+  }
+  const slRef = tankRef.centerSlice().disp;
+  const slUni = tankUni.centerSlice().disp;
+  let maxDelta = 0;
+  for (let i = 0; i < slRef.length; i++) maxDelta = Math.max(maxDelta, Math.abs(slRef[i] - slUni[i]));
+  assert.ok(maxDelta > 0.01, `refractive c_in=alpha*c_out produces distinct wavefield (maxDelta=${maxDelta})`);
+});
