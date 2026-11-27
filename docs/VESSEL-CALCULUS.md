@@ -298,6 +298,34 @@ The Vessel Calculus also gives exact physical meaning to **acoustic pressure**, 
    $$\text{Ionian} \leftrightarrow \text{Phrygian}, \qquad \text{Lydian} \leftrightarrow \text{Locrian}, \qquad \text{Mixolydian} \leftrightarrow \text{Aeolian}, \qquad \boxed{\text{Dorian} \leftrightarrow \text{Dorian}}$$
    Dorian (`2-1-2-2-2-1-2`) is an **exact palindrome**, sitting on the self-conjugate mirror axis just as `1000 ↔ 0001` does on the Four-Bit Orbit.
 
+### 5.6 Dimensional Descent (2D Annular Slice), $\eta^\ell$ Spherical Multipole Filtering & Harmor Void Extraction
+
+Generalizing the hollow-vessel seed $V_d = c_d(R^d - r^d) = c_d R^d(1 - \eta^d)$ across dimension $d$ yields one unified logarithmic rate law:
+
+$$\frac{\dot{V}_d}{V_d} \;=\; d\,\frac{\dot{R}}{R} \;-\; \frac{d\,\eta^{d-1}}{1 - \eta^d}\,\dot{\eta}$$
+
+From this single dimensional ladder emerge the three Stage 4 field laws proven in [`js/engine.js`](../js/engine.js) and auditioned in [`spike/`](../spike/README.md):
+
+1. **2D Annular Slice Descent ($d = 2$) & Two-Medium Eikonal Dispersion (`viscoelastic-slice.html`):**
+   - The equatorial 2D slice $A(R, r) = \pi(R^2 - r^2) = \frac{1}{4}(\partial_R + \partial_r)V$ is literally the first directional derivative of the 3D seed (Archimedes' constant-area ring), whose first derivatives are the exact great circles $\pm 2\pi R, -2\pi r$, whose second derivatives form the exact $\pm 2\pi$ antipodal null, and whose vertical Cavalieri integral $\int_{-R}^{+R} A_{\text{ring}}(z)\,dz$ reconstructs exact 3D volume $V$.
+   - Coupling orthogonal vantage slices (**Chime A `Front XY`** $\ominus$ **Chime B `Top XZ`**) drives a CFL-stable self-adjoint 2D viscoelastic wave tank:
+     $$\frac{\partial^2 u}{\partial t^2} \;=\; \nabla \cdot \big(c^2(\rho)\,\nabla u\big) \;-\; \gamma(\eta)\,\frac{\partial u}{\partial t}, \qquad \frac{c_{\text{in}}}{c_{\text{out}}} = \alpha = \frac{R}{r}$$
+     with exact flux conservation across the refractive cavity ring $\rho = \eta$ and selectable **Osmosis (absorbing sponge rim)** vs. **Wavefold (Neumann reflection + strictly passive $C^1$ sine wavefolder $|f(x)| \le |x|$)**.
+
+2. **The Hollow Shell as an Exact $6\ell\text{ dB/octave}$ Spherical Multipole Filter ($T_\ell = \eta^\ell$) & Graph Laplacian Wireframe (`spherical-harmonics.html`):**
+   - Lifting the 2D slice back onto the 3D spherical boundaries $S^2_r \subset S^2_R$, the eigenfunctions of the spherical Laplacian $\Delta_{S^2} Y_\ell^m = -\ell(\ell+1)Y_\ell^m$ ($\ell = 0..4$, **25 orthonormal real bands**) transfer across the hollow shell wall $r \le \rho \le R$ by the exact potential-theory factor:
+     $$\boxed{T_\ell(\eta) \;=\; \eta^\ell \;=\; \left(\frac{r}{R}\right)^\ell \qquad \big(-6.02\,\ell\text{ dB/octave}\big)}$$
+     - $\ell = 0$ (Monopole): $\eta^0 = 1$ (breathing vessel $V$ passes unattenuated).
+     - $\ell = 1$ (Dipole): $\eta^1 = r/R$ (`X / Y / Z` polarity).
+     - $\ell = 2$ (Quadrupole): $\eta^2 = dR/dr\big|_V$ (our exact **`Lock V` radial Jacobian**!).
+     - $\ell = 3$ (Octupole): $\eta^3 = V_{\text{cavity}}/V_{\text{outer}}$ (our exact **cavity volume fraction** — and $Y_3^{-2} \propto xyz$ peaks on the **exact 4 vertices of the inscribed Quadray tetrahedron**!).
+     - $\ell = 4$ (Hexadecapole): $\eta^4$ (8-lobe octal bloom symmetry).
+   - Stepping Sentinel Octave $\sigma$ inward **recursively unpacks** higher-$\ell$ angular structure coarse-grained behind the hollow shell while scaling child volume by $2^{-3\sigma}$. On the discrete geodesic wireframe $G = (V, E)$ ($V - E + F = 2$), the **Graph Laplacian** $\mathbf{L} = \mathbf{D} - \mathbf{A}$ governs conductive wave propagation ($\ddot{\mathbf{u}} = -c^2\mathbf{L}\mathbf{u} - \gamma\dot{\mathbf{u}}$) and heat diffusion ($\dot{\mathbf{u}} = -\kappa\mathbf{L}\mathbf{u}$) with exact surface-tension Dirichlet energy $E_{\text{tension}} = \frac{1}{2}\mathbf{u}^\top\mathbf{L}\mathbf{u}$.
+
+3. **Harmor Void Collapse ($\lambda \in [0, 1]$) & 4-Bit "Violin Bow" Richter-Yaw Extraction (`violin-bow-collapse.html`):**
+   - Collapsing wall thickness $\Delta(\lambda) = (1-\lambda)(R-r) \to 0$ and depth $z(\lambda) = (1-\lambda)z \to 0$ morphs a 3D luminous green hollow shell smoothly into a 2D monotone-cubic green BitWave spline over `#000000` silence, pivoted cleanly at nibble `0x8` (`1000₂` $\equiv 0.0$) with Resonant Attraction ($\kappa = 1 \implies -\infty\text{ dB}$ null lock) and next-shell width doubling $S_k \to S_{k+1}$ ($M \to 2M$ nibbles).
+   - Reusing `fourBitOrbit()`'s rotating antipodal right-triangle bows (`1000 ↔ 0001`) yields instantaneous quadrature power area $\mathcal{A}_\triangle(\theta) = \frac{1}{2}(R\sin\theta)^2$ and closest midpoint approach $d_{\text{mid}}(\theta) = R\sqrt{1 - \frac{1}{2}\sin^2\theta} \in [R/\sqrt{2},\, R]$ — placing a built-in **$-3\text{ dB}$ half-power cavity contact threshold** at $\eta = 1/\sqrt{2} \approx 0.7071$ that deflects a top-down Richter-Scale yaw needle $\delta\psi(t)$ to crystallize live 4-bit BitWave hex registers directly from cavity signals.
+
 ---
 
 ## 6. The Unified 3-Axis Master Frame & Scope Boundary
@@ -317,16 +345,17 @@ flowchart LR
 
 ### Two Complementary Papers, One Engine
 - **[`HARMONY_ENGINE.md`](../HARMONY_ENGINE.md)** establishes the **angular / phase / conjugate** proof: complex phasors $e^{\pm i\theta}$, Frobenius eigenvalues $\lambda^k + \bar\lambda^k$, Morlet atoms, and winding ratios (`n : m : k`, `Order N`, `Phase φ`).
-- **This paper (`docs/VESSEL-CALCULUS.md`)** establishes the **radial / volumetric / scale / temporal-granularity** calculus rooted in $V = \frac{4}{3}\pi(R^3 - r^3)$ — and shows via $\mathcal{P}(t) = V(t)e^{i\theta(t)}$ and $\dot{\mathcal{P}}/\mathcal{P} = \dot{V}/V + i\dot{\theta}$ how parallel perspective sends (`P / P̄ / −P / ~P`) sum coherently back to one master bus.
+- **This paper (`docs/VESSEL-CALCULUS.md`)** establishes the **radial / volumetric / scale / temporal-granularity** calculus rooted in $V = \frac{4}{3}\pi(R^3 - r^3)$ — and shows via $\mathcal{P}(t) = V(t)e^{i\theta(t)}$ and $\dot{\mathcal{P}}/\mathcal{P} = \dot{V}/V + i\dot{\theta}$ how parallel perspective sends (`P / P̄ / −P / ~P`), 2D slices, 3D $\eta^\ell$ spherical multipoles, and 4-bit Violin Bow extractors all descend from one seed.
 
-### Mapping to Existing Code in [`js/engine.js`](../js/engine.js)
+### Implemented Primitives in [`js/engine.js`](../js/engine.js) *(All Verified in `tests/vessel-calculus.test.mjs`)*
 
-| Vessel Calculus Axis | Existing Foundations in `js/engine.js` | Next Unification Opportunity |
+| Vessel Calculus Axis | Pure Engine Primitives in `js/engine.js` | Live Surface / Prototype |
 | :--- | :--- | :--- |
-| **Axis 1 (Multitudes & Sentinel)** | `sentinelRegister`, `sentinelHysteresisStep`, `clefFactor`, `pseudoMersenneDecomp` | Add base-8 Sentinel shell decomposition, telescoping $(N+1)V$ helper, and Cuban/Taxicab integer-cube lock detector. |
-| **Axis 2 (Derivative Ladder)** | `shellMetrics`, `solveConstantVolumeR`, `sphereResonance`, `nearestHarmonicRatio`, `ramanujanSeries` | Unify into one pure `vesselCalculus(state, playT)` derivation exposing $V^{(0..3)}$, $\dot{V}/V$, and hypergeometric expansion. |
-| **Axis 3 (RX 11 Time-Zoom)** | `sampleWindow` (Zoom Lens), `floorZoomSec` / `floorZoomLog` (`6 · Floor WT`) | Lift $(t_0, T = 2^\zeta)$ + `BigInt` modular phase `frac(M * t0)` into a general engine-level time-zoom vector. |
-| **Parallel Perspective Bus** | `twinOf`, `playhead`, `ChimeRack` slots `A..H`, `BitWaveFeed` Twin Decompiler | Formalize parallel send summation $\mathcal{B}(t) = \sum w_j \mathcal{O}_j(\mathcal{P}_j)$ & linear bus-delta validation (`B(t) ≠ 0`). |
+| **Axis 1 (Multitudes & Sentinel)** | `sentinelRegister`, `sentinelHysteresisStep`, `clefFactor`, `pseudoMersenneDecomp`, `multitudeShell`, `sentinelOctalDecomp`, `cubeLatticeCheck` | Main app (`Hollow Vessel` Sentinel $\sigma$ + `Equations` Clef/LCS) |
+| **Axis 2 (Derivative Ladder & Tuner)** | `vesselCalculus`, `vesselPerturbation`, `hypergeometricLockV`, `tunerReadout`, `keySignatureLattice`, `snapToKeySignature` | Main app (`#resTunerBar` hairline tuner + LFO Clef & Key-Sig ops) |
+| **Axis 3 (RX 11 Time-Zoom)** | `sampleWindow`, `floorZoomSec`, `floorZoomLogFromSec`, `modularZoomPhase` | Main app (`Zoom Lens` & `6 · Floor WT`) |
+| **Parallel Bus & Clockwork (§5.3–5.5)** | `parallelVesselBus`, `bitwiseNotNullBridge`, `diatonicModeConjugate`, `clockworkCoupling`, `pollardRhoSlice` | Main app (`ChimeRack` Master Bus `#chimeBusBar` + `Helix` toggle) |
+| **Stage 4 Field Laws (§5.6)** | `sliceCalculus2D`, `cavalieriVolume`, `crossChimeSlice`, `createViscoelasticTank`, `sphericalHarmonicBasis25`, `sphericalHarmonicSpectrum`, `shellMultipoleTransfer`, `createSphericalWireframeGraph`, `cavityCollapseProfile`, `fourBitLockInYaw` | Standalone R&D spikes in [`spike/`](../spike/README.md) (`viscoelastic-slice.html`, `spherical-harmonics.html`, `violin-bow-collapse.html`) |
 
 ---
 

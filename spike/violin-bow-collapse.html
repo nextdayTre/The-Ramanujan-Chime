@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stage 4b-2 Spike — Harmor Void Collapse (&lambda;) &amp; 4-Bit Violin Bow Richter-Yaw</title>
+<style>
+  :root {
+    --bg: #000000;
+    --panel: #030705;
+    --panel2: #060d08;
+    --line: rgba(0, 255, 102, 0.18);
+    --line2: rgba(0, 255, 102, 0.36);
+    --text: #d8ffe6;
+    --muted: #6eb889;
+    --cyan: #00ff66;
+    --emerald: #39ff14;
+    --gold: #ffd166;
+    --coral: #9dff6e;
+    --mono: "Cascadia Code", Consolas, ui-monospace, monospace;
+    --sans: "Segoe UI", system-ui, sans-serif;
+  }
+  body.studio-theme {
+    --bg: #070b11;
+    --panel: #0d131d;
+    --panel2: #111927;
+    --line: rgba(130, 160, 195, 0.16);
+    --line2: rgba(130, 160, 195, 0.28);
+    --text: #e3ecf7;
+    --muted: #8495ad;
+    --cyan: #4df3dd;
+    --emerald: #6ee7a0;
+    --gold: #ffd166;
+    --coral: #ff6b7a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+  .mono { font-family: var(--mono); }
+  .app { display: flex; flex-direction: column; height: 100dvh; }
+  .topbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+  .brand h1 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; }
+  .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--cyan);
+    background: rgba(0, 255, 102, 0.10);
+    border: 1px solid var(--line2);
+    white-space: nowrap;
+  }
+  .premise { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .top-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    appearance: none;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    text-decoration: none;
+  }
+  .pill:hover { color: var(--text); border-color: var(--cyan); }
+  .pill.active {
+    color: var(--emerald);
+    background: rgba(0, 255, 102, 0.16);
+    border-color: rgba(0, 255, 102, 0.62);
+    font-weight: 600;
+  }
+  .pill.gold.active {
+    color: var(--gold);
+    background: rgba(255, 209, 102, 0.16);
+    border-color: rgba(255, 209, 102, 0.65);
+  }
+
+  .main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 300px 1.15fr 1.05fr;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .card-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    background: var(--panel2);
+    border-bottom: 1px solid var(--line);
+  }
+  .kicker {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cyan);
+  }
+  .tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--emerald);
+    background: rgba(0, 255, 102, 0.12);
+    border: 1px solid var(--line2);
+    white-space: nowrap;
+  }
+  .tag.contact {
+    color: var(--gold);
+    background: rgba(255, 209, 102, 0.18);
+    border-color: rgba(255, 209, 102, 0.65);
+  }
+  .controls {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .sec-title {
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 3px;
+  }
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field-head { display: flex; justify-content: space-between; font-size: 11px; }
+  .field-head span { color: var(--muted); }
+  .field-head b { color: var(--text); }
+  select, input[type="range"], input[type="text"] { width: 100%; }
+  select, input[type="text"] {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line2);
+    border-radius: 5px;
+    padding: 5px 7px;
+    font-size: 11px;
+  }
+  input[type="text"] { font-family: var(--mono); letter-spacing: 0.05em; }
+  input[type="range"] { accent-color: var(--cyan); cursor: pointer; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .btn-row .pill { flex: 1 1 auto; text-align: center; padding: 3px 5px; font-size: 10px; }
+
+  .center-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 1.45fr 1fr;
+    gap: 1px;
+    background: var(--line);
+  }
+  .stage-box {
+    position: relative;
+    background: var(--bg);
+    min-height: 0;
+    overflow: hidden;
+  }
+  #stage3d { width: 100%; height: 100%; cursor: grab; }
+  #stage3d:active { cursor: grabbing; }
+  .stage-box canvas { width: 100%; height: 100%; display: block; }
+  .webgl-fallback {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 18px;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: var(--bg);
+  }
+
+  .right-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 1.05fr auto 0.95fr;
+    gap: 1px;
+    background: var(--line);
+  }
+  .scope-cell {
+    position: relative;
+    background: var(--bg);
+    min-height: 0;
+  }
+  .scope-cell canvas { width: 100%; height: 100%; display: block; }
+  .scope-lbl {
+    position: absolute;
+    left: 10px;
+    top: 7px;
+    font-size: 10px;
+    color: var(--muted);
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.78);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .hex-strip {
+    background: var(--panel2);
+    padding: 7px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .hex-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .hex-val {
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--emerald);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nib-pill {
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(0, 255, 102, 0.14);
+    border: 1px solid var(--line2);
+    color: var(--gold);
+    white-space: nowrap;
+  }
+
+  .telemetry-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 11px;
+    background: var(--panel2);
+    border-top: 1px solid var(--line);
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .telemetry-bar b { color: var(--text); }
+  .telemetry-bar .hl-green { color: var(--emerald); }
+  .telemetry-bar .hl-gold { color: var(--gold); }
+  .telemetry-bar .hl-cyan { color: var(--cyan); }
+
+  .hint-note {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.45;
+    background: rgba(0, 255, 102, 0.04);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 7px 8px;
+  }
+  @media (max-width: 1080px) {
+    .main { grid-template-columns: 270px 1fr; grid-template-rows: 1fr 1fr; }
+    .controls-card { grid-row: span 2; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Stage 4b-2 Spike &middot; Harmor Void Collapse (&lambda;) &amp; 4-Bit Violin Bow Richter-Yaw</h1>
+      <span class="badge mono">d<sub>mid</sub> &isin; [R/&radic;2, R] (&minus;3 dB) &middot; [Green Cavity] &rarr; [Green BitWave]</span>
+      <span class="premise">Continuous 3D&rarr;2D Shell Collapse (&sect;5.6) &times; Rotating Right-Triangle Lock-In Seismograph (&sect;5.7)</span>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="btnPlay" class="pill active">&#9654; Run</button>
+      <button type="button" id="btnBreathe" class="pill gold">Breathe &lambda;(t)</button>
+      <button type="button" id="btnTheme" class="pill active">Harmor Void</button>
+      <a href="spherical-harmonics.html" class="pill">&larr; 3D Y<sub>&ell;</sub><sup>m</sup></a>
+      <a href="viscoelastic-slice.html" class="pill">&larr; 2D Tank</a>
+      <a href="../index.html" class="pill">&larr; Main Chime</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Left Controls -->
+    <section class="card controls-card">
+      <div class="card-head">
+        <span class="kicker">&sect;5.6 Collapse &amp; &sect;5.7 Bow Controls</span>
+        <button type="button" id="btnLockV" class="pill active">Lock V</button>
+      </div>
+      <div class="controls">
+        <div class="sec-title mono">&sect;5.6 Harmor Void Collapse &amp; Attraction</div>
+        <div class="field">
+          <div class="field-head"><span>Cavity Collapse &lambda; (3D &rarr; 2D)</span><b id="outLambda" class="mono">0.25</b></div>
+          <input type="range" id="slLambda" min="0" max="1" step="0.01" value="0.25" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Resonant Attraction &kappa;</span><b id="outKappa" class="mono">0.20</b></div>
+          <input type="range" id="slKappa" min="0" max="1" step="0.01" value="0.20" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>BitWave Hex Register</span><b id="outBits" class="mono">64-bit (16n)</b></div>
+          <input type="text" id="inpHex" value="8ADEFEDA85210125" spellcheck="false" />
+        </div>
+        <div class="btn-row">
+          <button type="button" class="pill hex-pre" data-hex="8ADEFEDA85210125">Sine 64b</button>
+          <button type="button" class="pill hex-pre" data-hex="8F808F808F808F80">Quadray</button>
+          <button type="button" class="pill hex-pre" data-hex="8888888888888888">Zero 8</button>
+        </div>
+        <button type="button" id="btnExpand" class="pill gold">Step Out S<sub>k</sub> &rarr; S<sub>k+1</sub> (&times;2 Bits)</button>
+
+        <div class="sec-title mono">&sect;5.7 4-Bit Violin Bow Lock-In Scanner</div>
+        <div class="field">
+          <div class="field-head"><span>Cavity Signal Preset</span><b id="presetTag" class="mono">Preset 5</b></div>
+          <select id="selPreset"></select>
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Outer R</span><b id="outR" class="mono">1.00</b></div>
+          <input type="range" id="slR" min="0.5" max="1.9" step="0.01" value="1.00" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Cavity r (&eta; = r/R)</span><b id="outRIn" class="mono">0.76</b></div>
+          <input type="range" id="slRIn" min="0" max="1.75" step="0.01" value="0.76" />
+        </div>
+        <div class="btn-row" role="group" aria-label="Half-power cavity snaps">
+          <button type="button" class="pill snap-btn" data-eta="0.50">.50</button>
+          <button type="button" class="pill snap-btn" data-eta="0.65">.65</button>
+          <button type="button" class="pill snap-btn" data-eta="0.7071">&minus;3dB</button>
+          <button type="button" class="pill snap-btn active" data-eta="0.76">.76 Hit</button>
+          <button type="button" class="pill snap-btn" data-eta="0.86">.86 Deep</button>
+        </div>
+        <div class="btn-row">
+          <button type="button" id="btnModular" class="pill">Order-N Comb: OFF</button>
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Order N / Stride g</span><b id="outOrderN" class="mono">N=19 &middot; g=3 (gcd 1)</b></div>
+          <input type="range" id="slOrderN" min="3" max="61" step="1" value="19" />
+          <input type="range" id="slStride" min="1" max="12" step="1" value="3" />
+        </div>
+        <div class="field">
+          <div class="field-head"><span>Lock-In Yaw Gain</span><b id="outGain" class="mono">1.80&times;</b></div>
+          <input type="range" id="slGain" min="0.4" max="4.0" step="0.1" value="1.8" />
+        </div>
+
+        <div class="hint-note">
+          <b>Try this:</b> Slide <b>Collapse &lambda;</b> from <code>0 &rarr; 1</code> to watch the luminous green 3D hollow sphere flatten seamlessly into a 2D BitWave spline over pure <code>#000000</code> silence! Keep <b>&eta; &gt; 0.7071</b> (&minus;3 dB) so the rotating 4-bit Violin Bow slices into the inner cavity and kicks the <b>Richter-Yaw</b> seismogram, then click <b>Feed Hex &rarr; Cavity</b> to close the loop!
+        </div>
+      </div>
+    </section>
+
+    <!-- Center: 3D Collapsing Green Cavity + Violin Bows & Top-Down XZ Seismograph Radar -->
+    <section class="card">
+      <div class="card-head">
+        <span class="kicker">3D Collapsing Vessel &amp; Top XZ Richter-Yaw Radar</span>
+        <span id="contactTag" class="tag mono">&minus;3 dB BOUNDARY</span>
+      </div>
+      <div class="center-split">
+        <div class="stage-box">
+          <div id="stage3d"></div>
+          <span class="scope-lbl mono" id="stageLbl">3D Green Cavity (&lambda;=0.25) &middot; Antipodal 1000&harr;0001 Bows</span>
+          <div class="webgl-fallback mono" id="webglFallback">WebGL unavailable in headless mode &mdash; Top XZ radar &amp; live Richter-Yaw seismogram remain active.</div>
+        </div>
+        <div class="stage-box">
+          <span class="scope-lbl mono">Top XZ (+Y Crown): Equatorial Chord e<sub>8</sub>&harr;e<sub>1</sub> &middot; X Carriage &middot; Yaw Needle &delta;&psi;(t)</span>
+          <canvas id="radarCanvas"></canvas>
+        </div>
+      </div>
+      <div class="telemetry-bar mono">
+        <span>&Delta;(&lambda;)=<b id="telWall" class="hl-cyan">0.18</b></span>
+        <span>A<sub>&triangle;</sub>=<b id="telBowArea" class="hl-green">0.00</b></span>
+        <span>d<sub>mid</sub>=<b id="telDMid" class="hl-gold">1.00</b></span>
+        <span>Yaw <b id="telYaw" class="hl-cyan">0.0&deg;</b></span>
+      </div>
+    </section>
+
+    <!-- Right: Live Richter-Scale Seismogram, Extracted BitWave Hex & Resonant Attraction Null -->
+    <section class="card">
+      <div class="card-head">
+        <span class="kicker">Live Richter-Scale Seismogram &amp; Attraction Null</span>
+        <span id="nullTag" class="tag mono">NULL 0.0 dB</span>
+      </div>
+      <div class="right-split">
+        <div class="scope-cell">
+          <span class="scope-lbl mono">Richter-Yaw Seismogram &delta;&psi;(t) &rarr; Quantized 4-Bit Nibbles (0x0..0xF, Center = 0x8)</span>
+          <canvas id="seismoCanvas"></canvas>
+        </div>
+        <div class="hex-strip mono">
+          <div class="hex-row">
+            <span style="font-size:10px;color:var(--muted)">CRYSTALLIZED 64-BIT REGISTER</span>
+            <span id="activeNibPill" class="nib-pill">0x8 (1000)</span>
+          </div>
+          <div class="hex-row">
+            <span id="extractedHexOut" class="hex-val">8888888888888888</span>
+            <button type="button" id="btnFeedHex" class="pill gold">Feed Hex &rarr; Cavity</button>
+          </div>
+        </div>
+        <div class="scope-cell">
+          <span class="scope-lbl mono">&sect;5.6 Resonant Attraction: Shell Carrier (dashed) &middot; Attracted BitWave (green) &middot; Residual (gold)</span>
+          <canvas id="attractCanvas"></canvas>
+        </div>
+      </div>
+      <div class="telemetry-bar mono">
+        <span>Lock |R|=<b id="telLockR" class="hl-green">0.00</b></span>
+        <span>Null <b id="telNullDb" class="hl-gold">&mdash;</b></span>
+        <span>Zeros(8)=<b id="telZeros" class="hl-cyan">0</b></span>
+        <span>Peak f32 <b id="telHexF32" class="hl-cyan">0x00000000</b></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="../vendor/OrbitControls.js"></script>
+<script src="../js/engine.js"></script>
+<script src="../js/presets.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var Engine = window.Harmony.engine;
+  var Presets = window.Harmony.Presets.list;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var ui = {
+    playing: true,
+    breathe: false,
+    harmor: true,
+    lockV: true,
+    r: 1.0,
+    rIn: 0.76,
+    lockedR0: Engine.cbrt(1.0 * 1.0 * 1.0 - 0.76 * 0.76 * 0.76),
+    lambda: 0.25,
+    kappa: 0.20,
+    hex: '8ADEFEDA85210125',
+    presetIdx: 5,       // Analytic Morlet 3D Helix
+    modular: false,
+    orderN: 19,
+    stride: 3,
+    gain: 1.8,
+    playT: 0,
+    breathePhase: 0
+  };
+
+  // Scrolling Richter-Yaw seismogram ring buffer + sliding 16-nibble crystallized hex register
+  var HIST = 160;
+  var yawHist = new Float32Array(HIST);
+  var nibHist = new Uint8Array(HIST);
+  nibHist.fill(8);
+  var histPtr = 0;
+  var liveNibs = new Uint8Array(16);
+  liveNibs.fill(8);
+  var lastQuantSlot = -1;
+  var lastExtractedHex = '8888888888888888';
+
+  (function populatePresets() {
+    var sel = $('selPreset');
+    sel.innerHTML = '';
+    for (var i = 0; i < Presets.length; i++) {
+      if (!Presets[i] || !Presets[i].formulas) continue;
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = '#' + i + ' · ' + Presets[i].name.split(' — ')[0];
+      if (i === ui.presetIdx) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  })();
+
+  function buildPresetState(idx) {
+    var pr = Presets[idx] || Presets[5];
+    var p = pr.params || {};
+    var f = pr.formulas || { x: 'r*cos(TAU*f*t+phase)', y: 'r*sin(TAU*f*t+phase)', z: '0' };
+    return {
+      r: ui.r,
+      rIn: ui.rIn,
+      amp: p.amp != null ? p.amp : 1,
+      f: p.f != null ? p.f : 1,
+      n: ui.stride,
+      m: p.m != null ? p.m : 2,
+      k: p.k != null ? p.k : 1,
+      K: p.K != null ? p.K : 6,
+      orderN: ui.orderN,
+      a: p.a != null ? p.a : 0.5,
+      b: p.b != null ? p.b : 3,
+      phaseRad: ((p.phaseDeg || 0) * Math.PI) / 180,
+      formulas: { x: f.x, y: f.y, z: f.z }
+    };
+  }
+
+  function syncLabels() {
+    $('outLambda').textContent = ui.lambda.toFixed(2);
+    $('slLambda').value = ui.lambda.toFixed(2);
+    $('outKappa').textContent = ui.kappa.toFixed(2);
+    $('outR').textContent = ui.r.toFixed(2);
+    $('outRIn').textContent = ui.rIn.toFixed(2);
+    $('slR').value = ui.r.toFixed(2);
+    $('slRIn').value = ui.rIn.toFixed(2);
+    $('outGain').textContent = ui.gain.toFixed(2) + '×';
+    $('presetTag').textContent = 'Preset ' + ui.presetIdx;
+    var g = Engine.gcd(ui.stride, ui.orderN);
+    $('outOrderN').textContent = 'N=' + ui.orderN + ' · g=' + ui.stride + ' (gcd ' + g + ', sub ' + (ui.orderN / g) + ')';
+    $('btnModular').textContent = 'Order-N Comb: ' + (ui.modular ? 'ON' : 'OFF');
+    $('btnModular').classList.toggle('active', ui.modular);
+    var eta = ui.r > 0 ? ui.rIn / ui.r : 0;
+    document.querySelectorAll('.snap-btn[data-eta]').forEach(function (b) {
+      b.classList.toggle('active', Math.abs(eta - parseFloat(b.getAttribute('data-eta'))) <= 0.015);
+    });
+    $('stageLbl').textContent = '3D Green Cavity (λ=' + ui.lambda.toFixed(2) + ', κ=' + ui.kappa.toFixed(2) + ') · Antipodal 1000↔0001 Bows';
+  }
+
+  // ---- Controls ----
+  $('slLambda').addEventListener('input', function () {
+    ui.breathe = false;
+    $('btnBreathe').classList.remove('active');
+    ui.lambda = parseFloat($('slLambda').value);
+    syncLabels();
+  });
+  $('slKappa').addEventListener('input', function () { ui.kappa = parseFloat($('slKappa').value); syncLabels(); });
+  $('inpHex').addEventListener('input', function () { ui.hex = $('inpHex').value; });
+  $('selPreset').addEventListener('change', function () { ui.presetIdx = parseInt($('selPreset').value, 10); syncLabels(); });
+  $('slOrderN').addEventListener('input', function () { ui.orderN = parseInt($('slOrderN').value, 10); syncLabels(); });
+  $('slStride').addEventListener('input', function () { ui.stride = parseInt($('slStride').value, 10); syncLabels(); });
+  $('slGain').addEventListener('input', function () { ui.gain = parseFloat($('slGain').value); syncLabels(); });
+
+  $('slR').addEventListener('input', function () {
+    ui.r = parseFloat($('slR').value);
+    if (ui.lockV) {
+      if (ui.r < ui.lockedR0) { ui.lockedR0 = ui.r; ui.rIn = 0; }
+      else ui.rIn = Engine.clamp(Engine.solveConstantVolumeRIn(ui.r, ui.lockedR0), 0, Math.min(1.75, ui.r));
+    } else if (ui.rIn > ui.r) ui.rIn = ui.r;
+    syncLabels();
+  });
+  $('slRIn').addEventListener('input', function () {
+    ui.rIn = parseFloat($('slRIn').value);
+    if (ui.lockV) {
+      ui.r = Engine.clamp(Engine.solveConstantVolumeR(ui.rIn, ui.lockedR0), 0.5, 1.9);
+    } else if (ui.rIn > ui.r) ui.rIn = ui.r;
+    syncLabels();
+  });
+  document.querySelectorAll('.snap-btn[data-eta]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var targetEta = parseFloat(btn.getAttribute('data-eta'));
+      if (ui.lockV) {
+        var pair = Engine.solveConstantVolumePairForEta(targetEta, ui.lockedR0);
+        ui.r = Engine.clamp(pair.R, 0.5, 1.9);
+        ui.rIn = Engine.clamp(pair.rIn, 0, Math.min(1.75, ui.r));
+      } else {
+        ui.rIn = Engine.clamp(ui.r * targetEta, 0, Math.min(1.75, ui.r));
+      }
+      syncLabels();
+    });
+  });
+  document.querySelectorAll('.hex-pre[data-hex]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      ui.hex = btn.getAttribute('data-hex');
+      $('inpHex').value = ui.hex;
+    });
+  });
+
+  $('btnExpand').addEventListener('click', function () {
+    var col = Engine.cavityCollapseProfile(buildPresetState(ui.presetIdx), { hex: ui.hex, lambda: ui.lambda, kappa: ui.kappa, bins: 64 });
+    ui.hex = col.expandedHex;
+    $('inpHex').value = ui.hex;
+  });
+  $('btnFeedHex').addEventListener('click', function () {
+    ui.hex = lastExtractedHex;
+    $('inpHex').value = ui.hex;
+  });
+  $('btnModular').addEventListener('click', function () { ui.modular = !ui.modular; syncLabels(); });
+  $('btnLockV').addEventListener('click', function () {
+    ui.lockV = !ui.lockV;
+    if (ui.lockV) ui.lockedR0 = Engine.cbrt(Math.max(0.01, ui.r * ui.r * ui.r - ui.rIn * ui.rIn * ui.rIn));
+    $('btnLockV').classList.toggle('active', ui.lockV);
+  });
+  $('btnPlay').addEventListener('click', function () {
+    ui.playing = !ui.playing;
+    $('btnPlay').classList.toggle('active', ui.playing);
+    $('btnPlay').innerHTML = ui.playing ? '&#9654; Run' : '&#10074;&#10074; Paused';
+  });
+  $('btnBreathe').addEventListener('click', function () {
+    ui.breathe = !ui.breathe;
+    $('btnBreathe').classList.toggle('active', ui.breathe);
+  });
+  $('btnTheme').addEventListener('click', function () {
+    ui.harmor = !ui.harmor;
+    document.body.classList.toggle('studio-theme', !ui.harmor);
+    $('btnTheme').classList.toggle('active', ui.harmor);
+    $('btnTheme').textContent = ui.harmor ? 'Harmor Void' : 'Studio Theme';
+  });
+
+  // ---- Three.js 3D Stage: Collapsing Green Hollow Cavity + Rotating Antipodal Violin Bows ----
+  var threeOk = false;
+  var renderer, scene, camera, controls;
+  var outerWire, innerWire, halfPowerRing, collapseCurve, collapseAttr;
+  var bow1Mesh, bow8Mesh, bow1Attr, bow8Attr, bow1Edge, bow8Edge, bow1EdgeAttr, bow8EdgeAttr;
+  var BINS = 128;
+
+  function init3D() {
+    var host = $('stage3d');
+    if (typeof THREE === 'undefined' || !host) return;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(host.clientWidth || 560, host.clientHeight || 320);
+      renderer.setClearColor(0x000000, 1);
+      host.innerHTML = '';
+      host.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(42, (host.clientWidth || 560) / (host.clientHeight || 320), 0.1, 40);
+      camera.position.set(1.9, 1.45, 2.45);
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+
+      outerWire = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 24, 18),
+        new THREE.MeshBasicMaterial({ color: 0x00ff66, wireframe: true, transparent: true, opacity: 0.24 })
+      );
+      scene.add(outerWire);
+
+      innerWire = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 20, 14),
+        new THREE.MeshBasicMaterial({ color: 0x39ff14, wireframe: true, transparent: true, opacity: 0.34 })
+      );
+      scene.add(innerWire);
+
+      // Dashed -3 dB (R / sqrt(2)) Equatorial Half-Power Contact Ring
+      var hpPts = [];
+      for (var h0 = 0; h0 <= 72; h0++) {
+        var ha = (h0 / 72) * Math.PI * 2;
+        hpPts.push(new THREE.Vector3(Math.cos(ha) * Math.SQRT1_2, 0, Math.sin(ha) * Math.SQRT1_2));
+      }
+      halfPowerRing = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(hpPts),
+        new THREE.LineBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.45 })
+      );
+      scene.add(halfPowerRing);
+
+      // Collapsing 3D Shell -> 2D Green BitWave Vector Curve
+      var cGeo = new THREE.BufferGeometry();
+      collapseAttr = new THREE.BufferAttribute(new Float32Array(BINS * 3), 3);
+      cGeo.setAttribute('position', collapseAttr);
+      collapseCurve = new THREE.Line(cGeo, new THREE.LineBasicMaterial({ color: 0x39ff14, linewidth: 2 }));
+      scene.add(collapseCurve);
+
+      // Antipodal Violin Bow Right-Triangle Blades (0001 and 1000)
+      function makeBow(colorHex) {
+        var g = new THREE.BufferGeometry();
+        var attr = new THREE.BufferAttribute(new Float32Array(9), 3);
+        g.setAttribute('position', attr);
+        var mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+          color: colorHex, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false
+        }));
+        var eg = new THREE.BufferGeometry();
+        var eAttr = new THREE.BufferAttribute(new Float32Array(12), 3);
+        eg.setAttribute('position', eAttr);
+        var edge = new THREE.Line(eg, new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.92 }));
+        scene.add(mesh);
+        scene.add(edge);
+        return { mesh: mesh, attr: attr, edge: edge, eAttr: eAttr };
+      }
+      var b1 = makeBow(0x00ff66);
+      var b8 = makeBow(0xffd166);
+      bow1Mesh = b1.mesh; bow1Attr = b1.attr; bow1Edge = b1.edge; bow1EdgeAttr = b1.eAttr;
+      bow8Mesh = b8.mesh; bow8Attr = b8.attr; bow8Edge = b8.edge; bow8EdgeAttr = b8.eAttr;
+
+      threeOk = true;
+    } catch (err) {
+      threeOk = false;
+      $('webglFallback').style.display = 'flex';
+    }
+  }
+  init3D();
+
+  function setBowTri(attr, eAttr, pX, pM, pE) {
+    var a = attr.array;
+    a[0] = pX.x; a[1] = pX.y; a[2] = pX.z;
+    a[3] = pM.x; a[4] = pM.y; a[5] = pM.z;
+    a[6] = pE.x; a[7] = pE.y; a[8] = pE.z;
+    attr.needsUpdate = true;
+
+    var e = eAttr.array;
+    e[0] = pX.x; e[1] = pX.y; e[2] = pX.z;
+    e[3] = pM.x; e[4] = pM.y; e[5] = pM.z;
+    e[6] = pE.x; e[7] = pE.y; e[8] = pE.z;
+    e[9] = pX.x; e[10] = pX.y; e[11] = pX.z;
+    eAttr.needsUpdate = true;
+  }
+
+  function sizeCanvas(cv) {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return null;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(h * dpr);
+    }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function drawRadar(bow) {
+    var box = sizeCanvas($('radarCanvas'));
+    if (!box) return;
+    var ctx = box.ctx, w = box.w, h = box.h;
+    ctx.fillStyle = ui.harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    var cx = w * 0.5, cy = h * 0.54;
+    var rad = Math.min(w, h) * 0.39;
+    var orb = bow.orbit;
+    var R = Math.max(0.1, orb.R);
+
+    // Outer carrier R
+    ctx.strokeStyle = ui.harmor ? 'rgba(0,255,102,0.55)' : 'rgba(77,243,221,0.55)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+
+    // Built-in -3 dB half-power circle (R / sqrt(2))
+    ctx.strokeStyle = 'rgba(255,209,102,0.45)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(cx, cy, rad * Math.SQRT1_2, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Inner Cavity r (glows bright gold/green when bow hypotenuse slices into cavity!)
+    if (ui.rIn > 0.02) {
+      var rPx = rad * (ui.rIn / R);
+      ctx.fillStyle = bow.cavityContact
+        ? (ui.harmor ? 'rgba(255,209,102,0.16)' : 'rgba(255,209,102,0.16)')
+        : (ui.harmor ? 'rgba(0,255,102,0.08)' : 'rgba(255,107,122,0.08)');
+      ctx.beginPath(); ctx.arc(cx, cy, rPx, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = bow.cavityContact ? '#ffd166' : (ui.harmor ? '#00ff66' : '#ff6b7a');
+      ctx.lineWidth = bow.cavityContact ? 2.2 : 1.3;
+      ctx.stroke();
+    }
+
+    // X-axis seismograph rail
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.moveTo(cx - rad, cy); ctx.lineTo(cx + rad, cy); ctx.stroke();
+
+    // Equatorial chord e8 <-> e1 (Top XZ view: x horizontal, z vertical)
+    var e1x = cx + (orb.equator1.x / R) * rad;
+    var e1z = cy + (orb.equator1.z / R) * rad;
+    var e8x = cx + (orb.equator8.x / R) * rad;
+    var e8z = cy + (orb.equator8.z / R) * rad;
+    var x1x = cx + (orb.real1.x / R) * rad;
+    var x8x = cx + (orb.real8.x / R) * rad;
+
+    // Projected X-carriage segment
+    ctx.strokeStyle = 'rgba(255,209,102,0.55)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x8x, cy); ctx.lineTo(x1x, cy); ctx.stroke();
+
+    // Equatorial bow radar chord e8 <-> e1
+    ctx.strokeStyle = ui.harmor ? '#39ff14' : '#4df3dd';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(e8x, e8z); ctx.lineTo(e1x, e1z); ctx.stroke();
+
+    // Richter-Scale Yaw deflected needle around +Y center
+    var baseAng = Math.atan2(orb.equator1.z, orb.equator1.x);
+    var yawAng = baseAng + bow.yawRad;
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(yawAng) * rad * 0.96, cy + Math.sin(yawAng) * rad * 0.96);
+    ctx.stroke();
+
+    // Nodes e1 (0001) & e8 (1000)
+    ctx.fillStyle = ui.harmor ? '#00ff66' : '#4df3dd';
+    ctx.beginPath(); ctx.arc(e1x, e1z, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath(); ctx.arc(e8x, e8z, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawSeismo() {
+    var box = sizeCanvas($('seismoCanvas'));
+    if (!box) return;
+    var ctx = box.ctx, w = box.w, h = box.h;
+    ctx.fillStyle = ui.harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    var padT = 26, padB = 12, midY = padT + (h - padT - padB) * 0.5;
+    var ampY = (h - padT - padB) * 0.44;
+
+    // Zero-crossing (0x8 / 1000) centerline & 0xF / 0x0 rails
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(w, midY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(0, midY - ampY); ctx.lineTo(w, midY - ampY);
+    ctx.moveTo(0, midY + ampY); ctx.lineTo(w, midY + ampY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Quantized 4-bit nibble staircase (gold)
+    ctx.strokeStyle = 'rgba(255,209,102,0.58)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (var i = 0; i < HIST; i++) {
+      var idx = (histPtr + i) % HIST;
+      var n = nibHist[idx];
+      var nv = n >= 8 ? ((n - 8) / 7) : ((n - 8) / 8);
+      var x = (i / (HIST - 1)) * w;
+      var y = midY - nv * ampY;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Continuous Richter-Scale Yaw waveform (luminous green)
+    ctx.strokeStyle = ui.harmor ? '#00ff66' : '#4df3dd';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    for (var j = 0; j < HIST; j++) {
+      var idx2 = (histPtr + j) % HIST;
+      var x2 = (j / (HIST - 1)) * w;
+      var y2 = midY - yawHist[idx2] * ampY;
+      if (j === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
+    }
+    ctx.stroke();
+  }
+
+  function drawAttract(col) {
+    var box = sizeCanvas($('attractCanvas'));
+    if (!box) return;
+    var ctx = box.ctx, w = box.w, h = box.h;
+    ctx.fillStyle = ui.harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    var padT = 26, padB = 12, midY = padT + (h - padT - padB) * 0.5;
+    var ampY = (h - padT - padB) * 0.43;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(w, midY); ctx.stroke();
+
+    function trace(arr, color, width, dash) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      if (dash) ctx.setLineDash(dash);
+      ctx.beginPath();
+      for (var i = 0; i < arr.length; i++) {
+        var x = (i / (arr.length - 1)) * w;
+        var y = midY - Engine.clamp(arr[i], -1, 1) * ampY;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      if (dash) ctx.setLineDash([]);
+    }
+
+    trace(col.shellCarrier, ui.harmor ? 'rgba(57,255,20,0.42)' : 'rgba(77,243,221,0.52)', 1.3, [3, 3]);
+    trace(col.residual, '#ffd166', 1.6, null);
+    trace(col.attracted, ui.harmor ? '#00ff66' : '#6ee7a0', 2.2, null);
+  }
+
+  syncLabels();
+  var lastNow = performance.now();
+
+  function frame(now) {
+    var dt = Math.min(0.05, (now - lastNow) / 1000);
+    lastNow = now;
+    if (ui.playing) {
+      ui.playT = (ui.playT + dt * 0.16) % 1;
+      if (ui.breathe) {
+        ui.breathePhase += dt * 0.65;
+        ui.lambda = 0.5 - 0.5 * Math.cos(ui.breathePhase);
+        syncLabels();
+      }
+    }
+
+    var st = buildPresetState(ui.presetIdx);
+    var col = Engine.cavityCollapseProfile(st, {
+      hex: ui.hex,
+      lambda: ui.lambda,
+      kappa: ui.kappa,
+      bins: BINS
+    });
+    var bow = Engine.fourBitLockInYaw(st, ui.playT, {
+      modular: ui.modular,
+      orderN: ui.orderN,
+      stride: ui.stride,
+      gain: ui.gain,
+      bins: 128
+    });
+
+    if (ui.playing) {
+      yawHist[histPtr] = bow.yawNorm;
+      nibHist[histPtr] = bow.nibbleVal;
+      histPtr = (histPtr + 1) % HIST;
+
+      var qSlot = Math.floor(ui.playT * 16) % 16;
+      if (qSlot !== lastQuantSlot) {
+        lastQuantSlot = qSlot;
+        liveNibs[qSlot] = bow.nibbleVal;
+        var sHex = '';
+        for (var q = 0; q < 16; q++) sHex += liveNibs[q].toString(16).toUpperCase();
+        lastExtractedHex = sHex;
+      }
+    }
+
+    // Update 3D WebGL collapsing hollow sphere + antipodal right-triangle Violin Bows
+    if (threeOk) {
+      var host = $('stage3d');
+      var cw = host.clientWidth, ch = host.clientHeight;
+      if (cw > 0 && ch > 0 && (renderer.domElement.width !== Math.round(cw * renderer.getPixelRatio()) || renderer.domElement.height !== Math.round(ch * renderer.getPixelRatio()))) {
+        camera.aspect = cw / ch;
+        camera.updateProjectionMatrix();
+        renderer.setSize(cw, ch, false);
+      }
+      renderer.setClearColor(ui.harmor ? 0x000000 : 0x070b11, 1);
+
+      var zFlat = Math.max(0.002, 1 - ui.lambda);
+      outerWire.scale.set(ui.r, ui.r, ui.r * zFlat);
+      outerWire.material.opacity = 0.24 * (1 - ui.lambda * 0.92);
+      outerWire.material.color.setHex(ui.harmor ? 0x00ff66 : 0x4df3dd);
+
+      innerWire.visible = ui.rIn > 0.03;
+      // Wall thickness Delta(lambda) = (1 - lambda)*(R - r) -> inner radius converges to R as lambda -> 1!
+      var effInnerR = ui.r - col.wallThickness;
+      innerWire.scale.set(effInnerR, effInnerR, effInnerR * zFlat);
+      innerWire.material.opacity = 0.34 * (1 - ui.lambda * 0.95);
+      innerWire.material.color.setHex(bow.cavityContact ? 0xffd166 : (ui.harmor ? 0x39ff14 : 0xff6b7a));
+
+      halfPowerRing.scale.setScalar(ui.r);
+      halfPowerRing.material.opacity = 0.45 * (1 - ui.lambda * 0.7);
+
+      var ca = collapseAttr.array;
+      for (var ci = 0; ci < BINS; ci++) {
+        ca[ci * 3]     = col.outX[ci];
+        ca[ci * 3 + 1] = col.outY[ci];
+        ca[ci * 3 + 2] = col.outZ[ci];
+      }
+      collapseAttr.needsUpdate = true;
+      collapseCurve.material.color.setHex(ui.harmor ? 0x39ff14 : 0x6ee7a0);
+
+      var orb = bow.orbit;
+      setBowTri(bow1Attr, bow1EdgeAttr, orb.real1, orb.meridian1, orb.equator1);
+      setBowTri(bow8Attr, bow8EdgeAttr, orb.real8, orb.meridian8, orb.equator8);
+      bow1Edge.material.color.setHex(bow.cavityContact ? 0xffd166 : (ui.harmor ? 0x00ff66 : 0x4df3dd));
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    drawRadar(bow);
+    drawSeismo();
+    drawAttract(col);
+
+    // Telemetry updates
+    $('outBits').textContent = col.registerBits + '-bit (' + col.nibbles.length + 'n)';
+    $('telWall').textContent = col.wallThickness.toFixed(2);
+    $('telBowArea').textContent = bow.bowArea.toFixed(2);
+    $('telDMid').textContent = bow.dMid.toFixed(3);
+    $('telYaw').textContent = (bow.yawDeg >= 0 ? '+' : '') + bow.yawDeg.toFixed(1) + '°';
+    $('telLockR').textContent = bow.lockMag.toFixed(2);
+    var dbStr = col.isExactNull ? '−∞ dB (LOCK)' : (col.nullDb.toFixed(1) + ' dB');
+    $('telNullDb').textContent = dbStr;
+    $('nullTag').textContent = 'NULL ' + dbStr;
+    $('telZeros').textContent = String(col.zeroCrossings);
+    $('telHexF32').textContent = col.peakResidualBits.hex;
+    $('activeNibPill').textContent = '0x' + bow.nibbleHex + ' (' + bow.nibbleBin + ')';
+    $('extractedHexOut').textContent = lastExtractedHex;
+
+    var cTag = $('contactTag');
+    cTag.classList.toggle('contact', bow.cavityContact);
+    cTag.textContent = bow.cavityContact
+      ? ('★ −3dB CAVITY CONTACT (d=' + bow.dMid.toFixed(2) + ')')
+      : (bow.etaCrossesHalfPower ? 'ARMED (η ≥ 0.707)' : 'SHELL ONLY (η < 0.707)');
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

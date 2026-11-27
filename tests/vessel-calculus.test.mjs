@@ -569,3 +569,80 @@ test('Stage 4b-1: createSphericalWireframeGraph satisfies Euler V-E+F=2, L*1=0 n
   assert.ok(Number.isFinite(wEnd.totalEnergy) && Number.isFinite(wEnd.dirichletEnergy), 'CFL-stable conductive wave');
   assert.ok(wEnd.totalEnergy < w0, 'viscous conductive wave strictly dissipates free-decay energy');
 });
+
+test('Stage 4b-2 (§5.6): cavityCollapseProfile flattens Delta(lambda)->0 & z->0, honors 0x8 pivot, kappa=1 exact null & S_k->S_{k+1}', () => {
+  const st = {
+    r: 1.0, rIn: 0.6, amp: 1, f: 1, n: 3, m: 2, k: 1, K: 6, orderN: 19, a: 0.5, b: 3, phaseRad: 0,
+    formulas: { x: 'r*cos(TAU*t)', y: 'r*sin(TAU*t)', z: '0.4*sin(TAU*2*t)' }
+  };
+
+  // 1. Collapse lambda = 0 vs lambda = 1
+  const c0 = Engine.cavityCollapseProfile(st, { hex: '8ADEFEDA85210125', lambda: 0, kappa: 0, bins: 64 });
+  const c1 = Engine.cavityCollapseProfile(st, { hex: '8ADEFEDA85210125', lambda: 1, kappa: 0, bins: 64 });
+  close(c0.wallThickness, 0.4, 1e-6, 'full 3D wall thickness R - r at lambda=0');
+  assert.equal(c1.wallThickness, 0, 'collapsed wall thickness vanishes identically at lambda=1');
+  assert.equal(c1.voidFraction, 1);
+  let maxZ1 = 0;
+  for (let i = 0; i < c1.bins; i++) maxZ1 = Math.max(maxZ1, Math.abs(c1.outZ[i]));
+  assert.equal(maxZ1, 0, 'collapsed 2D BitWave contour has z === 0 identically at lambda=1');
+
+  // 2. Zero-crossing pivot: 0x8 (1000) maps to exact 0.0 across entire spline
+  const cz = Engine.cavityCollapseProfile(st, { hex: '8888888888888888', lambda: 1, kappa: 0, bins: 64 });
+  assert.equal(cz.zeroCrossings, 16);
+  for (let i = 0; i < cz.bins; i++) assert.equal(cz.bitWave[i], 0);
+
+  // 3. Resonant Attraction kappa = 1 -> exact -Infinity dB null lock (0x00000000)
+  const cLock = Engine.cavityCollapseProfile(st, { hex: '8ADEFEDA85210125', lambda: 0.5, kappa: 1.0, bins: 64 });
+  assert.equal(cLock.isExactNull, true);
+  assert.equal(cLock.nullDb, -Infinity);
+  assert.equal(cLock.peakResidualBits.hex, '0x00000000');
+
+  // 4. Infinite nested sphere register expansion S_k -> S_{k+1} doubles register width (64b -> 128b)
+  assert.equal(c0.registerBits, 64);
+  assert.equal(c0.nextOuterBits, 128);
+  assert.equal(c0.expandedHex.length, 32);
+});
+
+test('Stage 4b-2 (§5.7): fourBitLockInYaw verifies bow area, -3 dB (R/sqrt(2)) cavity contact, silence->0x8 & Order-N comb', () => {
+  const baseSt = {
+    r: 1.0, rIn: 0.65, amp: 1, f: 1, n: 3, m: 2, k: 1, K: 6, orderN: 19, a: 0.5, b: 3, phaseRad: 0,
+    formulas: { x: 'r*cos(TAU*t)', y: 'r*sin(TAU*t)', z: '0' }
+  };
+
+  // 1. Exact geometry at theta = pi/2 (playT = 0.25): A_tri = 0.5*R^2, L_hyp = sqrt(2)*R, d_mid = R/sqrt(2) (-3 dB)
+  const noHit = Engine.fourBitLockInYaw(baseSt, 0.25, { bins: 128, gain: 1.8 });
+  close(noHit.bowArea, 0.5, 1e-6, 'bow right-triangle area = R^2/2 at pi/2');
+  close(noHit.bowHypotenuse, Math.SQRT2, 1e-6, 'bow hypotenuse = sqrt(2)*R at pi/2');
+  close(noHit.dMid, Math.SQRT1_2, 1e-6, 'bow closest approach d_mid = R/sqrt(2) (-3 dB)');
+  assert.equal(noHit.etaCrossesHalfPower, false, 'eta=0.65 stays strictly outside -3 dB cavity contact');
+  assert.equal(noHit.cavityContact, false);
+
+  // 2. Raising rIn above R/sqrt(2) (eta = 0.76) triggers -3 dB cavity contact at pi/2, silent at 0
+  const hitSt = Object.assign({}, baseSt, { rIn: 0.76 });
+  const hitAtQuarter = Engine.fourBitLockInYaw(hitSt, 0.25, { bins: 128, gain: 1.8, sweepNibbles: 16 });
+  const missAtZero = Engine.fourBitLockInYaw(hitSt, 0.0, { bins: 128, gain: 1.8 });
+  assert.equal(hitAtQuarter.etaCrossesHalfPower, true);
+  assert.equal(hitAtQuarter.cavityContact, true);
+  assert.ok(hitAtQuarter.penetration > 0.05);
+  assert.equal(missAtZero.cavityContact, false, 'at theta=0, d_mid=R > rIn so bow is clear of cavity');
+
+  // 3. Single-sweep crystallized 64-bit BitWave register is 16 valid hex nibbles with non-zero modulation
+  assert.equal(hitAtQuarter.extractedHex.length, 16);
+  assert.match(hitAtQuarter.extractedHex, /^[0-9A-F]{16}$/);
+  assert.notEqual(hitAtQuarter.extractedHex, '8888888888888888');
+
+  // 4. Zero-signal silence settles identically on 0x8 (1000 zero-crossing) with 0 yaw
+  const silentSt = Object.assign({}, hitSt, { formulas: { x: 'r*cos(TAU*t)', y: '0', z: '0' } });
+  const sil = Engine.fourBitLockInYaw(silentSt, 0.25, { bins: 128 });
+  assert.equal(sil.lockMag, 0);
+  assert.equal(sil.yawNorm, 0);
+  assert.equal(sil.nibbleVal, 8);
+  assert.equal(sil.nibbleHex, '8');
+  assert.equal(sil.nibbleBin, '1000');
+
+  // 5. Order-N modular comb stepping reports exact gcd and subgroup order
+  const comb = Engine.fourBitLockInYaw(hitSt, 0.2, { modular: true, orderN: 15, stride: 3, bins: 64 });
+  assert.equal(comb.modular, true);
+  assert.equal(comb.gcd, 3);
+  assert.equal(comb.subOrder, 5);
+});

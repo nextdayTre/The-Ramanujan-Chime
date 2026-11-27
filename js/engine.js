@@ -2854,6 +2854,332 @@
     };
   }
 
+  // ---- Stage 4b-2 (§§5.6–5.7): Harmor Void Cavity Collapse (lambda), Resonant Attraction (kappa),
+  //      & 4-Bit Orbit "Violin Bow" Lock-In / Top-Down Richter-Yaw Extractor ----
+
+  function parseHexNibbles(hexStr) {
+    var clean = String(hexStr || '8ADEFEDA85210125').replace(/^0x/i, '').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    if (!clean.length) clean = '8888888888888888';
+    if (clean.length < 4) clean = (clean + '8888').slice(0, 4);
+    if (clean.length > 64) clean = clean.slice(0, 64);
+    var out = new Uint8Array(clean.length);
+    for (var i = 0; i < clean.length; i++) out[i] = parseInt(clean[i], 16) & 0xF;
+    return { hex: clean, nibbles: out };
+  }
+
+  function nibbleToUnit(n) {
+    // §5.6 Zero-crossing pivot: 0x8 (1000) -> exact 0.0, 0xF -> +1.0, 0x0 -> -1.0
+    return n >= 8 ? ((n - 8) / 7) : ((n - 8) / 8);
+  }
+
+  function unitToNibble(v) {
+    var x = clamp(Number(v || 0), -1, 1);
+    return x >= 0 ? clamp(Math.round(8 + x * 7), 8, 15) : clamp(Math.round(8 + x * 8), 0, 8);
+  }
+
+  // Periodic Fritsch-Carlson monotone-cubic interpolation across cyclic nibble knots
+  function sampleCyclicMonotoneNibbles(nibbles, bins) {
+    var M = nibbles.length;
+    var y = new Float64Array(M);
+    for (var i = 0; i < M; i++) y[i] = nibbleToUnit(nibbles[i]);
+    var sec = new Float64Array(M);
+    for (var j = 0; j < M; j++) sec[j] = y[(j + 1) % M] - y[j];
+    var m = new Float64Array(M);
+    for (var k = 0; k < M; k++) {
+      var dPrev = sec[(k - 1 + M) % M];
+      var dNext = sec[k];
+      if (dPrev * dNext <= 0) m[k] = 0;
+      else m[k] = 0.5 * (dPrev + dNext);
+    }
+    // Enforce Fritsch-Carlson monotonicity clamp so spline never overshoots knots
+    for (var s = 0; s < M; s++) {
+      var dk = sec[s];
+      if (Math.abs(dk) < 1e-12) {
+        m[s] = 0;
+        m[(s + 1) % M] = 0;
+      } else {
+        var a = m[s] / dk;
+        var b = m[(s + 1) % M] / dk;
+        var h2 = a * a + b * b;
+        if (h2 > 9) {
+          var tau = 3 / Math.sqrt(h2);
+          m[s] = tau * a * dk;
+          m[(s + 1) % M] = tau * b * dk;
+        }
+      }
+    }
+    var out = new Float32Array(bins);
+    for (var bi = 0; bi < bins; bi++) {
+      var pos = (bi / bins) * M;
+      var idx = Math.floor(pos) % M;
+      var nxt = (idx + 1) % M;
+      var t = pos - Math.floor(pos);
+      var t2 = t * t, t3 = t2 * t;
+      var h00 = 2 * t3 - 3 * t2 + 1;
+      var h10 = t3 - 2 * t2 + t;
+      var h01 = -2 * t3 + 3 * t2;
+      var h11 = t3 - t2;
+      out[bi] = Math.fround(clamp(h00 * y[idx] + h10 * m[idx] + h01 * y[nxt] + h11 * m[nxt], -1, 1));
+    }
+    return out;
+  }
+
+  // §5.6 Harmor Void Cavity Collapse (lambda in [0,1]) & Resonant Attraction (kappa in [0,1])
+  // Smoothly collapses 3D green hollow shell (R, r) into 2D green BitWave spline over #000000 silence
+  // and computes next-shell register expansion S_k -> S_{k+1} (M -> 2M nibbles).
+  function cavityCollapseProfile(state, opts) {
+    state = state || {};
+    opts = opts || {};
+    var R = Math.max(0.1, Number(state.r != null ? state.r : 1));
+    var rIn = clamp(Number(state.rIn != null ? state.rIn : 0.5), 0, R);
+    var lambda = clamp(Number(opts.lambda != null ? opts.lambda : 0), 0, 1);
+    var kappa = clamp(Number(opts.kappa != null ? opts.kappa : 0), 0, 1);
+    var bins = clamp(Math.round(opts.bins || 128), 16, 512);
+
+    var parsed = parseHexNibbles(opts.hex);
+    var nibbles = parsed.nibbles;
+    var bitWave = sampleCyclicMonotoneNibbles(nibbles, bins);
+
+    var hasFormulas = !!(state.formulas && state.formulas.x && state.formulas.y);
+    var sampled = hasFormulas ? sample(state, bins) : null;
+    var pts = sampled ? sampled.points : null;
+
+    var sphereX = new Float32Array(bins);
+    var sphereY = new Float32Array(bins);
+    var sphereZ = new Float32Array(bins);
+    var shellCarrier = new Float32Array(bins);
+    var attracted = new Float32Array(bins);
+    var residual = new Float32Array(bins);
+    var outX = new Float32Array(bins);
+    var outY = new Float32Array(bins);
+    var outZ = new Float32Array(bins);
+
+    var sqShell = 0, sqRes = 0, peakRes = 0, peakAbs = -1;
+    for (var i = 0; i < bins; i++) {
+      var uT = i / (bins - 1);
+      var sx, sy, sz;
+      if (pts && pts[i] && pts[i].valid) {
+        sx = pts[i].x; sy = pts[i].y; sz = pts[i].z;
+      } else {
+        var ang = TAU * uT;
+        sx = R * Math.cos(ang);
+        sy = R * Math.sin(ang);
+        sz = rIn * Math.sin(ang * 2) * 0.5;
+      }
+      var sc = clamp(sy / R, -1, 1);
+      var att = (1 - kappa) * bitWave[i] + kappa * sc;
+      var res = sc - att;
+
+      var lineX = (uT * 2 - 1) * R;
+      sphereX[i] = Math.fround(sx);
+      sphereY[i] = Math.fround(sy);
+      sphereZ[i] = Math.fround(sz);
+      shellCarrier[i] = Math.fround(sc);
+      attracted[i] = Math.fround(att);
+      residual[i] = Math.fround(res);
+      outX[i] = Math.fround(lerp(sx, lineX, lambda));
+      outY[i] = Math.fround(lerp(sy, att * R, lambda));
+      outZ[i] = Math.fround((1 - lambda) * sz);
+
+      sqShell += sc * sc;
+      sqRes += res * res;
+      var ar = Math.abs(res);
+      if (ar > peakAbs) { peakAbs = ar; peakRes = res; }
+    }
+
+    var rmsShell = Math.sqrt(sqShell / bins);
+    var rmsRes = Math.sqrt(sqRes / bins);
+    var nullDb = rmsRes <= 1e-9 ? -Infinity : (20 * Math.log10(rmsRes / Math.max(rmsShell, 1e-9)));
+
+    var zeroCrossings = 0;
+    for (var n0 = 0; n0 < nibbles.length; n0++) {
+      if (nibbles[n0] === 8) zeroCrossings++;
+    }
+
+    // Build next outer sphere S_{k+1} expanded hex (M -> 2M nibbles, capped at 64 nibbles / 256 bits)
+    var expHex = '';
+    if (nibbles.length <= 32) {
+      for (var ei = 0; ei < nibbles.length; ei++) {
+        var aN = nibbles[ei];
+        var bN = nibbles[(ei + 1) % nibbles.length];
+        var midN = clamp(Math.round(0.5 * (aN + bN)), 0, 15);
+        expHex += aN.toString(16).toUpperCase() + midN.toString(16).toUpperCase();
+      }
+    } else {
+      expHex = parsed.hex;
+    }
+
+    return {
+      R: Math.fround(R),
+      rIn: Math.fround(rIn),
+      lambda: Math.fround(lambda),
+      kappa: Math.fround(kappa),
+      wallThickness: Math.fround((1 - lambda) * Math.max(0, R - rIn)),
+      voidFraction: Math.fround(lambda),
+      hex: parsed.hex,
+      nibbles: nibbles,
+      registerBits: nibbles.length * 4,
+      nextOuterBits: Math.min(256, nibbles.length * 8),
+      expandedHex: expHex,
+      zeroCrossings: zeroCrossings,
+      bins: bins,
+      bitWave: bitWave,
+      shellCarrier: shellCarrier,
+      attracted: attracted,
+      residual: residual,
+      outX: outX,
+      outY: outY,
+      outZ: outZ,
+      rmsShell: Math.fround(rmsShell),
+      rmsResidual: Math.fround(rmsRes),
+      nullDb: Number.isFinite(nullDb) ? Math.fround(nullDb) : -Infinity,
+      isExactNull: rmsRes <= 1e-9,
+      peakResidual: Math.fround(peakRes),
+      peakResidualBits: bitInspect(peakRes)
+    };
+  }
+
+  // §5.7 Temporal Filtration: 4-Bit Orbit "Violin Bow" Quadrature Lock-In & Top-Down Richter-Yaw Extractor
+  // Reuses Engine.fourBitOrbit() for exact right-triangle bow geometry, built-in -3 dB (R/sqrt(2)) cavity contact,
+  // continuous or Order-N modular comb stepping, and real-time 4-bit nibble crystallization (0x8 = zero-crossing).
+  function fourBitLockInYaw(state, playT, opts) {
+    state = state || {};
+    opts = opts || {};
+    var R = Math.max(0.1, Number(state.r != null ? state.r : 1));
+    var rIn = clamp(Number(state.rIn != null ? state.rIn : 0), 0, R);
+    var eta = rIn / R;
+    var modular = !!opts.modular;
+    var orderN = clamp(Math.round(opts.orderN != null ? opts.orderN : (state.orderN != null ? state.orderN : 19)), 3, 96);
+    var stride = Math.max(1, Math.round(opts.stride != null ? opts.stride : (state.n != null ? state.n : 1)));
+    var g = gcd(stride, orderN);
+    var subOrder = Math.floor(orderN / g);
+    var bins = clamp(Math.round(opts.bins || 128), 32, 512);
+    var gain = clamp(Number(opts.gain != null ? opts.gain : 1.6), 0.2, 6.0);
+
+    var rawT = frac(Number(playT || 0));
+    var modStep = Math.floor(rawT * orderN);
+    var modSlot = (modStep * stride) % orderN;
+    var effT = modular ? (modSlot / orderN) : rawT;
+
+    // Sample cavity signal once (or reuse caller-supplied pre-sampled points)
+    var pts = opts.points;
+    if (!pts) {
+      if (state.formulas && state.formulas.x && state.formulas.y) {
+        pts = sample(state, bins).points;
+      } else {
+        pts = [];
+      }
+    }
+    var pLen = pts.length;
+    var sig = new Float32Array(pLen);
+    var sigSum = 0;
+    for (var s0 = 0; s0 < pLen; s0++) {
+      var pt = pts[s0];
+      var sv = (pt && pt.valid && Number.isFinite(pt.y)) ? clamp(pt.y / R, -2.5, 2.5) : 0;
+      sig[s0] = sv;
+      sigSum += sv;
+    }
+    var sigMean = pLen > 0 ? (sigSum / pLen) : 0;
+
+    function evalAtT(tVal) {
+      var orb = fourBitOrbit(state, tVal);
+      var theta = orb.theta;
+      var scanPhi = TAU * tVal;
+      var sinT = Math.sin(theta);
+      var sin2 = sinT * sinT;
+
+      // Exact Violin Bow Right-Triangle Area = (1/2)*(R*sin(theta))^2 = (R^2/4)*(1 - cos(2*theta))
+      var bowArea = 0.5 * R * R * sin2;
+      var bowHypotenuse = Math.SQRT2 * R * Math.abs(sinT);
+      // Closest approach of bow hypotenuse midpoint to origin: R * sqrt(1 - 0.5*sin^2(theta)) in [R/sqrt(2), R]
+      var dMid = R * Math.sqrt(Math.max(0, 1 - 0.5 * sin2));
+      var halfPowerRadius = R * Math.SQRT1_2;
+      var cavityContact = rIn > 1e-6 && dMid <= (rIn + 1e-6);
+      var penetration = cavityContact ? (rIn - dMid) : 0;
+
+      // Broadband Gaussian Violin-Bow Lock-In Pickup (I = even/local amplitude, Q = quadrature slope)
+      // Works across ANY carrier frequency (1x sine, 9-cycle Analytic Morlet burst, Weierstrass, Lissajous)
+      // while remaining identically 0 (nibble 0x8) on flat DC or silent cavity signals.
+      var accI = 0, accQ = 0, wSum = 0;
+      if (pLen > 0) {
+        var inv2Sig2 = 1 / (2 * 0.14 * 0.14);
+        for (var i = 0; i < pLen; i++) {
+          var phi = (i / pLen) * TAU;
+          var dPhi = phi - scanPhi;
+          if (dPhi > PI) dPhi -= TAU;
+          else if (dPhi < -PI) dPhi += TAU;
+          var win = Math.exp(-(dPhi * dPhi) * inv2Sig2);
+          if (win < 1e-5) continue;
+          var sAC = sig[i] - sigMean;
+          accI += sAC * Math.cos(dPhi) * win;
+          accQ += sAC * Math.sin(dPhi) * win;
+          wSum += win;
+        }
+      }
+      var invW = wSum > 1e-9 ? (1.0 / wSum) : 0;
+      var lockI = accI * invW;
+      var lockQ = accQ * invW;
+      var lockMag = Math.sqrt(lockI * lockI + lockQ * lockQ);
+
+      // Cavity contact boost when hypotenuse penetrates past -3 dB boundary into inner cavity
+      var contactBoost = cavityContact ? (1 + 0.35 * clamp(penetration / Math.max(0.05, R * (1 - Math.SQRT1_2)), 0, 1)) : 1.0;
+      var yawProj = (lockI + 0.65 * lockQ) * gain * contactBoost;
+      var yawNorm = clamp(yawProj, -1, 1);
+      var yawRad = yawNorm * (PI * 0.25);
+      var nib = unitToNibble(yawNorm);
+
+      return {
+        orbit: orb,
+        effT: effT,
+        bowArea: Math.fround(bowArea),
+        bowHypotenuse: Math.fround(bowHypotenuse),
+        dMid: Math.fround(dMid),
+        halfPowerRadius: Math.fround(halfPowerRadius),
+        eta: Math.fround(eta),
+        etaCrossesHalfPower: eta >= (Math.SQRT1_2 - 1e-6),
+        cavityContact: cavityContact,
+        penetration: Math.fround(penetration),
+        modular: modular,
+        orderN: orderN,
+        stride: stride,
+        gcd: g,
+        subOrder: subOrder,
+        modSlot: modSlot,
+        lockI: Math.fround(lockI),
+        lockQ: Math.fround(lockQ),
+        lockMag: Math.fround(lockMag),
+        yawNorm: Math.fround(yawNorm),
+        yawRad: Math.fround(yawRad),
+        yawDeg: Math.fround((yawRad * 180) / PI),
+        nibbleVal: nib,
+        nibbleHex: nib.toString(16).toUpperCase(),
+        nibbleBin: nib.toString(2).padStart(4, '0')
+      };
+    }
+
+    var cur = evalAtT(effT);
+
+    // Optional deterministic full-sweep 16-nibble BitWave extraction
+    if (opts.sweepNibbles) {
+      var sweepN = clamp(Math.round(opts.sweepNibbles), 4, 64);
+      var nibs = new Uint8Array(sweepN);
+      var trace = new Float32Array(sweepN);
+      var hexOut = '';
+      for (var sw = 0; sw < sweepN; sw++) {
+        var tSw = modular ? (((sw * stride) % orderN) / orderN) : (sw / sweepN);
+        var ev = evalAtT(tSw);
+        nibs[sw] = ev.nibbleVal;
+        trace[sw] = ev.yawNorm;
+        hexOut += ev.nibbleHex;
+      }
+      cur.extractedNibbles = nibs;
+      cur.extractedHex = hexOut;
+      cur.yawTrace = trace;
+    }
+
+    return cur;
+  }
+
   // Discrete Order N Cyclic Group Strobe:
   // Quantizes the continuous curve into N discrete states P_0 .. P_{N-1},
   // and traces the cyclic subgroup generated by stride g = round(n):
@@ -3812,6 +4138,8 @@
       sphericalHarmonicSpectrum: sphericalHarmonicSpectrum,
       shellMultipoleTransfer: shellMultipoleTransfer,
       createSphericalWireframeGraph: createSphericalWireframeGraph,
+      cavityCollapseProfile: cavityCollapseProfile,
+      fourBitLockInYaw: fourBitLockInYaw,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,

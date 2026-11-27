@@ -7,6 +7,22 @@ release artifact in this repo is the agent layer (commit `78386a9`, tag `agent-l
 Open any page directly (`file://` works — classic scripts, no server needed) or serve the repo
 root and browse `/spike/`.
 
+## `violin-bow-collapse.html` — Stage 4b-2 Harmor Void collapse ($\lambda$) & 4-bit Violin Bow Richter-Yaw (§§5.6–5.7)
+
+Standalone Harmor Void (`#000000` silence + luminous green) R&D prototype driven by the pure
+Stage 4b-2 math in `js/engine.js` (`cavityCollapseProfile`, `fourBitLockInYaw`):
+
+- **Continuous Cavity Collapse ($\lambda \in [0, 1]$) & Resonant Attraction ($\kappa$):** Flattens
+  the 3D green hollow shell smoothly into a 2D monotone-cubic green BitWave spline ($\Delta(\lambda)
+  = (1 - \lambda)(R - r) \to 0$, $z \to 0$) over `#000000` silence, with exact `0x8` (`1000₂`)
+  zero-crossing equilibrium, live attraction null metering (`−∞ dB` at $\kappa = 1$), and
+  `S_k → S_{k+1}` register width doubling (`64b → 128b → 256b`).
+- **4-Bit "Violin Bow" Lock-In & Top-Down Richter-Yaw Seismogram:** Reuses `Engine.fourBitOrbit()`'s
+  rotating antipodal right triangles (`1000 ↔ 0001`), detects exact cavity contact past the built-in
+  $-3\text{ dB}$ half-power radius ($d_{\text{mid}} \in [R/\sqrt{2}, R]$), supports continuous or
+  Order-$N$ modular comb stepping, and crystallizes a live 64-bit BitWave hex register from the
+  deflected Richter-Yaw needle (with one-click feedback into the collapsing cavity).
+
 ## `spherical-harmonics.html` — Stage 4b-1 3D $Y_\ell^m$ heat/EQ shader & conductive wireframe
 
 Standalone 3D WebGL R&D prototype driven by the pure Stage 4b-1 math in `js/engine.js`
