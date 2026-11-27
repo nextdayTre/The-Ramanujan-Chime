@@ -1545,6 +1545,241 @@
     };
   }
 
+  // ---- Stage 2: Unified Guitar-Tuner Readout & Target-Aware Key-Signature Lattices ----
+
+  // Donner-DT-2-style Vessel & Chromatic Tuner rooted in V^(2) ratio alpha = R/r,
+  // Sentinel scale-frequency duality (-sigma octaves), and unit-time rate dV/V.
+  function tunerReadout(state, playT, opts) {
+    state = state || {};
+    opts = opts || {};
+    var mode = (opts.mode === 'note' || state.tunerMode === 'note') ? 'note' : 'ratio';
+    var res = sphereResonance(state, playT || 0);
+    var vc = vesselCalculus(state, {
+      dR: opts.dR || 0,
+      dr: opts.dr || 0,
+      dTheta: opts.dTheta || 0
+    });
+
+    // 1. Modal Ratio mode (V^(2) ratio alpha = R/r vs CONSONANT_RATIOS)
+    var ratioId = res.cavityActive ? res.syzygy.ratioText : '1:0';
+    var ratioName = res.cavityActive ? res.syzygy.intervalName : 'Solid';
+    var ratioCents = res.cavityActive ? res.syzygy.detuneCents : 0;
+    var ratioLocked = !res.cavityActive || !!res.syzygy.locked || !!res.bowHalfPowerLock;
+    var ratioNeedle = clamp(ratioCents / 50, -1, 1);
+    var ratioSat = Math.abs(ratioCents) > 50;
+
+    // 2. Chromatic Note mode (G2 = 98 Hz anchor at R=1, f=1, phase=0, sigma=0)
+    // Computed directly in logarithmic MIDI space so extreme Sentinel octaves (sigma in [-24..+64]) never underflow!
+    var R = Math.max(0.05, state.r != null ? state.r : 1);
+    var f = Math.max(0.25, state.f != null ? state.f : 1);
+    var semiShift = ((state.phaseRad || 0) / PI) * 6;
+    var sigma = clamp(Math.round(state.sentinelOctave || 0), -24, 64);
+    var baseHzUnit = (98.0 * f / R) * Math.pow(2, semiShift / 12);
+    var midiFloat = 69 + 12 * ((Math.log(baseHzUnit / 440) / Math.LN2) - sigma);
+    var midi = Math.round(midiFloat);
+    var noteCents = Math.round((midiFloat - midi) * 100);
+    var pc = ((midi % 12) + 12) % 12;
+    var noteOct = Math.floor(midi / 12) - 1;
+    var noteName = NOTE_NAMES[pc] + String(noteOct);
+    var noteLocked = Math.abs(noteCents) <= 5;
+    var noteNeedle = clamp(noteCents / 50, -1, 1);
+
+    // 3. Vessel rate dV/V telemetry & bounded [-1, 1] modulation taps
+    var dV = vc.dynamics.dV;
+    var dVOverV = vc.dynamics.dVOverV;
+    var hasMotion = Math.abs(opts.dR || 0) > 1e-7 || Math.abs(opts.dr || 0) > 1e-7;
+    var rateTag = 'eq';
+    if (state.lockVolume && vc.dynamics.isLockedV) {
+      rateTag = 'V̇=0';
+    } else if (!Number.isFinite(dVOverV)) {
+      rateTag = dVOverV > 0 ? '+∞' : '−∞';
+    } else if (hasMotion || Math.abs(dVOverV) > 1e-3) {
+      rateTag = (dVOverV >= 0 ? '+' : '−') + Math.min(99.9, Math.abs(dVOverV)).toFixed(Math.abs(dVOverV) >= 10 ? 1 : 2);
+    }
+
+    var detuneSignal = Math.fround(clamp(ratioCents / 50, -1, 1));
+    var dVSignal = Number.isFinite(dVOverV)
+      ? Math.fround(Math.tanh(dVOverV))
+      : Math.fround(dVOverV > 0 ? 1 : -1);
+
+    var isNote = mode === 'note';
+    var activeCents = isNote ? noteCents : ratioCents;
+    return {
+      mode: mode,
+      identity: isNote ? noteName : ratioId,
+      subLabel: isNote ? ('σ=' + (sigma >= 0 ? '+' : '−') + Math.abs(sigma)) : ratioName,
+      cents: Math.fround(activeCents),
+      needleNorm: Math.fround(isNote ? noteNeedle : ratioNeedle),
+      saturated: isNote ? false : ratioSat,
+      satDir: isNote ? 0 : (ratioSat ? (ratioCents > 0 ? 1 : -1) : 0),
+      locked: isNote ? noteLocked : ratioLocked,
+      ratio: {
+        identity: ratioId,
+        name: ratioName,
+        cents: Math.fround(ratioCents),
+        needleNorm: Math.fround(ratioNeedle),
+        saturated: ratioSat,
+        locked: ratioLocked
+      },
+      note: {
+        identity: noteName,
+        midi: midi,
+        octave: noteOct,
+        cents: noteCents,
+        needleNorm: Math.fround(noteNeedle),
+        locked: noteLocked,
+        sigma: sigma
+      },
+      vessel: {
+        V: Math.fround(vc.V),
+        dV: Math.fround(dV),
+        dVOverV: Number.isFinite(dVOverV) ? Math.fround(dVOverV) : dVOverV,
+        isLockedV: vc.dynamics.isLockedV,
+        lockVolume: !!state.lockVolume,
+        rateTag: rateTag,
+        boundaryState: vc.boundaryState
+      },
+      detuneSignal: detuneSignal,
+      dVSignal: dVSignal
+    };
+  }
+
+  function nearestInLattice(val, list) {
+    if (!list || !list.length) return val;
+    var best = list[0];
+    var bestDist = Math.abs(val - best);
+    for (var i = 1; i < list.length; i++) {
+      var d = Math.abs(val - list[i]);
+      if (d < bestDist) {
+        best = list[i];
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  function isFiveLimitSmooth(n) {
+    var x = Math.round(n);
+    if (x < 1) return false;
+    while (x % 2 === 0) x /= 2;
+    while (x % 3 === 0) x /= 3;
+    while (x % 5 === 0) x /= 5;
+    return x === 1;
+  }
+
+  // Build deterministic target-aware Key-Signature lattice for Prime Key, Divisor Lattice, and Just / Modal
+  function keySignatureLattice(op, targetKey, meta, state) {
+    meta = meta || { min: 1, max: 8, isInt: true };
+    state = state || {};
+    var lo = meta.min;
+    var hi = meta.max;
+    var R = Math.max(0.2, state.r != null ? state.r : 1);
+    var rIn = Math.max(0, state.rIn != null ? state.rIn : 0.45);
+    var out = [];
+
+    if (op === 'qPrime') {
+      if (meta.isInt) {
+        for (var p = Math.max(2, Math.ceil(lo)); p <= Math.floor(hi); p++) {
+          if (isPrimeInt(p)) out.push(p);
+        }
+        return out.length ? out : [Math.round(lo)];
+      }
+      if (targetKey === 'f') return [0.5, 1, 2, 3, 5, 7];
+      if (targetKey === 'phaseDeg') return [-150, -90, -60, -30, 0, 30, 60, 90, 150];
+      if (targetKey === 'rIn') {
+        var rp = [R / 7, R / 5, R / 3, R / 2, (2 * R) / 3, (3 * R) / 5, (5 * R) / 7];
+        return rp.filter(function (v) { return v >= lo && v <= hi; }).sort(function (a, b) { return a - b; });
+      }
+      return [lo, lo + (hi - lo) * 0.25, lo + (hi - lo) * 0.5, lo + (hi - lo) * 0.75, hi];
+    }
+
+    if (op === 'qDivisor') {
+      if (targetKey === 'orderN') {
+        // 5-limit highly composite Tonnetz orders (divisors of 60 & 48 in [5..64])
+        var tonnetz = [5, 6, 8, 10, 12, 15, 16, 20, 24, 30, 48, 60];
+        return tonnetz.filter(function (v) { return v >= lo && v <= hi; });
+      }
+      if (meta.isInt) {
+        var refN = Math.max(2, Math.round(state.orderN || 19));
+        var divs = [];
+        for (var d = Math.max(1, Math.ceil(lo)); d <= Math.floor(hi); d++) {
+          if (refN % d === 0) divs.push(d);
+        }
+        if (divs.length >= 2) return divs;
+        // Fallback to highly composite 60 when active Order N is prime
+        var divs60 = [];
+        for (var d2 = Math.max(1, Math.ceil(lo)); d2 <= Math.floor(hi); d2++) {
+          if (60 % d2 === 0) divs60.push(d2);
+        }
+        return divs60.length ? divs60 : [1, 2, 3, 4, 6];
+      }
+      if (targetKey === 'rIn') {
+        var ds = [12, 10, 8, 6, 5, 4, 3, 2];
+        for (var di = 0; di < ds.length; di++) {
+          var rv = R / ds[di];
+          if (rv >= lo && rv <= hi) out.push(rv);
+        }
+        return out.length ? out : [0, R * 0.5];
+      }
+      if (targetKey === 'phaseDeg') {
+        var stepN = clamp(Math.round(state.orderN || 12), 4, 24);
+        var stepDeg = 360 / stepN;
+        for (var k = -Math.floor(180 / stepDeg); k <= Math.floor(180 / stepDeg); k++) {
+          out.push(clamp(k * stepDeg, -180, 180));
+        }
+        return out;
+      }
+      if (targetKey === 'f') return [0.5, 1, 1.5, 2, 3, 4, 6];
+      return [lo, (lo + hi) * 0.5, hi];
+    }
+
+    if (op === 'qJust') {
+      if (targetKey === 'rIn') {
+        // Exact CONSONANT_RATIOS locks: r = R * (q / p) so Tuner needle snaps dead-center 0¢!
+        for (var ci = 0; ci < CONSONANT_RATIOS.length; ci++) {
+          var cr = CONSONANT_RATIOS[ci];
+          if (cr.p <= cr.q) continue;
+          var rCand = R * (cr.q / cr.p);
+          if (rCand >= lo && rCand <= Math.min(hi, R)) out.push(rCand);
+        }
+        out.sort(function (a, b) { return a - b; });
+        return out.length ? out : [0, R * 0.5];
+      }
+      if (targetKey === 'r') {
+        var baseR = rIn > 0.05 ? rIn : 0.5;
+        for (var cj = 0; cj < CONSONANT_RATIOS.length; cj++) {
+          var cr2 = CONSONANT_RATIOS[cj];
+          var candR = baseR * (cr2.p / cr2.q);
+          if (candR >= lo && candR <= hi) out.push(candR);
+        }
+        out.sort(function (a, b) { return a - b; });
+        return out.length ? out : [0.5, 1.0, 1.5, 2.0];
+      }
+      if (targetKey === 'phaseDeg') {
+        // Pentatonic / 5-limit key on Z_12 circle (C, D, E, G, A -> 0, 60, 120, -150, -90, ...)
+        return [-180, -120, -90, -30, 0, 60, 90, 150, 180];
+      }
+      if (targetKey === 'f') {
+        return [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
+      }
+      if (meta.isInt) {
+        for (var j = Math.max(1, Math.ceil(lo)); j <= Math.floor(hi); j++) {
+          if (isFiveLimitSmooth(j)) out.push(j);
+        }
+        return out.length ? out : [Math.round(lo)];
+      }
+      return [lo, lo + (hi - lo) / 3, lo + (hi - lo) * 0.5, lo + (hi - lo) * (2 / 3), hi];
+    }
+
+    return null;
+  }
+
+  function snapToKeySignature(op, targetKey, candVal, meta, state) {
+    var lattice = keySignatureLattice(op, targetKey, meta, state);
+    if (!lattice || !lattice.length) return candVal;
+    return nearestInLattice(candVal, lattice);
+  }
+
   // Discrete Order N Cyclic Group Strobe:
   // Quantizes the continuous curve into N discrete states P_0 .. P_{N-1},
   // and traces the cyclic subgroup generated by stride g = round(n):
@@ -2487,6 +2722,9 @@
       modularZoomPhase: modularZoomPhase,
       parallelVesselBus: parallelVesselBus,
       bitwiseNotNullBridge: bitwiseNotNullBridge,
+      tunerReadout: tunerReadout,
+      keySignatureLattice: keySignatureLattice,
+      snapToKeySignature: snapToKeySignature,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,

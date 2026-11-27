@@ -587,6 +587,18 @@
           </div>
         </div>
 
+        <div id="resTunerBar" class="res-tuner-bar mono" title="Vessel Tuner (V⁽²⁾ ratio α = R/r · click identity to toggle Ratio / Note)">
+          <button type="button" id="btnTunerMode" class="tuner-id" title="Click to toggle Modal Ratio vs. Chromatic Note (+ Sentinel σ)">2:1</button>
+          <div class="tuner-rail" aria-hidden="true">
+            <span class="tuner-tick left"></span>
+            <span class="tuner-tick mid"></span>
+            <span class="tuner-tick right"></span>
+            <span id="resTunerNeedle" class="tuner-needle" style="left:50%"></span>
+          </div>
+          <span id="resTunerCents" class="tuner-cents">+0.0&cent;</span>
+          <span id="resTunerRate" class="tuner-rate" title="Normalized vessel rate V̇/V (V̇=0 when Lock V holds)">eq</span>
+        </div>
+
         <div id="resSentinelBar" class="res-sentinel-bar mono" hidden>
           <span id="resSentinelScale">R<sub>sent</sub>=1.00</span>
           <span id="resSentinelPitch">Pitch 0 oct</span>
@@ -939,6 +951,8 @@
             <button type="button" class="mini-btn mod-preset-btn" data-mpreset="entangled">Entangled Slice</button>
             <button type="button" class="mini-btn mod-preset-btn" data-mpreset="nibbleStep">4-Bit Stepper</button>
             <button type="button" class="mini-btn mod-preset-btn" data-mpreset="volBreath">Lock-V Breather</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="tunerSweep" title="Lock V + slow Clef LFO sweeping Cavity r across harmonic locks while Tuner Δ¢ sympathetically bends Phase">Tuner Sweep</button>
+            <button type="button" class="mini-btn mod-preset-btn" data-mpreset="primeGears" title="Step Order N strictly across cofactor-1 Prime Keys while Ratio m clicks along Composite Divisors">Prime Gears</button>
             <button type="button" class="mini-btn mod-preset-btn mod-clear-btn" data-mpreset="clear">Clear</button>
           </div>
         </div>

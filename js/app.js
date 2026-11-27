@@ -64,6 +64,7 @@
     sentinelAuto: false,   // Schmitt-trigger Clef-change hysteresis on R drags
     clefRoundM: 0,         // Movable C-Clef Round octave for Ratio m (m_eff = m · 2^clefRoundM)
     lcsReduce: false,      // Lowest-Common-Structure Period-1 gcd reduction for active (n, m, k)
+    tunerMode: 'ratio',    // Stage 2 hairline vessel tuner mode: 'ratio' (V^(2) alpha) | 'note' (chromatic + Sentinel σ)
     archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
     archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
     floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D)
@@ -456,6 +457,7 @@
       state.sentinelAuto = false;
       state.clefRoundM = 0;
       state.lcsReduce = false;
+      state.tunerMode = 'ratio';
       var targetPreset = (d && d.presetIndex != null) ? d.presetIndex : 12;
       applyPreset(targetPreset);
       if (d) {
@@ -879,6 +881,13 @@
     $('btnLcsReduce').addEventListener('click', function () {
       state.lcsReduce = !state.lcsReduce;
       updateSentinelReadout();
+      bump();
+    });
+  }
+  if ($('btnTunerMode')) {
+    $('btnTunerMode').addEventListener('click', function () {
+      state.tunerMode = (state.tunerMode === 'note') ? 'ratio' : 'note';
+      if (Engine.sphereResonance) updateResonanceWidget(Engine.sphereResonance(state, state.playT));
       bump();
     });
   }
@@ -2498,6 +2507,7 @@
       sentinelAuto: !!state.sentinelAuto,
       clefRoundM: state.clefRoundM || 0,
       lcsReduce: !!state.lcsReduce,
+      tunerMode: state.tunerMode || 'ratio',
       archimedesAuto: state.archimedesAuto !== false,
       archimedesZNorm: state.archimedesZNorm || 0,
       toggles: togglesCopy,
@@ -2551,6 +2561,7 @@
       state.sentinelAuto = !!patch.sentinelAuto;
       state.clefRoundM = Engine.clamp(Math.round(patch.clefRoundM || 0), 0, 12);
       state.lcsReduce = !!patch.lcsReduce;
+      state.tunerMode = (patch.tunerMode === 'note') ? 'note' : 'ratio';
       state.archimedesAuto = patch.archimedesAuto !== false;
       if (typeof patch.archimedesZNorm === 'number' && isFinite(patch.archimedesZNorm)) {
         state.archimedesZNorm = Engine.clamp(patch.archimedesZNorm, -1, 1);
@@ -3326,6 +3337,45 @@
     }
     if ($('resWallK')) {
       $('resWallK').textContent = res.modes.shell[0] ? ('k₁=' + res.modes.shell[0].toFixed(2)) : '—';
+    }
+
+    var tunerBar = $('resTunerBar');
+    if (tunerBar && Engine.tunerReadout) {
+      var liveR = (ModMatrix && typeof ModMatrix.getLiveRates === 'function') ? ModMatrix.getLiveRates() : null;
+      var tun = Engine.tunerReadout(state, state.playT, {
+        mode: state.tunerMode || 'ratio',
+        dR: liveR ? liveR.dR : 0,
+        dr: liveR ? liveR.dr : 0
+      });
+      tunerBar.classList.toggle('locked', !!tun.locked);
+      tunerBar.classList.toggle('mode-note', tun.mode === 'note');
+      tunerBar.classList.toggle('sat-hi', tun.satDir > 0);
+      tunerBar.classList.toggle('sat-lo', tun.satDir < 0);
+
+      var idBtn = $('btnTunerMode');
+      if (idBtn) {
+        idBtn.textContent = tun.identity;
+        idBtn.title = (tun.mode === 'note')
+          ? ('Chromatic Pitch ' + tun.identity + ' (' + tun.subLabel + ') — click to switch to Modal Ratio')
+          : ('Modal Ratio ' + tun.identity + ' (' + tun.subLabel + ') — click to switch to Chromatic Note');
+      }
+      var needle = $('resTunerNeedle');
+      if (needle) {
+        needle.style.left = (((tun.needleNorm + 1) * 50).toFixed(1)) + '%';
+      }
+      var centsEl = $('resTunerCents');
+      if (centsEl) {
+        var absC = Math.abs(tun.cents);
+        var cSign = tun.cents >= 0 ? '+' : '−';
+        var cTxt = (tun.mode === 'note' || absC >= 100) ? absC.toFixed(0) : absC.toFixed(1);
+        centsEl.textContent = cSign + cTxt + '¢';
+      }
+      var rateEl = $('resTunerRate');
+      if (rateEl) {
+        rateEl.textContent = tun.vessel.rateTag;
+        rateEl.classList.toggle('lock-v', !!(tun.vessel.lockVolume && tun.vessel.isLockedV));
+        rateEl.classList.toggle('moving', tun.vessel.rateTag !== 'eq' && tun.vessel.rateTag !== 'V̇=0');
+      }
     }
 
     var sentBar = $('resSentinelBar');

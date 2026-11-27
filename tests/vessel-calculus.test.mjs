@@ -278,3 +278,34 @@ test('Edge Case 4: Deterministic ModMatrix LFO -> Cavity r under Lock V satisfie
 
   ModMatrix.clearRoutes();
 });
+
+test('Stage 2: Engine.tunerReadout computes exact Ratio locks, Chromatic Note + Sentinel σ without underflow, and V̇/V rate tags', () => {
+  // 1. Exact 2:1 Octave Lock (R=1.0, rIn=0.5) with Lock V => 0.0¢ locked & V̇=0 tag
+  const oct = Engine.tunerReadout({ r: 1.0, rIn: 0.5, f: 1, phaseRad: 0, sentinelOctave: 0, lockVolume: true }, 0, { mode: 'ratio', dR: 0.05, dr: 0.2 });
+  assert.equal(oct.mode, 'ratio');
+  assert.equal(oct.identity, '2:1');
+  assert.equal(oct.locked, true);
+  close(oct.cents, 0, 1e-4, '2:1 octave has 0¢ detune');
+  close(oct.needleNorm, 0, 1e-4, 'needle dead-center');
+  assert.equal(oct.saturated, false);
+  assert.equal(oct.vessel.rateTag, 'V̇=0');
+
+  // 2. Default vessel (R=1.0, rIn=0.45): +182.4¢ off 2:1 => needle saturated high, not locked
+  const def = Engine.tunerReadout({ r: 1.0, rIn: 0.45, f: 1, phaseRad: 0, sentinelOctave: 0 }, 0, { mode: 'ratio' });
+  assert.equal(def.locked, false);
+  assert.equal(def.saturated, true);
+  assert.equal(def.satDir, 1);
+  assert.equal(def.needleNorm, 1);
+
+  // 3. Chromatic Note mode at default (R=1, f=1, phase=0, sigma=0) => G2 +0¢; at Sentinel σ=+50 => G-48 +0¢ (zero underflow!)
+  const g2 = Engine.tunerReadout({ r: 1.0, rIn: 0.45, f: 1, phaseRad: 0, sentinelOctave: 0 }, 0, { mode: 'note' });
+  assert.equal(g2.identity, 'G2');
+  assert.equal(g2.locked, true);
+  assert.equal(g2.cents, 0);
+
+  const deepSent = Engine.tunerReadout({ r: 1.0, rIn: 0.45, f: 1, phaseRad: 0, sentinelOctave: 50 }, 0, { mode: 'note' });
+  assert.equal(deepSent.identity, 'G-48');
+  assert.equal(deepSent.locked, true);
+  assert.equal(deepSent.cents, 0);
+  assert.equal(deepSent.note.octave, -48);
+});

@@ -19,6 +19,9 @@
     { id: 'cos',      label: 'cos(pi*x)',    desc: 'Phase-locked cosine entanglement (zero drift).' },
     { id: 'sin',      label: 'sin(pi*x)',    desc: 'Quadrature sine entanglement (90 deg shift).' },
     { id: 'jacobian', label: 'Jacobian x^2', desc: 'Constant-volume radial expansion warp (dR/dr = eta^2).' },
+    { id: 'qPrime',   label: 'Prime Key',    desc: 'Target-aware key signature: snap strictly onto prime orders/ratios (cofactor 1, zero subgroup collapse).', targetAware: true },
+    { id: 'qDivisor', label: 'Divisor Key',  desc: 'Target-aware lattice: snap onto divisors of active composite Order N / 60 (shared LCS clockwork gears).', targetAware: true },
+    { id: 'qJust',    label: 'Just / Modal', desc: 'Target-aware harmonic key: snap Cavity r to exact 0-cent Consonant Ratio locks or 5-limit musical steps.', targetAware: true },
     { id: 'qNibble',  label: 'Quant 4-Bit',  desc: 'Quantize signal onto 16 discrete 4-bit nibble steps (0x0..0xF).' },
     { id: 'q12',      label: 'Quant 12-Tone',desc: 'Quantize onto the 12 chromatic pitch classes (30 deg steps on Phase).' },
     { id: 'fifths',   label: 'Fifths (+7)',  desc: 'Step around the Circle of Fifths (+7 mod 12); Invert for Circle of Fourths (+5).' },
@@ -33,7 +36,9 @@
     { id: 'tap_eta2',    label: 'eta^2 Jacobian',short: 'eta2', color: '#4df3dd' },
     { id: 'tap_phase',   label: 'Phase phi',     short: 'phi',  color: '#9d8cff' },
     { id: 'tap_nibble',  label: '4-Bit Nibble',  short: '4b',   color: '#ffb04d' },
-    { id: 'tap_bitwave', label: 'BitWave Reg',   short: 'bw',   color: '#4af28a' }
+    { id: 'tap_bitwave', label: 'BitWave Reg',   short: 'bw',   color: '#4af28a' },
+    { id: 'tap_detune',  label: 'Tuner Δ¢',      short: 'Δ¢',   color: '#ffd166' },
+    { id: 'tap_dV',      label: 'Vessel V̇/V',    short: 'V̇/V',  color: '#38bdf8' }
   ];
 
   function evalBitWaveTap(phase, state, playT) {
@@ -77,11 +82,46 @@
     return Math.sin(u * Math.PI * 2);
   }
 
+  // Exact analytical derivative d(evalWave)/d(phase) for deterministic Vessel Calculus rates (dR, dr)
+  function evalWaveDeriv(wave, phase) {
+    var u = ((phase % 1) + 1) % 1;
+    if (wave === 'sine') return Math.PI * 2 * Math.cos(u * Math.PI * 2);
+    if (wave === 'tri')  return (u < 0.25 || u >= 0.75) ? 4 : -4;
+    if (wave === 'saw')  return 2;
+    if (wave === 'sq')   return 0;
+    return Math.PI * 2 * Math.cos(u * Math.PI * 2);
+  }
+
+  function isTargetAwareOp(op) {
+    return op === 'qPrime' || op === 'qDivisor' || op === 'qJust';
+  }
+
+  function lfoEffectiveRate(lfo) {
+    var clef = (lfo && typeof lfo.clef === 'number' && isFinite(lfo.clef)) ? clamp(Math.round(lfo.clef), -4, 4) : 0;
+    return (lfo && lfo.ratio ? lfo.ratio : 1) * Math.pow(2, clef);
+  }
+
   function applyOperator(op, x, ctx) {
     if (op === 'linear')   return x;
     if (op === 'cos')      return Math.cos(x * Math.PI);
     if (op === 'sin')      return Math.sin(x * Math.PI);
     if (op === 'jacobian') return (x < 0 ? -1 : 1) * x * x;
+    if (isTargetAwareOp(op)) {
+      // Normalized preview staircase when called standalone (e.g. Entanglement Scope or unit tests)
+      var Engine = Harmony.engine;
+      if (ctx && ctx.targetKey && TARGETS[ctx.targetKey] && Engine && typeof Engine.snapToKeySignature === 'function') {
+        var m = TARGETS[ctx.targetKey];
+        var baseV = ctx.baseVal != null ? ctx.baseVal : (m.min + m.max) * 0.5;
+        var spanV = (m.max - m.min) * 0.5;
+        var depV = ctx.depth != null ? ctx.depth : 1;
+        var candV = clamp(baseV + x * depV * spanV, m.min, m.max);
+        var snappedV = Engine.snapToKeySignature(op, ctx.targetKey, candV, m, ctx.state || {});
+        return spanV > 0 ? clamp((snappedV - baseV) / (Math.max(1e-6, Math.abs(depV)) * spanV), -1, 1) * (depV < 0 ? -1 : 1) : x;
+      }
+      var steps = op === 'qPrime' ? 8 : (op === 'qDivisor' ? 6 : 9);
+      var idxK = clamp(Math.round(((x + 1) * 0.5) * (steps - 1)), 0, steps - 1);
+      return (idxK / (steps - 1)) * 2 - 1;
+    }
     if (op === 'qNibble')  return Math.round(((x + 1) * 0.5) * 15) / 7.5 - 1;
     if (op === 'q12') {
       var k12 = clamp(Math.floor(((x + 1) * 0.5) * 12), 0, 11);
@@ -116,9 +156,9 @@
   var selectedRouteId = null;
 
   var lfos = [
-    { id: 'lfo1', name: 'LFO 1', short: 'L1', wave: 'sine', ratio: 1,   phaseOff: 0, color: LFO_COLORS[0] },
-    { id: 'lfo2', name: 'LFO 2', short: 'L2', wave: 'tri',  ratio: 0.5, phaseOff: 0, color: LFO_COLORS[1] },
-    { id: 'lfo3', name: 'LFO 3', short: 'L3', wave: 'saw',  ratio: 2,   phaseOff: 0, color: LFO_COLORS[2] }
+    { id: 'lfo1', name: 'LFO 1', short: 'L1', wave: 'sine', ratio: 1,   clef: 0, phaseOff: 0, color: LFO_COLORS[0] },
+    { id: 'lfo2', name: 'LFO 2', short: 'L2', wave: 'tri',  ratio: 0.5, clef: 0, phaseOff: 0, color: LFO_COLORS[1] },
+    { id: 'lfo3', name: 'LFO 3', short: 'L3', wave: 'saw',  ratio: 2,   clef: 0, phaseOff: 0, color: LFO_COLORS[2] }
   ];
 
   // Start with 0 routes on fresh mount so default view & agent contract snapshots stay 100% pristine
@@ -126,6 +166,8 @@
   var baseValues = {};
   var effValues = {};
   var srcValues = {};
+  var srcDerivs = {};
+  var liveRates = { dR: 0, dr: 0, dV: 0, dVOverV: 0, isLockedV: true };
   var hadActiveRoutes = false;
 
   var appHooks = null;
@@ -211,14 +253,18 @@
     var phi = (clockMode === 'free') ? freePhi : (playT || 0);
     lastMasterPhi = phi;
 
-    // Always compute LFO source waveforms so the live scope stays animated
+    // Always compute LFO source waveforms & analytical derivatives (Clef = 2^clef multiplier)
     for (var i = 0; i < lfos.length; i++) {
       var l = lfos[i];
-      srcValues[l.id] = evalWave(l.wave, phi * l.ratio + l.phaseOff);
+      var effRate = lfoEffectiveRate(l);
+      var lPhase = phi * effRate + (l.phaseOff || 0);
+      srcValues[l.id] = evalWave(l.wave, lPhase);
+      srcDerivs[l.id] = evalWaveDeriv(l.wave, lPhase) * effRate;
     }
 
     var active = hasActiveRoutes();
     if (!active) {
+      liveRates = { dR: 0, dr: 0, dV: 0, dVOverV: 0, isLockedV: true };
       var restored = false;
       if (hadActiveRoutes) {
         restored = restoreBaseToState(state);
@@ -261,19 +307,48 @@
     }
 
     // Two-pass topological evaluation so cross-parameter chains resolve in one frame
+    var estDR = 0, estDr = 0;
     for (var pass = 0; pass < 2; pass++) {
       var accum = {};
+      var snapOps = {};
       for (var k0 in TARGETS) accum[k0] = 0;
 
       var curR = Math.max(0.05, effValues.r);
-      var curEta = clamp(effValues.rIn / curR, 0, 0.98);
+      var curRIn = clamp(effValues.rIn, 0, curR);
+      var curEta = clamp(curRIn / curR, 0, 0.98);
       var curSlice = sliceIsDest ? effValues.archimedesZNorm : liveSliceZ;
       srcValues.tap_sliceZ = clamp(curSlice, -1, 1);
+      srcDerivs.tap_sliceZ = (!sliceIsDest && state.archimedesAuto !== false) ? (Math.PI * 2 * Math.cos(Math.PI * 2 * (playT || 0))) : 0;
       srcValues.tap_eta = curEta * 2 - 1;
       srcValues.tap_eta2 = (curEta * curEta) * 2 - 1;
       srcValues.tap_phase = clamp(effValues.phaseDeg / 180, -1, 1);
       srcValues.tap_nibble = (nibble - 8) / 8;
       srcValues.tap_bitwave = evalBitWaveTap(phi, state, playT);
+
+      // Compute Vessel Calculus live Tuner Δ¢ and V̇/V taps deterministically
+      if (Engine && typeof Engine.tunerReadout === 'function') {
+        var tProbe = Engine.tunerReadout({
+          r: curR,
+          rIn: curRIn,
+          f: effValues.f,
+          phaseRad: effValues.phaseDeg * Math.PI / 180,
+          sentinelOctave: state.sentinelOctave || 0,
+          lockVolume: !!state.lockVolume,
+          tunerMode: 'ratio'
+        }, playT || 0, { dR: estDR, dr: estDr });
+        srcValues.tap_detune = tProbe.detuneSignal;
+        srcValues.tap_dV = tProbe.dVSignal;
+        liveRates = {
+          dR: estDR,
+          dr: estDr,
+          dV: tProbe.vessel.dV,
+          dVOverV: tProbe.vessel.dVOverV,
+          isLockedV: tProbe.vessel.isLockedV
+        };
+      } else {
+        srcValues.tap_detune = 0;
+        srcValues.tap_dV = 0;
+      }
 
       var ctx = {
         nibble: nibble,
@@ -281,21 +356,52 @@
         eta: curEta
       };
 
+      var nextEstDR = 0, nextEstDr = 0;
       for (var ri = 0; ri < routes.length; ri++) {
         var rt = routes[ri];
         if (!rt.enabled) continue;
         var meta = TARGETS[rt.dst];
         if (!meta) continue;
         var raw = (typeof srcValues[rt.src] === 'number') ? srcValues[rt.src] : 0;
-        var shaped = applyOperator(rt.op, raw, ctx);
         var span = (meta.max - meta.min) * 0.5;
-        accum[rt.dst] += shaped * rt.depth * span;
+        if (isTargetAwareOp(rt.op)) {
+          // Target-aware key signatures use raw linear excursion, then snap onto the exact lattice below
+          accum[rt.dst] += raw * rt.depth * span;
+          snapOps[rt.dst] = rt.op;
+        } else {
+          var shaped = applyOperator(rt.op, raw, ctx);
+          accum[rt.dst] += shaped * rt.depth * span;
+          // Propagate analytical time derivative for Vessel Calculus dV/V telemetry
+          var rawD = (typeof srcDerivs[rt.src] === 'number') ? srcDerivs[rt.src] : 0;
+          if (rawD !== 0 && (rt.dst === 'r' || rt.dst === 'rIn')) {
+            var opSlope = 1;
+            if (rt.op === 'cos') opSlope = -Math.PI * Math.sin(raw * Math.PI);
+            else if (rt.op === 'sin') opSlope = Math.PI * Math.cos(raw * Math.PI);
+            else if (rt.op === 'jacobian') opSlope = 2 * Math.abs(raw);
+            else if (rt.op !== 'linear') opSlope = 0;
+            var contrib = rawD * opSlope * rt.depth * span;
+            if (rt.dst === 'r') nextEstDR += contrib;
+            else nextEstDr += contrib;
+          }
+        }
       }
+
+      var snapCtxState = {
+        r: curR,
+        rIn: curRIn,
+        orderN: effValues.orderN,
+        n: effValues.n,
+        m: effValues.m,
+        k: effValues.k
+      };
 
       for (var k1 in TARGETS) {
         if (!Object.prototype.hasOwnProperty.call(TARGETS, k1)) continue;
         var pMeta = TARGETS[k1];
         var nextVal = clamp(baseValues[k1] + accum[k1], pMeta.min, pMeta.max);
+        if (snapOps[k1] && Engine && typeof Engine.snapToKeySignature === 'function') {
+          nextVal = Engine.snapToKeySignature(snapOps[k1], k1, nextVal, pMeta, snapCtxState);
+        }
         if (pMeta.isInt) nextVal = Math.round(nextVal);
         effValues[k1] = nextVal;
       }
@@ -304,9 +410,25 @@
       if (state.lockVolume && Engine && typeof Engine.solveConstantVolumeR === 'function') {
         var lockedR = clamp(Engine.solveConstantVolumeR(effValues.rIn, state.lockedR0), TARGETS.r.min, TARGETS.r.max);
         effValues.r = lockedR;
+        var lockEta = lockedR > 1e-4 ? clamp(effValues.rIn / lockedR, 0, 1) : 0;
+        nextEstDR = (lockEta * lockEta) * nextEstDr;
       } else if (effValues.rIn > effValues.r) {
         effValues.rIn = effValues.r;
       }
+      estDR = nextEstDR;
+      estDr = nextEstDr;
+    }
+
+    // Final sync of liveRates after pass 2 so UI & Vessel Calculus telemetry agree bit-for-bit
+    if (Engine && typeof Engine.vesselCalculus === 'function') {
+      var vcFinal = Engine.vesselCalculus({ r: effValues.r, rIn: effValues.rIn }, { dR: estDR, dr: estDr });
+      liveRates = {
+        dR: estDR,
+        dr: estDr,
+        dV: vcFinal.dynamics.dV,
+        dVOverV: vcFinal.dynamics.dVOverV,
+        isLockedV: vcFinal.dynamics.isLockedV
+      };
     }
 
     // Apply effective values to live state and detect whether geometry/curve needs resampling
@@ -487,6 +609,17 @@
                 '<option value="3"'    + (lfo.ratio === 3    ? ' selected' : '') + '>3x</option>' +
                 '<option value="4"'    + (lfo.ratio === 4    ? ' selected' : '') + '>4x</option>' +
               '</select>' +
+              '<select class="mod-mini-sel mod-clef-sel mono" data-lfo-clef="' + lfo.id + '" aria-label="' + lfo.name + ' Clef octave" title="LFO Clef Register (2^σ): ÷16 climate drift → ×16 FM sweep">' +
+                '<option value="-4"' + ((lfo.clef || 0) === -4 ? ' selected' : '') + '>2⁻⁴</option>' +
+                '<option value="-3"' + ((lfo.clef || 0) === -3 ? ' selected' : '') + '>2⁻³</option>' +
+                '<option value="-2"' + ((lfo.clef || 0) === -2 ? ' selected' : '') + '>2⁻²</option>' +
+                '<option value="-1"' + ((lfo.clef || 0) === -1 ? ' selected' : '') + '>2⁻¹</option>' +
+                '<option value="0"'  + ((lfo.clef || 0) === 0  ? ' selected' : '') + '>2⁰</option>' +
+                '<option value="1"'  + ((lfo.clef || 0) === 1  ? ' selected' : '') + '>2⁺¹</option>' +
+                '<option value="2"'  + ((lfo.clef || 0) === 2  ? ' selected' : '') + '>2⁺²</option>' +
+                '<option value="3"'  + ((lfo.clef || 0) === 3  ? ' selected' : '') + '>2⁺³</option>' +
+                '<option value="4"'  + ((lfo.clef || 0) === 4  ? ' selected' : '') + '>2⁺⁴</option>' +
+              '</select>' +
             '</div>' +
             '<button type="button" class="mod-drag-handle" data-drag-src="' + lfo.id + '" data-drag-color="' + lfo.color + '" ' +
               'style="border-color:' + lfo.color + ';color:' + lfo.color + '" title="Drag onto any slider in the Left Rack">' +
@@ -506,6 +639,13 @@
         sel.addEventListener('change', function () {
           var id = sel.getAttribute('data-lfo-ratio');
           for (var j = 0; j < lfos.length; j++) if (lfos[j].id === id) lfos[j].ratio = parseFloat(sel.value) || 1;
+        });
+      });
+      lfoWrap.querySelectorAll('[data-lfo-clef]').forEach(function (sel) {
+        sel.addEventListener('change', function () {
+          var id = sel.getAttribute('data-lfo-clef');
+          var c = clamp(parseInt(sel.value, 10) || 0, -4, 4);
+          for (var j = 0; j < lfos.length; j++) if (lfos[j].id === id) lfos[j].clef = c;
         });
       });
     }
@@ -771,11 +911,13 @@
     }
 
     function evalPreview(p) {
-      if (lfo) return evalWave(lfo.wave, p * lfo.ratio + lfo.phaseOff);
+      if (lfo) return evalWave(lfo.wave, p * lfoEffectiveRate(lfo) + (lfo.phaseOff || 0));
       if (srcId === 'tap_bitwave') return evalBitWaveTap(p, state, state ? state.playT : 0);
       if (srcId === 'tap_sliceZ') return Math.sin(p * Math.PI * 2);
       if (srcId === 'tap_nibble') return (Math.round(((Math.sin(p * Math.PI * 2) + 1) * 0.5) * 15) - 8) / 8;
       if (srcId === 'tap_phase')  return Math.sin(p * Math.PI * 2);
+      if (srcId === 'tap_detune') return typeof srcValues.tap_detune === 'number' ? Math.sin(p * Math.PI * 2) * 0.5 + srcValues.tap_detune * 0.5 : Math.sin(p * Math.PI * 2);
+      if (srcId === 'tap_dV')     return Math.cos(p * Math.PI * 2) * 0.7;
       return Math.sin(p * Math.PI * 2) * 0.65;
     }
 
@@ -804,7 +946,16 @@
         var p2 = s2 / 120;
         var raw = evalPreview(p2);
         var nib = clamp(Math.round(((Math.sin(p2 * Math.PI * 2) + 1) * 0.5) * 15), 0, 15);
-        var out = applyOperator(rt.op, raw, { nibble: nib, sliceZ: Math.cos(p2 * Math.PI * 2) * 0.85, eta: eta }) * rt.depth;
+        var opCtx = {
+          nibble: nib,
+          sliceZ: Math.cos(p2 * Math.PI * 2) * 0.85,
+          eta: eta,
+          targetKey: rt.dst,
+          baseVal: baseValues[rt.dst],
+          depth: rt.depth,
+          state: state
+        };
+        var out = applyOperator(rt.op, raw, opCtx) * rt.depth;
         var x2 = p2 * w;
         var y2 = h * 0.5 - clamp(out, -1, 1) * (h * 0.40);
         if (s2 === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
@@ -991,6 +1142,25 @@
         { id: 'rt-' + (routeSeq++), src: 'tap_eta2', dst: 'phaseDeg',        op: 'jacobian', depth: 0.45, enabled: true }
       ];
       selectedRouteId = routes[0].id;
+    } else if (presetName === 'tunerSweep') {
+      if (st && !st.lockVolume && appHooks && appHooks.setLockVolume) {
+        appHooks.setLockVolume(true);
+      }
+      if (lfos[0]) lfos[0].clef = -1;
+      routes = [
+        { id: 'rt-' + (routeSeq++), src: 'lfo1',       dst: 'rIn',      op: 'linear', depth: 0.22, enabled: true },
+        { id: 'rt-' + (routeSeq++), src: 'tap_detune', dst: 'phaseDeg', op: 'linear', depth: 0.35, enabled: true }
+      ];
+      selectedRouteId = routes[0].id;
+      if (typeof document !== 'undefined') renderSourcesUI();
+    } else if (presetName === 'primeGears') {
+      if (lfos[1]) lfos[1].clef = -1;
+      routes = [
+        { id: 'rt-' + (routeSeq++), src: 'lfo1', dst: 'orderN', op: 'qPrime',   depth: 0.70, enabled: true },
+        { id: 'rt-' + (routeSeq++), src: 'lfo2', dst: 'm',      op: 'qDivisor', depth: 0.65, enabled: true }
+      ];
+      selectedRouteId = routes[0].id;
+      if (typeof document !== 'undefined') renderSourcesUI();
     }
 
     renderMatrixUI();
@@ -1011,6 +1181,7 @@
         short: l.short,
         wave: l.wave,
         ratio: l.ratio,
+        clef: clamp(Math.round(l.clef || 0), -4, 4),
         phaseOff: l.phaseOff || 0,
         color: l.color
       });
@@ -1071,6 +1242,7 @@
           short: typeof sl.short === 'string' && sl.short ? sl.short : ('L' + (i + 1)),
           wave: (sl.wave === 'sine' || sl.wave === 'tri' || sl.wave === 'saw' || sl.wave === 'sq') ? sl.wave : 'sine',
           ratio: (typeof sl.ratio === 'number' && isFinite(sl.ratio) && sl.ratio > 0) ? sl.ratio : 1,
+          clef: (typeof sl.clef === 'number' && isFinite(sl.clef)) ? clamp(Math.round(sl.clef), -4, 4) : 0,
           phaseOff: (typeof sl.phaseOff === 'number' && isFinite(sl.phaseOff)) ? sl.phaseOff : 0,
           color: typeof sl.color === 'string' && sl.color ? sl.color : LFO_COLORS[i % LFO_COLORS.length]
         });
@@ -1176,6 +1348,7 @@
           short: 'L' + (idx + 1),
           wave: 'sq',
           ratio: 3,
+          clef: 0,
           phaseOff: 0,
           color: LFO_COLORS[idx % LFO_COLORS.length]
         });
@@ -1202,6 +1375,18 @@
     renderMatrixUI();
   }
 
+  function setLfoClef(lfoId, clef) {
+    var c = clamp(Math.round(Number(clef) || 0), -4, 4);
+    for (var i = 0; i < lfos.length; i++) {
+      if (lfos[i].id === lfoId) {
+        lfos[i].clef = c;
+        if (typeof document !== 'undefined') renderSourcesUI();
+        return c;
+      }
+    }
+    return 0;
+  }
+
   Harmony.ModMatrix = {
     TARGETS: TARGETS,
     OPERATORS: OPERATORS,
@@ -1216,9 +1401,14 @@
     addRoute: addOrActivateRoute,
     applyPreset: applyMatrixPreset,
     getRoutes: function () { return routes.slice(); },
+    getLfos: function () { return lfos.map(function (l) { return Object.assign({}, l); }); },
+    setLfoClef: setLfoClef,
+    getLiveRates: function () { return Object.assign({}, liveRates); },
+    getSourceValues: function () { return Object.assign({}, srcValues); },
     exportState: exportState,
     importState: importState,
     evalWave: evalWave,
+    evalWaveDeriv: evalWaveDeriv,
     applyOperator: applyOperator
   };
 

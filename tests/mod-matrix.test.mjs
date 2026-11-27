@@ -216,3 +216,124 @@ test('ModMatrix exportState and importState round-trip LFOs, routes, and baseVal
 
   ModMatrix.clearRoutes();
 });
+
+test('Stage 2: Per-LFO Clef register (2^clef) scales LFO phase rate and persists in exportState/importState', () => {
+  const st = {
+    r: 1.0, rIn: 0.5, archimedesZNorm: 0, orderN: 19, phaseRad: 0,
+    f: 1, amp: 1, K: 6, a: 0.5, b: 3, n: 3, m: 2, k: 1,
+    lockVolume: false, lockedR0: 0.96868, archimedesAuto: true,
+    toggles: { animate: false, strobeN: false }
+  };
+
+  ModMatrix.clearRoutes();
+  ModMatrix.captureBase(st);
+  // Set LFO1 (sine, ratio=1) to Clef +2 (4x speed): at playT=1/16, phase=4*(1/16)=0.25 => sin(pi/2)=+1 => phaseDeg=+90°
+  ModMatrix.setLfoClef('lfo1', 2);
+  ModMatrix.addRoute('lfo1', 'phaseDeg', 'linear', 0.5);
+  ModMatrix.evaluate(st, 1 / 16, 0);
+  assert.ok(Math.abs((st.phaseRad * 180 / Math.PI) - 90) < 1e-6, 'Clef +2 quadruples LFO1 rate');
+
+  // Export & import preserves clef = +2 and restores cleanly
+  const snap = ModMatrix.exportState();
+  assert.equal(snap.lfos[0].clef, 2);
+  ModMatrix.setLfoClef('lfo1', 0);
+  ModMatrix.importState(snap, st);
+  assert.equal(ModMatrix.getLfos()[0].clef, 2);
+
+  // Reset LFO1 clef to 0
+  ModMatrix.setLfoClef('lfo1', 0);
+  ModMatrix.clearRoutes();
+});
+
+test('Stage 2: Target-aware Key-Signature operators (Prime Key, Divisor Key, Just / Modal) land dead-center on exact lattices', () => {
+  const st = {
+    r: 1.0, rIn: 0.5, archimedesZNorm: 0, orderN: 19, phaseRad: 0,
+    f: 1, amp: 1, K: 6, a: 0.5, b: 3, n: 3, m: 2, k: 1,
+    lockVolume: false, lockedR0: 0.96868, archimedesAuto: true,
+    toggles: { animate: false, strobeN: true }
+  };
+
+  // 1. Prime Key on Order N: every sampled point across full cycle is strictly prime!
+  ModMatrix.clearRoutes();
+  ModMatrix.setLfoClef('lfo1', 0);
+  ModMatrix.captureBase(st);
+  ModMatrix.addRoute('lfo1', 'orderN', 'qPrime', 0.8);
+  const seenPrimes = new Set();
+  for (let i = 0; i < 32; i++) {
+    ModMatrix.evaluate(st, i / 32, 0);
+    assert.equal(Engine.isPrimeInt(st.orderN), true, `orderN=${st.orderN} must be strictly prime`);
+    seenPrimes.add(st.orderN);
+  }
+  assert.ok(seenPrimes.size >= 5, 'Prime Key walks multiple distinct prime orders');
+
+  // 2. Divisor Key on Ratio m with composite Order N = 12: lands strictly on divisors of 12 in [1..8]
+  ModMatrix.clearRoutes();
+  st.orderN = 12;
+  st.m = 3;
+  ModMatrix.captureBase(st);
+  ModMatrix.addRoute('lfo1', 'm', 'qDivisor', 1.0);
+  const seenDivs = new Set();
+  for (let j = 0; j < 24; j++) {
+    ModMatrix.evaluate(st, j / 24, 0);
+    assert.equal(12 % st.m, 0, `m=${st.m} must divide Order N=12`);
+    seenDivs.add(st.m);
+  }
+  assert.ok(seenDivs.size >= 4, 'Divisor Key walks multiple exact divisors of 12');
+
+  // 3. Just / Modal Key on Cavity r: every step locks the Guitar Tuner dead-center (0¢ ★ LOCK)!
+  ModMatrix.clearRoutes();
+  st.r = 1.0;
+  st.rIn = 0.5;
+  ModMatrix.captureBase(st);
+  ModMatrix.addRoute('lfo1', 'rIn', 'qJust', 0.4);
+  for (let q = 0; q < 24; q++) {
+    ModMatrix.evaluate(st, q / 24, 0);
+    const tun = Engine.tunerReadout(st, q / 24, { mode: 'ratio' });
+    assert.equal(tun.locked, true, `qJust step rIn=${st.rIn} should lock tuner (cents=${tun.cents})`);
+    assert.ok(Math.abs(tun.cents) < 0.5, `qJust step detuneCents=${tun.cents} near 0¢`);
+  }
+
+  ModMatrix.clearRoutes();
+});
+
+test('Stage 2: Vessel Calculus taps (tap_detune & tap_dV) and Tuner Sweep / Prime Gears presets work deterministically', () => {
+  const st = {
+    r: 1.0, rIn: 0.45, archimedesZNorm: 0, orderN: 19, phaseRad: 0,
+    f: 1, amp: 1, K: 6, a: 0.5, b: 3, n: 3, m: 2, k: 1,
+    lockVolume: false, lockedR0: Engine.cbrt(1 - 0.45 ** 3), archimedesAuto: true,
+    toggles: { animate: false, strobeN: false }
+  };
+
+  // At default R=1.0, rIn=0.45 (+182¢ detuned), tap_detune saturates to +1.0 and drives Phase sympathetically
+  ModMatrix.clearRoutes();
+  ModMatrix.captureBase(st);
+  ModMatrix.addRoute('tap_detune', 'phaseDeg', 'linear', 0.5);
+  ModMatrix.evaluate(st, 0.25, 0);
+  assert.ok(Math.abs((st.phaseRad * 180 / Math.PI) - 90) < 1e-4, 'tap_detune (+1.0) at 50% depth bends phase to +90°');
+
+  // Unlocked breathing LFO1 -> rIn produces nonzero tap_dV; enabling Lock V zeros dV/V and tap_dV!
+  ModMatrix.clearRoutes();
+  st.r = 1.0; st.rIn = 0.5; st.phaseRad = 0; st.lockVolume = false;
+  ModMatrix.captureBase(st);
+  ModMatrix.addRoute('lfo1', 'rIn', 'linear', 0.25);
+  ModMatrix.addRoute('tap_dV', 'phaseDeg', 'linear', 0.5);
+  ModMatrix.evaluate(st, 0.0, 0); // sine derivative at t=0 is +2*pi (max expansion velocity!)
+  assert.ok(Math.abs(ModMatrix.getLiveRates().dVOverV) > 0.5, 'unlocked LFO->rIn generates live nonzero dV/V');
+  assert.ok(Math.abs(ModMatrix.getSourceValues().tap_dV) > 0.4, 'tap_dV carries live bounded vessel rate');
+
+  // Enable Lock V => analytical dR = eta^2 * dr cancels dV to 0!
+  st.lockVolume = true;
+  st.lockedR0 = Engine.cbrt(1 - 0.5 ** 3);
+  ModMatrix.evaluate(st, 0.0, 0);
+  assert.equal(ModMatrix.getLiveRates().isLockedV, true);
+  assert.ok(Math.abs(ModMatrix.getSourceValues().tap_dV) < 1e-6, 'Lock V zeros tap_dV analytically');
+
+  // Verify new Matrix Presets: primeGears and tunerSweep
+  ModMatrix.applyPreset('primeGears');
+  ModMatrix.evaluate(st, 0.2, 0);
+  assert.equal(Engine.isPrimeInt(st.orderN), true, 'primeGears keeps Order N prime');
+
+  ModMatrix.setLfoClef('lfo1', 0);
+  ModMatrix.setLfoClef('lfo2', 0);
+  ModMatrix.clearRoutes();
+});
