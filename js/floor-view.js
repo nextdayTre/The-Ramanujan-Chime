@@ -62,9 +62,42 @@
     return tempRowsPool;
   }
 
+  var tankRippleHandler = null;
+  var tankDiscGeom = null;
+  var tankDragging = false;
+  var tankOffCv = null;
+  var tankOffCtx = null;
+  var tankImgData = null;
+
+  function fireTankPointer(ev) {
+    if (!tankRippleHandler || !tankDiscGeom || !canvas) return;
+    var rect = canvas.getBoundingClientRect();
+    var px = ev.clientX - rect.left;
+    var py = ev.clientY - rect.top;
+    var nx = (px - tankDiscGeom.cx) / tankDiscGeom.rad;
+    var nz = (py - tankDiscGeom.cy) / tankDiscGeom.rad;
+    if (nx * nx + nz * nz <= 0.96) {
+      tankRippleHandler(nx, nz);
+    }
+  }
+
   function init(el) {
     canvas = el;
     ctx = el ? el.getContext('2d') : null;
+    if (canvas && !canvas._tankBound) {
+      canvas._tankBound = true;
+      canvas.addEventListener('pointerdown', function (ev) {
+        if (!tankDiscGeom) return;
+        tankDragging = true;
+        fireTankPointer(ev);
+      });
+      window.addEventListener('pointermove', function (ev) {
+        if (tankDragging) fireTankPointer(ev);
+      });
+      window.addEventListener('pointerup', function () {
+        tankDragging = false;
+      });
+    }
   }
 
   function ensureAudioCtx() {
@@ -958,6 +991,128 @@
     }
   }
 
+  function drawTankView(state, field, w, h, harmor) {
+    ctx.fillStyle = harmor ? '#000000' : '#070b11';
+    ctx.fillRect(0, 0, w, h);
+
+    var rad = Math.max(24, Math.min(h * 0.43, w * 0.22));
+    var cx = rad + 12;
+    var cy = h * 0.52;
+    tankDiscGeom = { cx: cx, cy: cy, rad: rad };
+
+    var N = field.tankSize || 0;
+    var grid = field.tankGrid;
+    var vGrid = field.tankVelGrid;
+    var mask = field.tankMask;
+    var rhoMap = field.tankRho;
+    var eta = field.eta || 0;
+
+    if (N > 0 && grid && mask) {
+      if (!tankOffCv || tankOffCv.width !== N) {
+        tankOffCv = document.createElement('canvas');
+        tankOffCv.width = N;
+        tankOffCv.height = N;
+        tankOffCtx = tankOffCv.getContext('2d');
+        tankImgData = tankOffCtx.createImageData(N, N);
+      }
+      var px = tankImgData.data;
+      for (var k = 0; k < N * N; k++) {
+        var o = k * 4;
+        if (!mask[k]) { px[o] = px[o + 1] = px[o + 2] = px[o + 3] = 0; continue; }
+        var val = grid[k];
+        var spd = vGrid ? Math.min(1, Math.abs(vGrid[k]) * 4.2) : 0;
+        var inCav = eta > 0.01 && rhoMap && rhoMap[k] <= eta;
+        var pos = Math.max(0, Math.min(1, val * 1.25));
+        var neg = Math.max(0, Math.min(1, -val * 1.25));
+        if (harmor) {
+          var lum = Math.min(1, (pos + neg) * 0.92 + spd * 0.55);
+          px[o] = Math.round(18 * pos + 60 * spd);
+          px[o + 1] = Math.round((inCav ? 36 : 14) + 218 * lum);
+          px[o + 2] = Math.round(35 * neg + 95 * spd);
+          px[o + 3] = 255;
+        } else {
+          px[o] = Math.min(255, Math.round((inCav ? 34 : 12) + 228 * neg + 95 * spd + 30 * pos));
+          px[o + 1] = Math.min(255, Math.round((inCav ? 18 : 26) + 215 * pos + 130 * spd + 35 * neg));
+          px[o + 2] = Math.min(255, Math.round((inCav ? 36 : 46) + 210 * pos + 110 * neg + 70 * spd));
+          px[o + 3] = 255;
+        }
+      }
+      tankOffCtx.putImageData(tankImgData, 0, 0);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.clip();
+      ctx.drawImage(tankOffCv, cx - rad, cy - rad, rad * 2, rad * 2);
+      ctx.restore();
+    }
+
+    // Center z=0 line, Helix chord, Inner Cavity ring, Outer Rim
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(cx - rad, cy); ctx.lineTo(cx + rad, cy); ctx.stroke();
+    ctx.setLineDash([]);
+    if (field.tankHelixAngle) {
+      var hx = Math.cos(field.tankHelixAngle) * rad, hy = Math.sin(field.tankHelixAngle) * rad;
+      ctx.strokeStyle = 'rgba(255,209,102,0.72)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(cx - hx, cy - hy); ctx.lineTo(cx + hx, cy + hy); ctx.stroke();
+    }
+    if (eta > 0.01) {
+      ctx.strokeStyle = harmor ? '#00ff66' : '#ff6b7a';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(cx, cy, rad * eta, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.strokeStyle = field.tankBoundary === 'wavefold' ? '#ffd166' : (harmor ? '#39ff14' : '#4df3dd');
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+
+    // Right side: Live Front f(x) Center Slice Displacement u(x,0) + Propagation Delta du/dt
+    var sx0 = cx + rad + 16;
+    var sw = w - sx0 - 10;
+    if (sw > 40) {
+      var midY = h * 0.54;
+      var ampY = h * 0.36;
+      if (eta > 0.01) {
+        var cavW = sw * eta;
+        ctx.fillStyle = harmor ? 'rgba(0,255,102,0.08)' : 'rgba(255,107,122,0.09)';
+        ctx.fillRect(sx0 + (sw - cavW) * 0.5, 16, cavW, h - 22);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.beginPath(); ctx.moveTo(sx0, midY); ctx.lineTo(sx0 + sw, midY); ctx.stroke();
+
+      var act = field.activeSlice;
+      var vel = field.activeVel;
+      var B = act ? act.length : 0;
+      if (vel && B > 1) {
+        ctx.fillStyle = harmor ? 'rgba(0,255,102,0.22)' : 'rgba(110,231,160,0.22)';
+        ctx.beginPath();
+        ctx.moveTo(sx0, midY);
+        for (var vi = 0; vi < B; vi++) {
+          var vx = sx0 + (vi / (B - 1)) * sw;
+          var vy = midY - Math.max(-0.95, Math.min(0.95, vel[vi] * 4.5)) * ampY;
+          ctx.lineTo(vx, vy);
+        }
+        ctx.lineTo(sx0 + sw, midY);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if (act && B > 1) {
+        ctx.strokeStyle = harmor ? '#39ff14' : '#4df3dd';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        for (var ai = 0; ai < B; ai++) {
+          var ax = sx0 + (ai / (B - 1)) * sw;
+          var ay = midY - Math.max(-0.95, Math.min(0.95, act[ai] * 1.15)) * ampY;
+          if (ai === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = harmor ? '#6ee7a0' : '#8495ad';
+      ctx.font = '600 9.5px "Cascadia Code", Consolas, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Click/drag disc to drop ripples · Front u(x,0) & ∂u/∂t [' + (field.tankBoundary === 'wavefold' ? 'WAVEFOLD' : 'OSMOSIS') + ']', sx0, 3);
+    }
+  }
+
   function update(state, field) {
     if (!canvas || !ctx || !field) return;
     var w = canvas.clientWidth, h = canvas.clientHeight;
@@ -970,6 +1125,11 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     var harmor = !!(state.toggles && state.toggles.harmorVoid);
+    if (field.mode === 'tank' && state.floorScopeView !== 'bitwave' && state.floorScopeView !== 'pcm') {
+      drawTankView(state, field, w, h, harmor);
+      return;
+    }
+    tankDiscGeom = null;
     if (state.floorScopeView === 'pcm') {
       drawPcmGroove(state, field, w, h, harmor);
       return;
@@ -1126,6 +1286,7 @@
   Harmony.FloorView = {
     init: init,
     update: update,
+    setTankRippleHandler: function (fn) { tankRippleHandler = (typeof fn === 'function') ? fn : null; },
     getAudioOptions: getAudioOptions,
     loadAudioFile: loadAudioFile,
     toggleFilePlay: toggleFilePlay,

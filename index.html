@@ -1046,6 +1046,7 @@
             <div class="segmented compact-seg" role="group" aria-label="Floor visual mode">
               <button type="button" class="seg-btn floor-mode-btn active" data-fmode="wavetable" title="GitWave-style 3D volumetric wavetable oscillator seated on the cutaway floor">3D Wavetable</button>
               <button type="button" class="seg-btn floor-mode-btn" data-fmode="spectrogram" title="MiniMeters-style 2D center equalizer with 3D cavity dispersion">MiniMeters 3D</button>
+              <button type="button" class="seg-btn floor-mode-btn" data-fmode="tank" title="Stage 5B: CFL-stable 2D Viscoelastic Eikonal Wave Tank (c_in/c_out = α = R/r) — click/drag the 2D disc below to drop ripples!">Eikonal Tank</button>
             </div>
             <label class="mod-scrub-ctl" title="Vertical amplitude / height of the 3D floor">
               <span>Depth</span>
@@ -1093,6 +1094,21 @@
             <button type="button" id="btnFloorMic" class="mini-btn floor-audio-btn" title="Feed live microphone audio into the MiniMeters 3D Spectrogram floor">Mic</button>
             <button type="button" id="btnFloorBwToggle" class="mini-btn floor-bw-btn" title="Read-only BitWave register feed (#bw= share link, .bitwave JSON, hex register, or 2nd-tab BroadcastChannel)">BW Feed</button>
           </div>
+        </div>
+
+        <!-- Inline Stage 5B Viscoelastic Eikonal Tank Strip (hidden unless Eikonal Tank mode is active) -->
+        <div id="floorTankBar" class="floor-tank-bar mono" hidden>
+          <span class="floor-tank-badge">EIKONAL 2D</span>
+          <div class="segmented compact-seg" role="group" aria-label="Tank outer boundary">
+            <button type="button" class="seg-btn floor-tank-bnd active" data-tbnd="osmosis" title="Open absorbing sponge rim (Harmonic Osmosis)">Osmosis</button>
+            <button type="button" class="seg-btn floor-tank-bnd" data-tbnd="wavefold" title="Reflective Neumann rim + passive C¹ sine wavefolder">Wavefold</button>
+          </div>
+          <button type="button" id="btnFloorTankRefract" class="mini-btn floor-tank-ref active" title="Two-medium refractive speed ratio c_in / c_out = α = R/r across cavity ring ρ = η">Refract c<sub>in</sub>=&alpha;&middot;c<sub>out</sub></button>
+          <button type="button" id="btnFloorTankRipple" class="mini-btn floor-tank-pulse" title="Drop a Gaussian ripple into the hollow cavity">Drop Ripple</button>
+          <button type="button" id="btnFloorTankClear" class="mini-btn" title="Quiet the viscoelastic wave tank">Clear</button>
+          <span class="floor-tank-stat">A<sub>2D</sub>=<b id="floorTankAreaOut">2.51</b></span>
+          <span class="floor-tank-stat">Trans=<b id="floorTankTransOut">0%</b></span>
+          <span class="floor-tank-stat">|&part;u/&part;t|=<b id="floorTankVelOut">0.000</b></span>
         </div>
 
         <!-- Inline MP3 Transport Strip (shown automatically when an audio file is loaded) -->

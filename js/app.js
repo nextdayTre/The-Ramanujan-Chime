@@ -71,7 +71,9 @@
     bowCrystallize: false, // Stage 5A (§5.7) live 4-Bit Violin Bow -> BitWave hex crystallizer
     archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
     archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
-    floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D)
+    floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D) | 'tank' (Stage 5B Eikonal Tank)
+    tankBoundary: 'osmosis',// Stage 5B 'osmosis' | 'wavefold'
+    tankRefractive: true,   // Stage 5B c_in / c_out = alpha = R/r refraction across cavity ring
     floorDepth: 0.68,      // §10 3D floor height/amplitude
     floorSmooth: 0.52,     // §10 smoothing (wavetable) or 3D dispersion spread (spectrogram)
     floorSize: 0.94,       // §10 floor footprint proportion inside outer sphere R
@@ -509,6 +511,10 @@
         ModMatrix.clearRoutes();
       }
       state.toggles.floorWt = false;
+      state.floorMode = 'wavetable';
+      state.tankBoundary = 'osmosis';
+      state.tankRefractive = true;
+      if (floorTank && typeof floorTank.reset === 'function') floorTank.reset();
       if (FloorView && typeof FloorView.stopAudio === 'function') FloorView.stopAudio();
       if (typeof syncFloorUI === 'function') syncFloorUI();
       if (typeof setTheatreMode === 'function' && !IS_POPOUT) {
@@ -1787,10 +1793,20 @@
   });
   renderGuideUI();
 
-  // ---- §10 Cutaway Floor 3D Wavetable & MiniMeters 3D Spectrogram Controls ----
+  // ---- §10 Cutaway Floor 3D Wavetable, MiniMeters 3D Spectrogram & Stage 5B Eikonal Tank ----
+  var floorTank = null;
+  function ensureFloorTank() {
+    if (!floorTank && Engine && typeof Engine.createViscoelasticTank === 'function') {
+      floorTank = Engine.createViscoelasticTank({ size: 56 });
+      floorTank.injectPulse(0, 0, 1.15, 0.11);
+    }
+    return floorTank;
+  }
+
   function syncFloorUI() {
     var on = !!(state.toggles && state.toggles.floorWt);
     var isSpec = state.floorMode === 'spectrogram';
+    var isTank = state.floorMode === 'tank';
     var enBtn = $('btnFloorEnable');
     if (enBtn) {
       enBtn.classList.toggle('active', on);
@@ -1802,13 +1818,20 @@
     document.querySelectorAll('.floor-mode-btn[data-fmode]').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-fmode') === state.floorMode);
     });
-    if ($('floorSmoothLbl')) $('floorSmoothLbl').textContent = isSpec ? 'Disp' : 'Smooth';
-    if ($('floorModeTag')) $('floorModeTag').textContent = isSpec ? 'MINIMETERS 3D' : 'WAVETABLE';
+    if ($('floorTankBar')) $('floorTankBar').hidden = !isTank;
+    document.querySelectorAll('.floor-tank-bnd[data-tbnd]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-tbnd') === (state.tankBoundary || 'osmosis'));
+    });
+    if ($('btnFloorTankRefract')) $('btnFloorTankRefract').classList.toggle('active', state.tankRefractive !== false);
+    if ($('floorSmoothLbl')) $('floorSmoothLbl').textContent = isSpec ? 'Disp' : (isTank ? 'Visc' : 'Smooth');
+    if ($('floorModeTag')) $('floorModeTag').textContent = isSpec ? 'MINIMETERS 3D' : (isTank ? 'EIKONAL TANK' : 'WAVETABLE');
     if ($('floorScopeTitle')) {
       if (state.floorScopeView === 'bitwave') {
         $('floorScopeTitle').innerHTML = 'BitWave 2D Register &mdash; Monotone-Cubic Spline (0x8 Zero-Crossing)';
       } else if (state.floorScopeView === 'pcm') {
         $('floorScopeTitle').innerHTML = 'RX 11-Style 2D PCM Needle Groove &mdash; Constant Cavity &amp; Zoom T';
+      } else if (isTank) {
+        $('floorScopeTitle').innerHTML = '2D Viscoelastic Eikonal Tank (Click/Drag Ripples) &amp; Propagation &part;u/&part;t';
       } else {
         $('floorScopeTitle').innerHTML = isSpec
           ? '2D MiniMeters Equalizer &mdash; Center 2D f(x) Slice &amp; 3D Cavity Dispersion'
@@ -1850,7 +1873,12 @@
     if ($('floorModeTag')) {
       $('floorModeTag').textContent = field.sourceLabel && field.sourceLabel !== 'SYNTH'
         ? field.sourceLabel
-        : (field.mode === 'spectrogram' ? 'MINIMETERS 3D' : 'WAVETABLE');
+        : (field.mode === 'spectrogram' ? 'MINIMETERS 3D' : (field.mode === 'tank' ? 'EIKONAL TANK' : 'WAVETABLE'));
+    }
+    if (field.mode === 'tank' && field.tankMetrics) {
+      if ($('floorTankAreaOut') && field.slice2d) $('floorTankAreaOut').textContent = field.slice2d.A.toFixed(2);
+      if ($('floorTankTransOut')) $('floorTankTransOut').textContent = Math.round((field.tankMetrics.transmissionRatio || 0) * 100) + '%';
+      if ($('floorTankVelOut')) $('floorTankVelOut').textContent = (field.tankMetrics.velRms || 0).toFixed(3);
     }
 
     var twinDec = (state.floorScopeView === 'bitwave' && field.bitwave && field.bitwave.twinDec)
@@ -1944,15 +1972,39 @@
         state.toggles.floorWt = true;
         if (!state.toggles.cutaway) state.toggles.cutaway = true;
       }
-      // Clicking MiniMeters 3D (or switching modes when BitWave has no loaded feed) shows the 2D EQ / Active Slice
-      if (state.floorMode === 'spectrogram' || !(BitWaveFeed && BitWaveFeed.isActive && BitWaveFeed.isActive())) {
+      // Clicking MiniMeters 3D or Eikonal Tank (or switching modes when BitWave has no loaded feed) shows the main 2D scope
+      if (state.floorMode === 'spectrogram' || state.floorMode === 'tank' || !(BitWaveFeed && BitWaveFeed.isActive && BitWaveFeed.isActive())) {
         if (state.floorScopeView === 'bitwave') state.floorScopeView = 'eq';
       }
+      if (state.floorMode === 'tank') ensureFloorTank();
       syncHudToggles();
       syncFloorUI();
       bump();
     });
   });
+  document.querySelectorAll('.floor-tank-bnd[data-tbnd]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.tankBoundary = btn.getAttribute('data-tbnd') === 'wavefold' ? 'wavefold' : 'osmosis';
+      syncFloorUI();
+    });
+  });
+  if ($('btnFloorTankRefract')) {
+    $('btnFloorTankRefract').addEventListener('click', function () {
+      state.tankRefractive = !state.tankRefractive;
+      syncFloorUI();
+    });
+  }
+  if ($('btnFloorTankRipple')) {
+    $('btnFloorTankRipple').addEventListener('click', function () {
+      var tk = ensureFloorTank();
+      if (tk) tk.injectPulse((Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, 1.35, 0.09);
+    });
+  }
+  if ($('btnFloorTankClear')) {
+    $('btnFloorTankClear').addEventListener('click', function () {
+      if (floorTank) floorTank.reset();
+    });
+  }
   if ($('floorDepthSlider')) {
     $('floorDepthSlider').addEventListener('input', function () {
       state.floorDepth = Engine.clamp(parseFloat($('floorDepthSlider').value) || 0.68, 0.15, 1.25);
@@ -2591,6 +2643,9 @@
       collapseLambda: baseOrState('collapseLambda') || 0,
       attractKappa: baseOrState('attractKappa') || 0,
       bowCrystallize: !!state.bowCrystallize,
+      floorMode: state.floorMode || 'wavetable',
+      tankBoundary: state.tankBoundary || 'osmosis',
+      tankRefractive: state.tankRefractive !== false,
       archimedesAuto: state.archimedesAuto !== false,
       archimedesZNorm: state.archimedesZNorm || 0,
       toggles: togglesCopy,
@@ -2653,6 +2708,11 @@
         ? Engine.clamp(patch.attractKappa, 0, 1) : 0;
       state.bowCrystallize = !!patch.bowCrystallize;
       if ($('btnFloorBwBow')) $('btnFloorBwBow').classList.toggle('active', !!state.bowCrystallize);
+      state.floorMode = (patch.floorMode === 'spectrogram' || patch.floorMode === 'tank') ? patch.floorMode : 'wavetable';
+      state.tankBoundary = (patch.tankBoundary === 'wavefold') ? 'wavefold' : 'osmosis';
+      state.tankRefractive = patch.tankRefractive !== false;
+      if (state.floorMode === 'tank') ensureFloorTank();
+      if (typeof syncFloorUI === 'function') syncFloorUI();
       state.archimedesAuto = patch.archimedesAuto !== false;
       if (typeof patch.archimedesZNorm === 'number' && isFinite(patch.archimedesZNorm)) {
         state.archimedesZNorm = Engine.clamp(patch.archimedesZNorm, -1, 1);
@@ -4026,7 +4086,15 @@
     TimeSeries.init($('timeseries'));
     Harmonics2D.init($('harmonicSpecCanvas'), $('ramanujanCanvas'));
     Frobenius.init($('frobPhasor'), $('frobCountCanvas'));
-    if (FloorView && typeof FloorView.init === 'function') FloorView.init($('floorViewCanvas'));
+    if (FloorView && typeof FloorView.init === 'function') {
+      FloorView.init($('floorViewCanvas'));
+      if (typeof FloorView.setTankRippleHandler === 'function') {
+        FloorView.setTankRippleHandler(function (nx, nz) {
+          var tk = ensureFloorTank();
+          if (tk) tk.injectPulse(nx, nz, 1.35, 0.085);
+        });
+      }
+    }
 
     applyFrobMode();
     if (!restoreFromHash()) {
@@ -4149,8 +4217,14 @@
       runBowCrystallizeStep(false);
     }
     if ((state.toggles.floorWt || state.activeTab === 'floorwt') && Engine.floorField) {
-      var audioOpts = (FloorView && FloorView.getAudioOptions) ? FloorView.getAudioOptions(state) : null;
-      floorFieldData = Engine.floorField(state, state.playT, audioOpts || undefined);
+      if (state.floorMode === 'tank' && typeof Engine.projectTankToFloorField === 'function') {
+        floorFieldData = Engine.projectTankToFloorField(ensureFloorTank(), state, state.playT, {
+          step: !!(state.toggles.animate && !state.staticMode)
+        });
+      } else {
+        var audioOpts = (FloorView && FloorView.getAudioOptions) ? FloorView.getAudioOptions(state) : null;
+        floorFieldData = Engine.floorField(state, state.playT, audioOpts || undefined);
+      }
     }
 
     // Always render Hero 3D Sphere + Zoom Lens (when open) + Multi-Chime Front f(x) Rack/Menu (when active)

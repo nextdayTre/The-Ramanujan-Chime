@@ -2374,6 +2374,199 @@
     };
   }
 
+  // Stage 5B: Project a live 2D Viscoelastic Eikonal Tank directly onto the 3D Cutaway Floor schema
+  // consumed by Scene3D.updateFloorWt() and FloorView.update().
+  function projectTankToFloorField(tank, state, playT, opts) {
+    state = state || {};
+    opts = opts || {};
+    var slices = clamp(Math.round(opts.slices || 28), 8, 48);
+    var bins = clamp(Math.round(opts.bins || 72), 24, 128);
+    var R = Math.max(0.1, Number(state.r != null ? state.r : 1));
+    var rIn = clamp(Number(state.rIn != null ? state.rIn : 0), 0, R * 0.99);
+    var eta = rIn / R;
+    var alpha = eta > 0.01 ? (R / rIn) : 1;
+    var size = clamp(Number(opts.size != null ? opts.size : (state.floorSize != null ? state.floorSize : 0.94)), 0.45, 1.0);
+    var depth = clamp(Number(opts.depth != null ? opts.depth : (state.floorDepth != null ? state.floorDepth : 0.68)), 0.15, 1.25);
+    var smooth = clamp(Number(opts.smooth != null ? opts.smooth : (state.floorSmooth != null ? state.floorSmooth : 0.52)), 0, 1);
+    var rEff = R * size;
+    var zSpan = rEff * 0.94;
+    var boundary = (opts.boundary || state.tankBoundary) === 'wavefold' ? 'wavefold' : 'osmosis';
+    var refractive = (opts.refractive != null ? opts.refractive : (state.tankRefractive !== false));
+    var viscosity = opts.viscosity != null ? Number(opts.viscosity) : (0.004 + smooth * 0.11);
+    var driveGain = opts.driveGain != null ? Number(opts.driveGain) : 0.16;
+
+    // Derive continuous chord drive from Collapse/BitWave, Ghost Cross-Chime Diff (A-B), or active trajectory
+    var driveLine = opts.driveLine;
+    var sourceTag = 'EIKONAL TANK';
+    if (!driveLine) {
+      driveLine = new Float32Array(64);
+      var f = (state.f != null) ? state.f : 1;
+      var ph = state.phaseRad || 0;
+      var shift = frac(Number(playT || 0));
+      var cp = state._lastCollapseProfile;
+      var pts = state.points;
+      var gPts = (state.toggles && state.toggles.ghostRef) ? state.ghostPoints : null;
+
+      if (cp && cp.attracted && cp.attracted.length >= 16) {
+        sourceTag = 'TANK · BITWAVE';
+        for (var d0 = 0; d0 < 64; d0++) {
+          var ci = Math.floor(((d0 / 64 + shift) % 1) * cp.attracted.length);
+          driveLine[d0] = Math.fround(cp.attracted[ci]);
+        }
+      } else if (gPts && gPts.length >= 16 && pts && pts.length >= 16) {
+        sourceTag = 'TANK · A−B DIFF';
+        for (var d1 = 0; d1 < 64; d1++) {
+          var u1 = (d1 / 64 + shift) % 1;
+          var pA = pts[Math.floor(u1 * pts.length)];
+          var pB = gPts[Math.floor(u1 * gPts.length)];
+          var yA = (pA && pA.valid) ? (pA.y / R) : 0;
+          var yB = (pB && pB.valid) ? (pB.y / R) : 0;
+          driveLine[d1] = Math.fround(clamp(yA - yB, -1.5, 1.5));
+        }
+      } else if (pts && pts.length >= 16) {
+        for (var d2 = 0; d2 < 64; d2++) {
+          var p0 = pts[Math.floor(((d2 / 64 + shift) % 1) * pts.length)];
+          driveLine[d2] = Math.fround((p0 && p0.valid) ? clamp(p0.y / R, -1.5, 1.5) : 0);
+        }
+      } else {
+        for (var d3 = 0; d3 < 64; d3++) {
+          driveLine[d3] = Math.fround(Math.sin(TAU * (f * (d3 / 63) + shift) + ph));
+        }
+      }
+    }
+
+    var helixAngle = opts.helixAngle != null
+      ? Number(opts.helixAngle)
+      : (state.helicalTurbine ? (TAU * frac(Number(playT || 0))) : 0);
+
+    if (tank && opts.step !== false) {
+      tank.step({
+        eta: eta,
+        refractive: refractive,
+        boundary: boundary,
+        viscosity: viscosity,
+        driveLine: driveLine,
+        driveGain: driveGain,
+        helixAngle: helixAngle
+      });
+    }
+
+    var gridN = tank ? tank.size : 48;
+    var uField = tank ? tank.getField() : new Float32Array(gridN * gridN);
+    var vField = tank ? tank.getVelocity() : new Float32Array(gridN * gridN);
+
+    function sampleGrid(arr, nx, nz) {
+      var gx = clamp((nx + 1) * 0.5 * (gridN - 1), 0, gridN - 1.001);
+      var gz = clamp((nz + 1) * 0.5 * (gridN - 1), 0, gridN - 1.001);
+      var i0 = Math.floor(gx), j0 = Math.floor(gz);
+      var fx = gx - i0, fz = gz - j0;
+      var o00 = j0 * gridN + i0;
+      var a = arr[o00] * (1 - fx) + arr[o00 + 1] * fx;
+      var b = arr[o00 + gridN] * (1 - fx) + arr[o00 + gridN + 1] * fx;
+      return a * (1 - fz) + b * fz;
+    }
+
+    var rows = new Array(slices);
+    var velRows = new Array(slices);
+    var rowZ = new Float32Array(slices);
+    var rowHalfW = new Float32Array(slices);
+    var rowInCavity = new Uint8Array(slices);
+    var activeSlice = new Float32Array(bins);
+    var activeVel = new Float32Array(bins);
+    var eqCenter = new Float32Array(bins);
+    var tiltLine = new Float32Array(bins);
+
+    for (var s = 0; s < slices; s++) {
+      var vz = slices > 1 ? ((s / (slices - 1)) * 2 - 1) : 0;
+      var z = vz * zSpan;
+      var halfW = Math.sqrt(Math.max(0.01, rEff * rEff - z * z));
+      rowZ[s] = Math.fround(z);
+      rowHalfW[s] = Math.fround(halfW);
+      rowInCavity[s] = (rIn > 0.01 && Math.abs(z) <= rIn) ? 1 : 0;
+
+      var rRow = new Float32Array(bins);
+      var vRow = new Float32Array(bins);
+      var nz = z / Math.max(1e-4, rEff);
+      for (var b = 0; b < bins; b++) {
+        var ux = bins > 1 ? ((b / (bins - 1)) * 2 - 1) : 0;
+        var nx = (ux * halfW) / Math.max(1e-4, rEff);
+        rRow[b] = Math.fround(sampleGrid(uField, nx, nz) * depth);
+        vRow[b] = Math.fround(sampleGrid(vField, nx, nz) * depth);
+      }
+      rows[s] = rRow;
+      velRows[s] = vRow;
+    }
+
+    var peakBin = 0, peakAbs = -1;
+    for (var ab = 0; ab < bins; ab++) {
+      var ux0 = bins > 1 ? ((ab / (bins - 1)) * 2 - 1) : 0;
+      var val0 = sampleGrid(uField, ux0, 0) * depth;
+      var vel0 = sampleGrid(vField, ux0, 0) * depth;
+      activeSlice[ab] = Math.fround(val0);
+      activeVel[ab] = Math.fround(vel0);
+      eqCenter[ab] = Math.fround(clamp(Math.abs(vel0) * 3.5, 0, 1));
+      tiltLine[ab] = Math.fround(clamp(Math.abs(val0), 0, 1));
+      if (Math.abs(val0) > peakAbs) { peakAbs = Math.abs(val0); peakBin = ab; }
+    }
+
+    var res = sphereResonance(state, playT);
+    var slice2d = sliceCalculus2D(state);
+    var tankMetrics = tank ? tank.metrics(eta) : { steps: 0, energyTotal: 0, energyCavity: 0, energyShell: 0, transmissionRatio: 0, velRms: 0, peakAbs: 0 };
+    var bpm = clamp(opts.bpm || state.floorBpm || 120, 40, 240);
+    var windowBeats = clamp(opts.windowBeats || state.floorBeats || 4, 0.25, 16);
+    var windowSec = state.floorZoomLog != null ? floorZoomSec(state.floorZoomLog) : ((60 * windowBeats) / bpm);
+    var peakFreqHz = 98.0 * Math.max(0.5, state.f || 1);
+
+    return {
+      mode: 'tank',
+      R: R,
+      rIn: rIn,
+      rEff: Math.fround(rEff),
+      eta: eta,
+      alpha: alpha,
+      size: size,
+      depth: depth,
+      smooth: smooth,
+      slices: slices,
+      bins: bins,
+      zSpan: Math.fround(zSpan),
+      activeZNorm: 0,
+      activeZ: 0,
+      rows: rows,
+      velRows: velRows,
+      rowZ: rowZ,
+      rowHalfW: rowHalfW,
+      rowInCavity: rowInCavity,
+      activeSlice: activeSlice,
+      activeVel: activeVel,
+      eqCenter: eqCenter,
+      tiltLine: tiltLine,
+      peakBin: peakBin,
+      pitch: freqToNoteCents(peakFreqHz),
+      syzygy: res.syzygy,
+      bpm: bpm,
+      windowBeats: windowBeats,
+      windowSec: Math.fround(windowSec),
+      cavityWindowSec: Math.fround(windowSec * eta),
+      floorVelocity: Math.fround((2 * R) / Math.max(1e-4, windowSec)),
+      dynamics: null,
+      hasLookahead: false,
+      sourceLabel: sourceTag,
+      bitwave: null,
+      tankBoundary: boundary,
+      tankRefractive: refractive,
+      tankViscosity: Math.fround(viscosity),
+      tankHelixAngle: Math.fround(helixAngle),
+      tankMetrics: tankMetrics,
+      slice2d: slice2d,
+      tankSize: gridN,
+      tankGrid: uField,
+      tankVelGrid: vField,
+      tankMask: tank ? tank.getMask() : null,
+      tankRho: tank ? tank.getRho() : null
+    };
+  }
+
   // ---- Stage 4b-1: Real Spherical Harmonics Y_l^m (l = 0..4, 25 Orthonormal Bands),
   //      Hollow-Shell Multipole Transfer (T_l = eta^l) & Graph Laplacian Conductive Wireframe ----
 
@@ -4132,6 +4325,7 @@
       cavalieriVolume: cavalieriVolume,
       crossChimeSlice: crossChimeSlice,
       createViscoelasticTank: createViscoelasticTank,
+      projectTankToFloorField: projectTankToFloorField,
       SH_BAND_META: SH_BAND_META,
       sphericalHarmonicBasis25: sphericalHarmonicBasis25,
       sphericalHarmonicReal: sphericalHarmonicReal,

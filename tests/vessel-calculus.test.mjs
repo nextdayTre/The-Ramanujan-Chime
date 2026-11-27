@@ -646,3 +646,40 @@ test('Stage 4b-2 (§5.7): fourBitLockInYaw verifies bow area, -3 dB (R/sqrt(2)) 
   assert.equal(comb.gcd, 3);
   assert.equal(comb.subOrder, 5);
 });
+
+test('Stage 5B: projectTankToFloorField bridges Viscoelastic Tank into 28x72 Floor WT schema & Ghost A-B diff drive', () => {
+  const tank = Engine.createViscoelasticTank({ size: 40 });
+  tank.injectPulse(0, 0, 1.2, 0.12);
+  const st = {
+    r: 1.0, rIn: 0.5, f: 1.5, phaseRad: 0,
+    floorMode: 'tank', tankBoundary: 'osmosis', tankRefractive: true,
+    floorDepth: 0.7, floorSmooth: 0.3, floorSize: 0.94, floorZoomLog: 0.72,
+    helicalTurbine: true,
+    toggles: { animate: true, floorWt: true, ghostRef: false }
+  };
+
+  // Step 1: active synth drive produces 28x72 finite rows + velRows + non-zero tankMetrics
+  const f1 = Engine.projectTankToFloorField(tank, st, 0.25, { step: true });
+  assert.equal(f1.mode, 'tank');
+  assert.equal(f1.slices, 28);
+  assert.equal(f1.bins, 72);
+  assert.equal(f1.rows.length, 28);
+  assert.equal(f1.rows[14].length, 72);
+  assert.equal(f1.velRows.length, 28);
+  assert.ok(f1.tankMetrics.steps === 1 && f1.tankMetrics.energyTotal > 0.1);
+  assert.ok(f1.slice2d && Math.abs(f1.slice2d.A - Math.PI * 0.75) < 1e-6);
+
+  // Step 2: static frame (step: false) does not advance tank step count
+  const fStatic = Engine.projectTankToFloorField(tank, st, 0.25, { step: false });
+  assert.equal(fStatic.tankMetrics.steps, 1);
+
+  // Step 3: Ghost Ref active switches drive label to cross-Chime A-B Diff
+  const ptsA = Array.from({ length: 32 }, (_, i) => ({ x: 0, y: Math.sin((i / 32) * Math.PI * 2), z: 0, valid: true }));
+  const ptsB = Array.from({ length: 32 }, (_, i) => ({ x: 0, y: Math.cos((i / 32) * Math.PI * 2), z: 0, valid: true }));
+  st.points = ptsA;
+  st.ghostPoints = ptsB;
+  st.toggles.ghostRef = true;
+  const fDiff = Engine.projectTankToFloorField(tank, st, 0.3, { step: true });
+  assert.equal(fDiff.sourceLabel, 'TANK · A−B DIFF');
+  assert.equal(fDiff.tankMetrics.steps, 2);
+});

@@ -686,6 +686,25 @@
     return [Math.min(1, cr), Math.min(1, cg), Math.min(1, cb)];
   }
 
+  // Viscoelastic Eikonal Tank ramp: cyan positive crest, coral negative trough, gold propagation velocity shimmer
+  function tankRgb(yNorm, velNorm, inCavity, harmor) {
+    var pos = Math.max(0, Math.min(1, yNorm * 1.35));
+    var neg = Math.max(0, Math.min(1, -yNorm * 1.35));
+    var spd = Math.max(0, Math.min(1, Math.abs(velNorm) * 4.5));
+    if (harmor) {
+      var lum = Math.min(1, (pos + neg) * 0.92 + spd * 0.55);
+      return [0.06 * pos + 0.24 * spd, (inCavity ? 0.20 : 0.10) + 0.90 * lum, 0.14 * neg + 0.35 * spd];
+    }
+    var baseR = inCavity ? 0.18 : 0.06;
+    var baseG = inCavity ? 0.10 : 0.14;
+    var baseB = inCavity ? 0.22 : 0.28;
+    return [
+      Math.min(1, baseR + 0.88 * neg + 0.42 * spd + 0.14 * pos),
+      Math.min(1, baseG + 0.84 * pos + 0.52 * spd + 0.16 * neg),
+      Math.min(1, baseB + 0.82 * pos + 0.44 * neg + 0.28 * spd)
+    ];
+  }
+
   function updateFloorWt(playT, state, field) {
     if (!floorWtGroup) return;
     var on = !!(state.toggles && state.toggles.floorWt);
@@ -700,11 +719,12 @@
     var S = field.slices, B = field.bins;
     var R = field.R;
     var isSpec = field.mode === 'spectrogram';
+    var isTank = field.mode === 'tank';
     var harmor = !!(state.toggles && state.toggles.harmorVoid);
-    var yScale = isSpec ? (R * 0.68) : (R * 0.36);
+    var yScale = isSpec ? (R * 0.68) : (isTank ? (R * 0.42) : (R * 0.36));
 
-    floorSurfaceMesh.material.opacity = isSpec ? 0.74 : 0.66;
-    floorWireLines.material.opacity = isSpec ? 0.38 : 0.54;
+    floorSurfaceMesh.material.opacity = isSpec ? 0.74 : (isTank ? 0.78 : 0.66);
+    floorWireLines.material.opacity = isSpec ? 0.38 : (isTank ? 0.48 : 0.54);
 
     // 1. Update 3D Floor Surface vertices & vertex colors
     for (var s = 0; s < S; s++) {
@@ -712,6 +732,7 @@
       var halfW = field.rowHalfW[s];
       var inCav = field.rowInCavity[s] === 1;
       var row = field.rows[s];
+      var vRow = (isTank && field.velRows) ? field.velRows[s] : null;
       var depthFade = S > 1 ? (s / (S - 1)) : 1;
 
       for (var b = 0; b < B; b++) {
@@ -723,9 +744,12 @@
         floorSurfPos[vi + 1] = y;
         floorSurfPos[vi + 2] = z;
 
+        var invD = 1 / Math.max(0.25, field.depth);
         var rgb = isSpec
-          ? miniMetersRgb(u, row[b] / Math.max(0.25, field.depth), harmor)
-          : wavetableRgb(row[b] / Math.max(0.25, field.depth), inCav, depthFade, harmor);
+          ? miniMetersRgb(u, row[b] * invD, harmor)
+          : (isTank
+            ? tankRgb(row[b] * invD, vRow ? (vRow[b] * invD) : 0, inCav, harmor)
+            : wavetableRgb(row[b] * invD, inCav, depthFade, harmor));
         floorSurfCol[vi]     = rgb[0];
         floorSurfCol[vi + 1] = rgb[1];
         floorSurfCol[vi + 2] = rgb[2];
