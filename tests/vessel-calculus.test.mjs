@@ -309,3 +309,60 @@ test('Stage 2: Engine.tunerReadout computes exact Ratio locks, Chromatic Note + 
   assert.equal(deepSent.cents, 0);
   assert.equal(deepSent.note.octave, -48);
 });
+
+test('Stage 3: Diatonic modal Conjugate (P̄) involutions verify Dorian palindrome & Ionian <-> Phrygian', () => {
+  const dor = Engine.diatonicModeConjugate('dorian');
+  assert.equal(dor.isPalindrome, true);
+  assert.equal(dor.conjugateMode, 'dorian');
+  assert.deepEqual(dor.steps, dor.reversedSteps);
+
+  const ion = Engine.diatonicModeConjugate('ionian');
+  const phr = Engine.diatonicModeConjugate('phrygian');
+  assert.equal(ion.conjugateMode, 'phrygian');
+  assert.equal(phr.conjugateMode, 'ionian');
+  assert.deepEqual(ion.reversedSteps, phr.steps);
+
+  assert.equal(Engine.diatonicModeConjugate('lydian').conjugateMode, 'locrian');
+  assert.equal(Engine.diatonicModeConjugate('aeolian').conjugateMode, 'mixolydian');
+});
+
+test('Stage 3: Clockwork coupling detects Adler gear-lock vs phase-slip & Osmosis coherence', () => {
+  // Two identical in-phase chimes => 100% Osmosis coherence & 2/2 gear lock
+  const lockCpl = Engine.clockworkCoupling([
+    { key: 'A', r: 1.0, rIn: 0.5, f: 1, orderN: 12, phaseRad: 0, twinMode: 'both' },
+    { key: 'B', r: 1.0, rIn: 0.5, f: 2, orderN: 18, phaseRad: 0, twinMode: 'both' }
+  ], 0);
+  assert.equal(lockCpl.lockedCount, 2);
+  assert.equal(lockCpl.orderGcd, 6);
+  assert.equal(lockCpl.orderLcm, 36);
+  assert.equal(lockCpl.regime, 'osmosis');
+  close(lockCpl.coherence, 1.0, 1e-6, 'in-phase chimes yield 100% osmosis coherence');
+
+  // Detuned second chime (R=1.13 => ~211¢ detuned from 1:1) => Adler phase_slip with nonzero slipRate
+  const slipCpl = Engine.clockworkCoupling([
+    { key: 'A', r: 1.0, rIn: 0.5, f: 1, orderN: 19, phaseRad: 0, twinMode: 'both' },
+    { key: 'B', r: 1.13, rIn: 0.5, f: 1, orderN: 23, phaseRad: 0, twinMode: 'both' }
+  ], 0, { couplingK: 15 });
+  assert.equal(slipCpl.cavities[1].state, 'phase_slip');
+  assert.ok(slipCpl.cavities[1].slipRate > 10, 'detuned cavity slips outside Arnold tongue');
+  assert.equal(slipCpl.gearedPairs, 0, 'coprime 19 & 23 act as independent CRT tumblers');
+  assert.equal(slipCpl.orderLcm, 19 * 23);
+});
+
+test('Stage 3: Pollard-ρ 1x/2x cycle-lock detector catches hexagonal poles (t=1/6) & composite Order-N factors', () => {
+  // Continuous 1x vs 2x lock: sin(4*pi*t) === sin(2*pi*t) at t = 0, 1/6, 1/2, 5/6
+  for (const tLock of [0, 1 / 6, 0.5, 5 / 6]) {
+    const rho = Engine.pollardRhoSlice({ r: 1, rIn: 0.5, orderN: 19 }, tLock);
+    assert.equal(rho.continuousLock, true, `1x/2x tortoise-hare locks at t=${tLock}`);
+    assert.ok(rho.continuousGap < 1e-5);
+  }
+  // Midpoint t = 0.25: sin(pi/2)=1 vs sin(pi)=0 => gap = 1.0 (not locked)
+  const mid = Engine.pollardRhoSlice({ r: 1, rIn: 0.5, orderN: 19 }, 0.25);
+  assert.equal(mid.continuousLock, false);
+  close(mid.continuousGap, 1.0, 1e-5, 'tortoise-hare gap=1 at t=0.25');
+
+  // Composite Order N = 15 at t = 1/3 => tortoise=5, hare=10 => |10-5|=5 => gcd(5, 15)=5 factor hit!
+  const comp = Engine.pollardRhoSlice({ r: 1, rIn: 0.5, orderN: 15 }, 1 / 3);
+  assert.equal(comp.hasCompositeFactor, true);
+  assert.equal(comp.factorHit, 5);
+});

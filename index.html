@@ -613,6 +613,7 @@
 
         <div class="res-slice-ctl mono" data-mod-target="archimedesZNorm" title="Drag any modulator handle (•) here to modulate z(t), or use Slice z(t) as a source tap in 5 · Mod &amp; Logic">
           <button type="button" id="btnArchAuto" class="mag-chip active" title="Sweep axial slice z automatically with oscillator playhead">Auto z(t)</button>
+          <button type="button" id="btnArchHelix" class="mag-chip" title="Helical Turbine rotation &amp; 1&times;/2&times; Pollard-&rho; cycle-lock detector on Auto z(t)">Helix</button>
           <span class="mod-badges" data-mod-badges="archimedesZNorm"></span>
           <div class="slider-wrap res-slider-wrap">
             <div class="mod-range-bar" data-mod-bar="archimedesZNorm"></div>
@@ -655,6 +656,16 @@
               <button type="button" class="seg-btn stage-view-btn" data-sview="menu">All Chimes</button>
             </div>
           </div>
+        </div>
+        <div id="chimeBusBar" class="chime-bus-bar mono" title="Parallel Perspective Master Bus (B(t) = Σ O_j(P_j)) · Adler gear locks · CRT lcm closure">
+          <span class="cbb-item"><span>BUS</span> <b id="rackBusVol">V=0.00</b></span>
+          <span class="cbb-item cbb-coh">
+            <span>OSMOSIS</span>
+            <span class="cbb-meter"><i id="rackBusCohFill" style="width:100%"></i></span>
+            <b id="rackBusCohOut">100%</b>
+          </span>
+          <span class="cbb-item"><span>GEARS</span> <b id="rackBusGears">1/1 LOCK</b></span>
+          <span id="rackBusRegime" class="cbb-regime osmosis">OSMOSIS</span>
         </div>
         <div class="chime-rack-body">
           <div id="chimeRackCards" class="chime-rack-cards"></div>

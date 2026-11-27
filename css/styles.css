@@ -927,6 +927,11 @@ body.harmor-void .viewport {
   border-color: rgba(110, 231, 160, 0.68);
   color: #6ee7a0;
 }
+#btnArchHelix.active {
+  background: rgba(255, 209, 102, 0.2);
+  border-color: rgba(255, 209, 102, 0.65);
+  color: #ffd166;
+}
 .res-slice-ctl input[type=range] {
   flex: 1;
   height: 12px;
@@ -3615,6 +3620,81 @@ body.harmor-void .chime-overlay { background: #000000; }
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+}
+
+/* ---- Stage 3: ChimeRack Clockwork Master Bus Strip ---- */
+.chime-bus-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 12px;
+  background: rgba(9, 14, 22, 0.94);
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+body.harmor-void .chime-bus-bar {
+  background: #000000;
+  border-bottom-color: rgba(0, 255, 102, 0.25);
+}
+.cbb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cbb-item > span:first-child {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #6e7f96;
+}
+.cbb-item b { color: var(--text); font-weight: 600; }
+.cbb-item b.is-null { color: #ff5ca8; }
+.cbb-meter {
+  width: 68px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: inline-block;
+}
+.cbb-meter i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #36d6c8, #6ee7a0);
+  border-radius: 999px;
+  transition: width 0.08s linear;
+}
+body.harmor-void .cbb-meter i { background: #00ff66; }
+.cbb-regime {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--line-2);
+}
+.cbb-regime.osmosis {
+  color: #6ee7a0;
+  background: rgba(110, 231, 160, 0.14);
+  border-color: rgba(110, 231, 160, 0.55);
+}
+.cbb-regime.coupled {
+  color: #4df3dd;
+  background: rgba(77, 243, 221, 0.12);
+  border-color: rgba(77, 243, 221, 0.45);
+}
+.cbb-regime.wavefold {
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.14);
+  border-color: rgba(255, 209, 102, 0.52);
+}
+.cbb-regime.bus_null {
+  color: #ff5ca8;
+  background: rgba(255, 92, 168, 0.16);
+  border-color: rgba(255, 92, 168, 0.58);
 }
 
 /* ---- Side-by-Side Front f(x) Chime Rack ---- */

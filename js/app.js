@@ -65,6 +65,7 @@
     clefRoundM: 0,         // Movable C-Clef Round octave for Ratio m (m_eff = m · 2^clefRoundM)
     lcsReduce: false,      // Lowest-Common-Structure Period-1 gcd reduction for active (n, m, k)
     tunerMode: 'ratio',    // Stage 2 hairline vessel tuner mode: 'ratio' (V^(2) alpha) | 'note' (chromatic + Sentinel σ)
+    helicalTurbine: false, // Stage 3 optional rotating Helical Turbine & 1x/2x Pollard-rho lock detector on Auto z(t)
     archimedesAuto: true,  // §3.3 Archimedes axial slice auto-sweep vs manual z scrubber
     archimedesZNorm: 0,    // Manual axial slice z / R in [-1, 1]
     floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D)
@@ -458,6 +459,8 @@
       state.clefRoundM = 0;
       state.lcsReduce = false;
       state.tunerMode = 'ratio';
+      state.helicalTurbine = false;
+      if ($('btnArchHelix')) $('btnArchHelix').classList.remove('active');
       var targetPreset = (d && d.presetIndex != null) ? d.presetIndex : 12;
       applyPreset(targetPreset);
       if (d) {
@@ -911,6 +914,13 @@
     $('btnArchAuto').addEventListener('click', function () {
       state.archimedesAuto = !state.archimedesAuto;
       $('btnArchAuto').classList.toggle('active', !!state.archimedesAuto);
+      bump();
+    });
+  }
+  if ($('btnArchHelix')) {
+    $('btnArchHelix').addEventListener('click', function () {
+      state.helicalTurbine = !state.helicalTurbine;
+      $('btnArchHelix').classList.toggle('active', !!state.helicalTurbine);
       bump();
     });
   }
@@ -2508,6 +2518,7 @@
       clefRoundM: state.clefRoundM || 0,
       lcsReduce: !!state.lcsReduce,
       tunerMode: state.tunerMode || 'ratio',
+      helicalTurbine: !!state.helicalTurbine,
       archimedesAuto: state.archimedesAuto !== false,
       archimedesZNorm: state.archimedesZNorm || 0,
       toggles: togglesCopy,
@@ -2562,6 +2573,8 @@
       state.clefRoundM = Engine.clamp(Math.round(patch.clefRoundM || 0), 0, 12);
       state.lcsReduce = !!patch.lcsReduce;
       state.tunerMode = (patch.tunerMode === 'note') ? 'note' : 'ratio';
+      state.helicalTurbine = !!patch.helicalTurbine;
+      if ($('btnArchHelix')) $('btnArchHelix').classList.toggle('active', !!state.helicalTurbine);
       state.archimedesAuto = patch.archimedesAuto !== false;
       if (typeof patch.archimedesZNorm === 'number' && isFinite(patch.archimedesZNorm)) {
         state.archimedesZNorm = Engine.clamp(patch.archimedesZNorm, -1, 1);
@@ -3292,6 +3305,26 @@
     g.arc(cx, cy, 3.3, 0, Math.PI * 2);
     g.fill();
 
+    // 4b. Stage 3 Pollard-ρ 2x Hare Cursor when Helical Turbine mode is active
+    if (state.helicalTurbine && Engine.pollardRhoSlice) {
+      var rho = Engine.pollardRhoSlice(state, state.playT);
+      var zHare = rho.zHare * R;
+      var aOutH = Math.PI * Math.max(0, R * R - zHare * zHare);
+      var aInH = (res.cavityActive && Math.abs(zHare) <= rIn) ? (Math.PI * Math.max(0, rIn * rIn - zHare * zHare)) : 0;
+      var hx = xForZ(zHare);
+      var hy = yForArea(aOutH - aInH);
+      g.strokeStyle = rho.locked ? '#ffd166' : 'rgba(255, 92, 168, 0.72)';
+      g.lineWidth = rho.locked ? 1.6 : 1;
+      g.beginPath();
+      g.moveTo(hx, padTop);
+      g.lineTo(hx, padTop + plotH);
+      g.stroke();
+      g.fillStyle = rho.locked ? '#ffd166' : '#ff5ca8';
+      g.beginPath();
+      g.arc(hx, hy, rho.locked ? 3.8 : 2.6, 0, Math.PI * 2);
+      g.fill();
+    }
+
     // 5. Axis labels (-R, -r, +r, +R)
     g.fillStyle = '#8b9bb0';
     g.font = '9px "Cascadia Code", Consolas, monospace';
@@ -3419,11 +3452,18 @@
 
     var archBadge = $('resArchBadge');
     if (archBadge) {
+      var rhoTag = '';
+      if (state.helicalTurbine && Engine.pollardRhoSlice) {
+        var rhoNow = Engine.pollardRhoSlice(state, state.playT);
+        if (rhoNow.locked) {
+          rhoTag = rhoNow.hasCompositeFactor ? (' · ρ÷' + rhoNow.factorHit) : ' · ρ-LOCK';
+        }
+      }
       if (res.slice.inCavitySpan) {
-        archBadge.textContent = 'CONST π(R²−r²) = ' + res.slice.areaRing.toFixed(2);
+        archBadge.textContent = 'CONST π(R²−r²) = ' + res.slice.areaRing.toFixed(2) + rhoTag;
         archBadge.className = 'arch-chip plateau';
       } else {
-        archBadge.textContent = 'CAP π(R²−z²) = ' + res.slice.areaRing.toFixed(2);
+        archBadge.textContent = 'CAP π(R²−z²) = ' + res.slice.areaRing.toFixed(2) + rhoTag;
         archBadge.className = 'arch-chip cap';
       }
     }

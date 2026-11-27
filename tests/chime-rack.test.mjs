@@ -31,4 +31,25 @@ describe('Harmony.ChimeRack — Multi-Chime Front f(x) Rack & Visual Menu', () =
       assert.equal(res.points.length, 129);
     }
   });
+
+  it('Stage 3: computeRackCoupling couples active slots A..C via LCS gcd/lcm, Adler locks & Parallel Bus', () => {
+    const slots = {
+      A: AgentCore.snapshotFromPreset(12),
+      B: AgentCore.snapshotFromPreset(12, { tw: 'antipodal' }),
+      C: AgentCore.snapshotFromPreset(9, { orderN: 24 })
+    };
+    const cpl = ChimeRack.computeRackCoupling(slots, ['A', 'B', 'C'], 'A', null, 0);
+    assert.equal(cpl.count, 3);
+    assert.equal(cpl.orderGcd, 8, 'gcd(16, 16, 24) === 8');
+    assert.equal(cpl.orderLcm, 48, 'lcm(16, 16, 24) === 48');
+    assert.equal(cpl.cavities[1].busOp, '-P', 'antipodal twin slot maps to -P null send on Master Bus');
+    assert.equal(cpl.cavities[0].gearLocked, true);
+    assert.equal(cpl.cavities[1].gearLocked, true);
+
+    // Pure antipodal pair (A = +P, B = -P, identical geometry) nulls the Master Bus identically!
+    const nullCpl = ChimeRack.computeRackCoupling(slots, ['A', 'B'], 'A', null, 0.25);
+    assert.equal(nullCpl.bus.isBusNull, true);
+    assert.equal(nullCpl.regime, 'bus_null');
+    assert.equal(nullCpl.coherence, 0);
+  });
 });

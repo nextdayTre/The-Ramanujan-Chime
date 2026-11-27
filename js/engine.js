@@ -1780,6 +1780,215 @@
     return nearestInLattice(candVal, lattice);
   }
 
+  // ---- Stage 3: Clockwork Multi-Cavity Coupling, Diatonic Mirror & Pollard-ρ Helical Turbine ----
+
+  // Diatonic modes under Conjugate Twin (P̄ / Negative Harmony) involution (docs/VESSEL-CALCULUS.md §5.5)
+  var DIATONIC_MODES = {
+    ionian:     { name: 'Ionian',     steps: [2, 2, 1, 2, 2, 2, 1], conjugate: 'phrygian',   palindrome: false },
+    dorian:     { name: 'Dorian',     steps: [2, 1, 2, 2, 2, 1, 2], conjugate: 'dorian',     palindrome: true  },
+    phrygian:   { name: 'Phrygian',   steps: [1, 2, 2, 2, 1, 2, 2], conjugate: 'ionian',     palindrome: false },
+    lydian:     { name: 'Lydian',     steps: [2, 2, 2, 1, 2, 2, 1], conjugate: 'locrian',    palindrome: false },
+    mixolydian: { name: 'Mixolydian', steps: [2, 2, 1, 2, 2, 1, 2], conjugate: 'aeolian',    palindrome: false },
+    aeolian:    { name: 'Aeolian',    steps: [2, 1, 2, 2, 1, 2, 2], conjugate: 'mixolydian', palindrome: false },
+    locrian:    { name: 'Locrian',    steps: [1, 2, 2, 1, 2, 2, 2], conjugate: 'lydian',     palindrome: false }
+  };
+
+  function diatonicModeConjugate(modeKey) {
+    var k = String(modeKey || 'dorian').toLowerCase();
+    var m = DIATONIC_MODES[k];
+    if (!m) return null;
+    var rev = m.steps.slice().reverse();
+    return {
+      mode: k,
+      name: m.name,
+      steps: m.steps.slice(),
+      reversedSteps: rev,
+      conjugateMode: m.conjugate,
+      conjugateName: DIATONIC_MODES[m.conjugate].name,
+      isPalindrome: m.palindrome
+    };
+  }
+
+  function twinModeToBusOp(twinMode) {
+    if (twinMode === 'antipodal') return '-P';
+    if (twinMode === 'conjugate') return 'conj';
+    return 'P';
+  }
+
+  // Clockwork Multi-Cavity Coupling across active ChimeRack slots (A..H):
+  //   - Shared LCS gcd / CRT lcm combination-lock closure across cavity Order N values
+  //   - Adler injection phase-locking (dphi/dt = dw - K*sin(phi)) -> GEAR LOCK vs PHASE SLIP
+  //   - Parallel Master Bus summation via Engine.parallelVesselBus + Harmonic Osmosis coherence
+  function clockworkCoupling(chimes, playT, opts) {
+    opts = opts || {};
+    var list = Array.isArray(chimes) ? chimes : [];
+    var t = Number(playT || 0);
+    var couplingK = opts.couplingK != null ? Math.max(0.01, Number(opts.couplingK)) : 18.0; // cents Arnold-tongue capture half-width
+
+    if (!list.length) {
+      return {
+        count: 0,
+        orderGcd: 1,
+        orderLcm: 1,
+        lockedCount: 0,
+        gearedPairs: 0,
+        coherence: 1,
+        regime: 'osmosis',
+        bus: parallelVesselBus([]),
+        cavities: []
+      };
+    }
+
+    var refIdx = (opts.refIndex != null && list[opts.refIndex]) ? opts.refIndex : 0;
+    var ref = list[refIdx];
+    var refR = Math.max(0.05, Number(ref.r != null ? ref.r : 1));
+    var refF = Math.max(0.1, Number(ref.f != null ? ref.f : 1));
+    var refOmega = refF / refR;
+
+    var orders = [];
+    var sends = [];
+    var sumVolMag = 0;
+    var cavities = [];
+    var lockedCount = 0;
+
+    for (var i = 0; i < list.length; i++) {
+      var ch = list[i] || {};
+      var R = Math.max(0.05, Number(ch.r != null ? ch.r : 1));
+      var rIn = clamp(Number(ch.rIn != null ? ch.rIn : 0), 0, R);
+      var f = Math.max(0.1, Number(ch.f != null ? ch.f : 1));
+      var ordN = Math.max(2, Math.round(Number(ch.orderN != null ? ch.orderN : 16)));
+      var ph = Number(ch.phaseRad != null ? ch.phaseRad : (((ch.ph || 0) * PI) / 180));
+      var tw = ch.twinMode || ch.tw || 'both';
+      var busOp = twinModeToBusOp(tw);
+
+      orders.push(ordN);
+
+      // Relative frequency ratio vs reference cavity (octave-folded into [1, 2) for harmonic gear check)
+      var omega = f / R;
+      var rawRatio = omega / Math.max(1e-6, refOmega);
+      var folded = rawRatio;
+      while (folded >= 2.0) folded *= 0.5;
+      while (folded < 1.0) folded *= 2.0;
+      var nearest = nearestHarmonicRatio(folded);
+      var detuneCents = (i === refIdx) ? 0 : nearest.detuneCents;
+
+      // Adler's Equation (Arnold Tongue): |dw| <= K => gear tooth clicks into lock (dphi/dt = 0)
+      var absCents = Math.abs(detuneCents);
+      var gearLocked = (i === refIdx) || (absCents <= couplingK);
+      if (gearLocked) lockedCount++;
+      var slipRate = gearLocked ? 0 : Math.sqrt(Math.max(0, absCents * absCents - couplingK * couplingK));
+      var osmosis = clamp(Math.exp(-Math.pow(absCents / Math.max(1, couplingK * 2), 2)), 0, 1);
+
+      var V = UNIT_SPHERE_V0 * (R * R * R - rIn * rIn * rIn);
+      sumVolMag += Math.abs(V);
+
+      var theta = TAU * f * t + ph;
+      sends.push({
+        R: R,
+        rIn: rIn,
+        dR: Number(ch.dR || 0),
+        dr: Number(ch.dr || 0),
+        theta: theta,
+        dTheta: TAU * f,
+        weight: 1,
+        op: busOp
+      });
+
+      cavities.push({
+        key: ch.key || String.fromCharCode(65 + i),
+        orderN: ordN,
+        busOp: busOp,
+        twinMode: tw,
+        V: Math.fround(V),
+        ratioText: (i === refIdx) ? '1:1' : nearest.ratioText,
+        detuneCents: Math.fround(detuneCents),
+        gearLocked: gearLocked,
+        state: gearLocked ? 'gear_lock' : 'phase_slip',
+        slipRate: Math.fround(slipRate),
+        osmosis: Math.fround(osmosis)
+      });
+    }
+
+    var orderGcd = orders[0];
+    var orderLcm = orders[0];
+    for (var j = 1; j < orders.length; j++) {
+      orderGcd = gcd(orderGcd, orders[j]);
+      orderLcm = lcm(orderLcm, orders[j]);
+    }
+    var gearedPairs = 0;
+    for (var a = 0; a < orders.length; a++) {
+      for (var b = a + 1; b < orders.length; b++) {
+        if (gcd(orders[a], orders[b]) > 1) gearedPairs++;
+      }
+    }
+
+    var bus = parallelVesselBus(sends);
+    var coherence = sumVolMag > 1e-9 ? clamp(bus.Vbus / sumVolMag, 0, 1) : 1;
+    var regime = bus.isBusNull
+      ? 'bus_null'
+      : (coherence >= 0.72 && lockedCount === list.length ? 'osmosis' : (coherence < 0.35 ? 'wavefold' : 'coupled'));
+
+    return {
+      count: list.length,
+      orderGcd: orderGcd,
+      orderLcm: orderLcm,
+      lockedCount: lockedCount,
+      gearedPairs: gearedPairs,
+      coherence: Math.fround(coherence),
+      sumVolMag: Math.fround(sumVolMag),
+      regime: regime,
+      bus: bus,
+      cavities: cavities
+    };
+  }
+
+  // 1x/2x Pollard-rho Cycle-Lock Detector & Helical Turbine Rotation on Auto z(t):
+  //   - Continuous tortoise (1x) vs hare (2x): sin(4*pi*t) === sin(2*pi*t) locks at 0, 1/6, 1/2, 5/6 (60° hexagonal poles!)
+  //   - Discrete Order-N ring: tortoise step x_1 vs hare step x_2 detects cycle collisions & composite factors gcd(|x2-x1|, N) > 1
+  function pollardRhoSlice(state, playT) {
+    state = state || {};
+    var t = frac(Number(playT || 0));
+    var N = clamp(Math.round(state.orderN != null ? state.orderN : 19), 3, 96);
+    var R = Math.max(0.05, Number(state.r != null ? state.r : 1));
+    var rIn = clamp(Number(state.rIn != null ? state.rIn : 0), 0, R);
+    var alpha = rIn > 0.005 ? (R / rIn) : 1;
+
+    var zTortoise = Math.sin(TAU * t);
+    var zHare = Math.sin(TAU * 2 * t);
+    var continuousGap = Math.abs(zHare - zTortoise);
+    var continuousLock = continuousGap <= 0.085;
+
+    var step1 = Math.floor(t * N) % N;
+    var step2 = Math.floor(((t * 2) % 1) * N) % N;
+    var diffStep = Math.abs(step2 - step1);
+    var discreteCollision = (diffStep === 0);
+    var factorHit = (diffStep > 0 && diffStep < N) ? gcd(diffStep, N) : 1;
+    var hasCompositeFactor = factorHit > 1 && factorHit < N;
+
+    // Helical turbine twist angle (rotates smoothly with axial scan z(t) and playhead t)
+    var zActive = (state.archimedesAuto !== false)
+      ? zTortoise
+      : clamp(Number(state.archimedesZNorm || 0), -1, 1);
+    var twistTurns = clamp(alpha * 0.5, 0.5, 4.0);
+    var helixAngleRad = TAU * (t + 0.5 * twistTurns * zActive);
+
+    return {
+      t: Math.fround(t),
+      N: N,
+      zTortoise: Math.fround(zTortoise),
+      zHare: Math.fround(zHare),
+      continuousGap: Math.fround(continuousGap),
+      continuousLock: continuousLock,
+      stepTortoise: step1,
+      stepHare: step2,
+      discreteCollision: discreteCollision,
+      factorHit: factorHit,
+      hasCompositeFactor: hasCompositeFactor,
+      locked: continuousLock || discreteCollision,
+      helixAngleRad: Math.fround(helixAngleRad)
+    };
+  }
+
   // Discrete Order N Cyclic Group Strobe:
   // Quantizes the continuous curve into N discrete states P_0 .. P_{N-1},
   // and traces the cyclic subgroup generated by stride g = round(n):
@@ -2725,6 +2934,9 @@
       tunerReadout: tunerReadout,
       keySignatureLattice: keySignatureLattice,
       snapToKeySignature: snapToKeySignature,
+      diatonicModeConjugate: diatonicModeConjugate,
+      clockworkCoupling: clockworkCoupling,
+      pollardRhoSlice: pollardRhoSlice,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,

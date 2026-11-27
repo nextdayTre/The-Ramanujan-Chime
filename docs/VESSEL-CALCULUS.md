@@ -278,6 +278,26 @@ $$\mathcal{B}(t) \;=\; \sum_{j=1}^{K} w_j\,\mathcal{O}_j\big(\mathcal{P}_j(t)\bi
    - The normalized master-bus delta $\dot{\mathcal{B}}/\mathcal{B}$ is smooth and finite everywhere except at an **exact bus null $\mathcal{B}(t) = 0$**, where $\dot{\mathcal{B}}/\mathcal{B}$ has a simple pole — corresponding directly to a $\pi$ phase-inversion / polarity zero-crossing (and IEEE-754 sentinel `0x7F800000` / `0x7FC00000` in the `tan()` / Bit Lab regime).
    - In the pure real-vessel limit ($\theta = 0$), a negative summed volume $V_{\text{bus}} < 0$ remains algebraically valid: it simply represents the **polarity-inverted dual vessel** $R^3 - r^3 = -(r^3 - R^3)$ where cavity and carrier swap roles.
 
+### 5.5 Pressure, Timbre (Harmonic Osmosis vs. Wavefolding) & Diatonic Modal Symmetry
+
+The Vessel Calculus also gives exact physical meaning to **acoustic pressure**, **timbre**, and **musical mode shifts** inside concentric Sentinel layers:
+
+1. **Acoustic Pressure ($\dot{p}$) & Membrane Surface Tension:**
+   In an elastic spherical vessel with bulk modulus $B$, pressure change is literally the negated real part of the master complex-frequency law:
+   $$\dot{p}(t) \;=\; -B\,\frac{\dot{V}(t)}{V(t)} \;=\; -B\left(3\,\frac{\dot{R}}{R} - \frac{3\eta^2}{1 - \eta^3}\,\dot{\eta}\right)$$
+   - Under `Lock V` ($\dot{V} = 0$), net pressure buildup vanishes ($\dot{p} = 0$) — incompressible flow transferring energy smoothly into wall geometry.
+   - When unlocked and compressed ($\dot{V} < 0$), positive pressure presses against the shell boundary, whose Young–Laplace surface tension $\Delta p_{\text{tension}} = \frac{2\gamma}{R} = \frac{16\pi\gamma}{\partial_R^2 V}$ scales directly with the $V^{(2)}$ triad reciprocals (`1/R`, `1/r`, `1/Δ`).
+
+2. **Harmonic Osmosis vs. Surface-Tension Wavefolding (Acoustic Impedance Matching):**
+   Grouping the 64 Sentinel radius octaves into **8 octal bloom tiers** (`8 × 8 = 64`, matching the 8-slot `ChimeRack` `A..H`) splits cavity energy into two exact wave-scattering regimes:
+   - **Harmonic Osmosis (Impedance-Matched Transmission):** When cavities lock to a simple rational ratio (`★ LOCK`, shared `LCS` `gcd > 1`, high Kuramoto/bus coherence), energy transmits cleanly outward across concentric tiers like a centrifugal harmonic bloom.
+   - **Surface-Tension Wavefolding (Impedance Mismatch / Reflection):** When detuned pressure or excess amplitude presses against the boundary without a resonant exit, energy reflects and **folds back inside $[-R, +R]$** — generating Bessel intermodulation sidebands $J_k(\beta)$ (West-Coast wavefolder timbre) and wireframe surface modulation.
+
+3. **Key Signature vs. Diatonic Modes (`Aeolian → Phrygian → Dorian`) under Conjugate Reflection (`P̄`):**
+   Holding the outer Sentinel layers constant fixes the **Key Signature** (the invariant pitch-class container), while modulating inner cavity parameters (`r/R`, `Phase φ`) rotates which internal degree anchors the tonic — walking cleanly across musical modes without rewriting the outer staff. Under **Conjugate Twin `P̄` inversion (Negative Harmony)**, the 7 diatonic modes form exact group involutions:
+   $$\text{Ionian} \leftrightarrow \text{Phrygian}, \qquad \text{Lydian} \leftrightarrow \text{Locrian}, \qquad \text{Mixolydian} \leftrightarrow \text{Aeolian}, \qquad \boxed{\text{Dorian} \leftrightarrow \text{Dorian}}$$
+   Dorian (`2-1-2-2-2-1-2`) is an **exact palindrome**, sitting on the self-conjugate mirror axis just as `1000 ↔ 0001` does on the Four-Bit Orbit.
+
 ---
 
 ## 6. The Unified 3-Axis Master Frame & Scope Boundary

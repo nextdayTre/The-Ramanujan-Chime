@@ -866,24 +866,38 @@
     }
     if (resSliceMesh) resSliceMesh.position.z = sl.z;
 
+    var rho = (state.helicalTurbine && Harmony.engine.pollardRhoSlice)
+      ? Harmony.engine.pollardRhoSlice(state, playT)
+      : null;
+    var hAng = rho ? rho.helixAngleRad : 0;
+
+    if (resSliceMesh) resSliceMesh.rotation.z = hAng;
     if (resSliceOuterRim) {
       resSliceOuterRim.position.z = sl.z;
       resSliceOuterRim.scale.set(rhoOut, rhoOut, 1);
+      resSliceOuterRim.rotation.z = hAng;
     }
     if (resSliceInnerRim) {
       resSliceInnerRim.visible = sl.inCavitySpan && sl.rhoIn > 0.005;
       resSliceInnerRim.position.z = sl.z;
       resSliceInnerRim.scale.set(Math.max(0.001, sl.rhoIn), Math.max(0.001, sl.rhoIn), 1);
+      resSliceInnerRim.rotation.z = hAng;
     }
     if (resSliceSpokes) {
       var r0 = sl.inCavitySpan ? sl.rhoIn : 0;
+      var ca = Math.cos(hAng), sa = Math.sin(hAng);
       var spPos = [
-         r0, 0, sl.z,   rhoOut, 0, sl.z,
-        -r0, 0, sl.z,  -rhoOut, 0, sl.z,
-         0,  r0, sl.z,  0,  rhoOut, sl.z,
-         0, -r0, sl.z,  0, -rhoOut, sl.z
+         r0 * ca,  r0 * sa, sl.z,   rhoOut * ca,  rhoOut * sa, sl.z,
+        -r0 * ca, -r0 * sa, sl.z,  -rhoOut * ca, -rhoOut * sa, sl.z,
+        -r0 * sa,  r0 * ca, sl.z,  -rhoOut * sa,  rhoOut * ca, sl.z,
+         r0 * sa, -r0 * ca, sl.z,   rhoOut * sa, -rhoOut * ca, sl.z
       ];
       resSliceSpokes.geometry.setAttribute('position', new THREE.Float32BufferAttribute(spPos, 3));
+      if (resSliceSpokes.material && resSliceSpokes.material.color) {
+        resSliceSpokes.material.color.setHex(
+          (rho && rho.locked) ? 0xffd166 : (harmor ? 0x00ff66 : 0x6ee7a0)
+        );
+      }
     }
   }
 

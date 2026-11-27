@@ -381,6 +381,16 @@
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
       ctx.fillText('\u03B7=' + eta.toFixed(2) + ' \u00B7 R=' + R.toFixed(2), 8, 7);
+
+      // Stage 3 Clockwork Gear-Lock / Bus Send corner tag
+      var cpl = opts.coupling;
+      if (cpl) {
+        var sendTag = cpl.busOp === '-P' ? '−P' : (cpl.busOp === 'conj' ? 'P̄' : '+P');
+        var gearTxt = (cpl.gearLocked ? '★ ' : '') + cpl.ratioText + ' · ' + sendTag;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = cpl.gearLocked ? (harmor ? '#00ff66' : '#6ee7a0') : '#ffd166';
+        ctx.fillText(gearTxt, w - 8, 7);
+      }
     }
   }
 
@@ -655,6 +665,60 @@
     }
   }
 
+  // Compute Clockwork Multi-Cavity Coupling & Parallel Master Bus across active Rack slots (A..H)
+  function computeRackCoupling(slots, order, activeSlot, liveState, playT) {
+    var Engine = getEngine();
+    if (!Engine || typeof Engine.clockworkCoupling !== 'function' || !slots || !order) return null;
+    var chimes = [];
+    var refIdx = 0;
+    for (var i = 0; i < order.length; i++) {
+      var k = order[i];
+      var isAct = k === activeSlot;
+      var st = isAct && liveState ? liveState : (slots[k] ? buildEvalStateFromSnap(slots[k]) : null);
+      if (!st) continue;
+      if (isAct) refIdx = chimes.length;
+      chimes.push({
+        key: k,
+        r: st.r,
+        rIn: st.rIn,
+        f: st.f,
+        n: st.n,
+        m: st.m,
+        k: st.k,
+        orderN: st.orderN,
+        phaseRad: st.phaseRad,
+        twinMode: st.twinMode
+      });
+    }
+    return Engine.clockworkCoupling(chimes, playT || 0, { refIndex: refIdx });
+  }
+
+  function updateBusBarUI(cpl) {
+    if (!cpl || typeof document === 'undefined') return;
+    var volEl = document.getElementById('rackBusVol');
+    var fillEl = document.getElementById('rackBusCohFill');
+    var cohEl = document.getElementById('rackBusCohOut');
+    var gearEl = document.getElementById('rackBusGears');
+    var regEl = document.getElementById('rackBusRegime');
+
+    if (volEl) {
+      volEl.textContent = cpl.bus.isBusNull ? '★ NULL (0.00)' : ('V=' + cpl.bus.Vbus.toFixed(2));
+      volEl.classList.toggle('is-null', !!cpl.bus.isBusNull);
+    }
+    var pct = Math.round((cpl.coherence || 0) * 100);
+    if (fillEl) fillEl.style.width = pct + '%';
+    if (cohEl) cohEl.textContent = pct + '%';
+    if (gearEl) {
+      var lcmStr = cpl.orderLcm > 9999 ? cpl.orderLcm.toExponential(1) : String(cpl.orderLcm);
+      gearEl.textContent = cpl.lockedCount + '/' + cpl.count + ' LOCK · gcd=' + cpl.orderGcd + ' · lcm=' + lcmStr;
+    }
+    if (regEl) {
+      var labels = { osmosis: 'OSMOSIS', coupled: 'COUPLED', wavefold: 'WAVEFOLD', bus_null: 'BUS NULL' };
+      regEl.textContent = labels[cpl.regime] || 'COUPLED';
+      regEl.className = 'cbb-regime ' + (cpl.regime || 'coupled');
+    }
+  }
+
   // ---- Per-Frame Render Loop Hook (Only runs when currentView !== 'stage') ----
   function update(liveState, livePoints, playT, floorFieldData) {
     if (currentView === 'stage' || typeof document === 'undefined' || !hooks) return;
@@ -664,6 +728,15 @@
 
     if (currentView === 'rack') {
       rebuildRackDOM(false);
+      var order = hooks.getSlotOrder();
+      var coupling = computeRackCoupling(slots, order, activeSlot, liveState, playT);
+      var cplByKey = Object.create(null);
+      if (coupling) {
+        updateBusBarUI(coupling);
+        for (var ci = 0; ci < coupling.cavities.length; ci++) {
+          cplByKey[coupling.cavities[ci].key] = coupling.cavities[ci];
+        }
+      }
       var canvases = document.querySelectorAll('#chimeRackCards canvas[data-chime-canvas]');
       for (var i = 0; i < canvases.length; i++) {
         var cv = canvases[i];
@@ -675,7 +748,8 @@
         drawFrontSphere(cv, st, pts, playT, {
           harmor: harmor,
           compact: false,
-          floorField: isAct ? floorFieldData : null
+          floorField: isAct ? floorFieldData : null,
+          coupling: cplByKey[key] || null
         });
 
         // Keep focused card's inline Phase/r readouts live if modulated by 5 · Mod & Logic!
@@ -767,7 +841,8 @@
       if (currentView === 'menu') rebuildMenuDOM(true);
     },
     drawFrontSphere: drawFrontSphere,
-    buildEvalStateFromSnap: buildEvalStateFromSnap
+    buildEvalStateFromSnap: buildEvalStateFromSnap,
+    computeRackCoupling: computeRackCoupling
   };
 
   Harmony.ChimeRack = api;
