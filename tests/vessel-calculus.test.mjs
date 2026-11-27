@@ -683,3 +683,27 @@ test('Stage 5B: projectTankToFloorField bridges Viscoelastic Tank into 28x72 Flo
   assert.equal(fDiff.sourceLabel, 'TANK · A−B DIFF');
   assert.equal(fDiff.tankMetrics.steps, 2);
 });
+
+test('Stage 5C: conductiveMeshFrame couples 25-band Y_l^m + eta^l transfer into Graph Laplacian wireframe', () => {
+  const graph = Engine.createSphericalWireframeGraph({ subdivisions: 2 });
+  graph.injectDirection(0.577, 0.577, 0.577, 1.2, 0.3);
+  const st = {
+    r: 1.0, rIn: 0.5, amp: 1, f: 1, n: 3, m: 2, k: 1, K: 6, orderN: 19, a: 0.5, b: 3, phaseRad: 0,
+    sentinelOctave: 0, conductiveMode: 'wave', conductiveBoundary: 'osmosis',
+    formulas: { x: 'r*cos(TAU*t)', y: 'r*sin(TAU*t)', z: '0' }
+  };
+
+  const f1 = Engine.conductiveMeshFrame(graph, st, 0.25, { step: true });
+  assert.equal(f1.mode, 'wave');
+  assert.equal(f1.boundary, 'osmosis');
+  assert.equal(f1.metrics.vertexCount, 162);
+  assert.equal(f1.metrics.edgeCount, 480);
+  assert.equal(f1.metrics.steps, 1);
+  assert.ok(f1.metrics.dirichletEnergy > 0, 'pinged conductive mesh has nonzero Dirichlet surface-tension energy');
+  assert.ok(f1.dominantBand && f1.dominantBand.label, 'reports dominant Y_l^m harmonic band');
+  assert.ok(f1.transmissionPct >= 0 && f1.transmissionPct <= 100);
+
+  // Static freeze (step: false) does not advance Graph Laplacian step count
+  const fStatic = Engine.conductiveMeshFrame(graph, st, 0.25, { step: false, spectrum: f1.spectrum });
+  assert.equal(fStatic.metrics.steps, 1);
+});

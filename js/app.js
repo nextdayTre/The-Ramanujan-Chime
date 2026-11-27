@@ -74,6 +74,8 @@
     floorMode: 'wavetable',// §10 'wavetable' (GitWave 3D) | 'spectrogram' (MiniMeters 3D) | 'tank' (Stage 5B Eikonal Tank)
     tankBoundary: 'osmosis',// Stage 5B 'osmosis' | 'wavefold'
     tankRefractive: true,   // Stage 5B c_in / c_out = alpha = R/r refraction across cavity ring
+    conductiveMode: 'wave', // Stage 5C 'wave' | 'diffusion'
+    conductiveBoundary: 'osmosis', // Stage 5C 'osmosis' | 'wavefold'
     floorDepth: 0.68,      // §10 3D floor height/amplitude
     floorSmooth: 0.52,     // §10 smoothing (wavetable) or 3D dispersion spread (spectrogram)
     floorSize: 0.94,       // §10 floor footprint proportion inside outer sphere R
@@ -103,6 +105,7 @@
       quadrayTetra: true,
       resonanceMode: true,
       floorWt: false,
+      conductiveMesh: false,
       harmorVoid: false,
       magnifier: false,
       ghostRef: false,
@@ -511,6 +514,10 @@
         ModMatrix.clearRoutes();
       }
       state.toggles.floorWt = false;
+      state.toggles.conductiveMesh = false;
+      state.conductiveMode = 'wave';
+      state.conductiveBoundary = 'osmosis';
+      if (Scene3D && typeof Scene3D.resetConductive === 'function') Scene3D.resetConductive();
       state.floorMode = 'wavetable';
       state.tankBoundary = 'osmosis';
       state.tankRefractive = true;
@@ -1373,7 +1380,40 @@
     if (refBtn) {
       refBtn.classList.toggle('active', !!state.toggles.refWaves);
     }
+    var condBar = $('conductiveMeshBar');
+    if (condBar) {
+      condBar.hidden = !state.toggles.conductiveMesh;
+    }
+    document.querySelectorAll('.cond-mode-btn[data-cmode]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-cmode') === (state.conductiveMode || 'wave'));
+    });
+    document.querySelectorAll('.cond-bnd-btn[data-cbnd]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-cbnd') === (state.conductiveBoundary || 'osmosis'));
+    });
     if (typeof syncFloorUI === 'function') syncFloorUI();
+  }
+
+  document.querySelectorAll('.cond-mode-btn[data-cmode]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.conductiveMode = btn.getAttribute('data-cmode') === 'diffusion' ? 'diffusion' : 'wave';
+      syncHudToggles();
+    });
+  });
+  document.querySelectorAll('.cond-bnd-btn[data-cbnd]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state.conductiveBoundary = btn.getAttribute('data-cbnd') === 'wavefold' ? 'wavefold' : 'osmosis';
+      syncHudToggles();
+    });
+  });
+  if ($('btnCondPing')) {
+    $('btnCondPing').addEventListener('click', function () {
+      if (Scene3D && typeof Scene3D.pingConductive === 'function') Scene3D.pingConductive();
+    });
+  }
+  if ($('btnCondQuiet')) {
+    $('btnCondQuiet').addEventListener('click', function () {
+      if (Scene3D && typeof Scene3D.resetConductive === 'function') Scene3D.resetConductive();
+    });
   }
 
   document.querySelectorAll('.hud-pill[data-toggle]').forEach(function (btn) {
@@ -2646,6 +2686,8 @@
       floorMode: state.floorMode || 'wavetable',
       tankBoundary: state.tankBoundary || 'osmosis',
       tankRefractive: state.tankRefractive !== false,
+      conductiveMode: state.conductiveMode || 'wave',
+      conductiveBoundary: state.conductiveBoundary || 'osmosis',
       archimedesAuto: state.archimedesAuto !== false,
       archimedesZNorm: state.archimedesZNorm || 0,
       toggles: togglesCopy,
@@ -2711,6 +2753,8 @@
       state.floorMode = (patch.floorMode === 'spectrogram' || patch.floorMode === 'tank') ? patch.floorMode : 'wavetable';
       state.tankBoundary = (patch.tankBoundary === 'wavefold') ? 'wavefold' : 'osmosis';
       state.tankRefractive = patch.tankRefractive !== false;
+      state.conductiveMode = (patch.conductiveMode === 'diffusion') ? 'diffusion' : 'wave';
+      state.conductiveBoundary = (patch.conductiveBoundary === 'wavefold') ? 'wavefold' : 'osmosis';
       if (state.floorMode === 'tank') ensureFloorTank();
       if (typeof syncFloorUI === 'function') syncFloorUI();
       state.archimedesAuto = patch.archimedesAuto !== false;
@@ -4069,6 +4113,10 @@
       state.toggles.harmorVoid = !state.toggles.harmorVoid;
       syncHudToggles();
       bump();
+    } else if (ev.key === 'k' || ev.key === 'K') {
+      state.toggles.conductiveMesh = !state.toggles.conductiveMesh;
+      syncHudToggles();
+      bump();
     } else if (ev.key === 'm' || ev.key === 'M') {
       if (ChimeRack && ChimeRack.getView && ChimeRack.setView) {
         ChimeRack.setView(ChimeRack.getView() === 'rack' ? 'stage' : 'rack');
@@ -4238,6 +4286,13 @@
       } else {
         nullBadge.hidden = true;
       }
+    }
+    var condOut = $('conductiveInfoOut');
+    if (condOut && state.toggles.conductiveMesh && state._lastConductiveInfo) {
+      var ci = state._lastConductiveInfo;
+      condOut.textContent = 'uᵀLu ' + ci.metrics.dirichletEnergy.toFixed(2) +
+        ' · ' + (ci.dominantBand ? ci.dominantBand.label : 'Y0,0') +
+        ' · ηˡ ' + ci.transmissionPct + '%';
     }
     Magnifier2D.update(state, state.playT);
     if (ChimeRack && typeof ChimeRack.update === 'function') {

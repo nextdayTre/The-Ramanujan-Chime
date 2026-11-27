@@ -211,6 +211,23 @@
             </div>
           </div>
         </div>
+
+        <!-- Stage 5C: Conditional Graph Laplacian Conductive Icosphere & Y_l^m Strip (hidden unless Conductive Mesh is ON) -->
+        <div id="conductiveMeshBar" class="conductive-bar mono" hidden>
+          <div class="conductive-bar-row">
+            <div class="segmented compact-seg" role="group" aria-label="Conductive wireframe PDE mode">
+              <button type="button" class="seg-btn cond-mode-btn active" data-cmode="wave" title="Conductive Wave PDE (∂²u = −c²Lu − γ∂u)">Wave</button>
+              <button type="button" class="seg-btn cond-mode-btn" data-cmode="diffusion" title="Heat / Osmosis Diffusion PDE (∂u = −κLu)">Heat</button>
+            </div>
+            <div class="segmented compact-seg" role="group" aria-label="Conductive mesh boundary">
+              <button type="button" class="seg-btn cond-bnd-btn active" data-cbnd="osmosis" title="Open Harmonics Osmosis radiation damping">Osm</button>
+              <button type="button" class="seg-btn cond-bnd-btn" data-cbnd="wavefold" title="Passive C¹ sine wavefolding surface tension">Fold</button>
+            </div>
+            <button type="button" id="btnCondPing" class="mini-btn cond-ping-btn" title="Ping a 3D wave ripple on the conductive icosphere (or Shift+Click anywhere on the 3D sphere!)">Ping</button>
+            <button type="button" id="btnCondQuiet" class="mini-btn" title="Quiet conductive wireframe">0</button>
+          </div>
+          <div id="conductiveInfoOut" class="conductive-info" title="Dirichlet surface-tension energy uᵀLu · Dominant Y_l^m harmonic · η^l outer shell transmission · Shift+Click sphere to ping">u<sup>T</sup>Lu 0.00 &middot; Y0,0 &middot; Shift+Click Ping</div>
+        </div>
       </section>
 
       <!-- 3. Oscillator & Order (Clean sliders — modulation indicators replace inline Ping/Repeat) -->
@@ -447,6 +464,7 @@
           <button type="button" class="hud-pill active" data-toggle="sliceGrid" data-agent-toggle="sliceGrid" title="Internal 2D f(x)/x Cartesian slice grid at z = 0">2D f(x) Grid</button>
           <button type="button" class="hud-pill active" data-toggle="surface" data-agent-toggle="surface">Surface</button>
           <button type="button" class="hud-pill active" data-toggle="wireframe" data-agent-toggle="wireframe">Wire</button>
+          <button type="button" class="hud-pill accent-cyan" data-toggle="conductiveMesh" id="btnConductiveMesh" title="Stage 5C: 162v/480e Graph Laplacian Conductive Mesh &amp; 25-Band Y_l^m (η^l) Struts — Shift+Click sphere to ping 3D waves! (K key)">&#9671; Mesh</button>
           <button type="button" class="hud-pill active" data-toggle="grid" data-agent-toggle="grid">Floor</button>
           <button type="button" class="hud-pill active" data-toggle="axes" data-agent-toggle="axes">Axes</button>
           <button type="button" class="hud-pill active" data-toggle="radiusVec" data-agent-toggle="radiusVec">Vector</button>

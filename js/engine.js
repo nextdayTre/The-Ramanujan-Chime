@@ -3047,6 +3047,54 @@
     };
   }
 
+  // Stage 5C: Pure single-frame step coupling 25-band Y_l^m spectrum + eta^l hollow-shell filter
+  // into the Graph Laplacian conductive icosphere wireframe (shared by Scene3D and Node tests).
+  function conductiveMeshFrame(graph, state, playT, opts) {
+    state = state || {};
+    opts = opts || {};
+    var R = Math.max(0.1, Number(state.r != null ? state.r : 1));
+    var rIn = clamp(Number(state.rIn != null ? state.rIn : 0), 0, R);
+    var eta = rIn / R;
+    var sigma = clamp(Math.round(Number(state.sentinelOctave || 0)), -6, 6);
+    var mode = (opts.mode || state.conductiveMode) === 'diffusion' ? 'diffusion' : 'wave';
+    var boundary = (opts.boundary || state.conductiveBoundary) === 'wavefold' ? 'wavefold' : 'osmosis';
+    var viscosity = opts.viscosity != null ? Number(opts.viscosity) : 0.028;
+    var coupling = opts.coupling != null ? Number(opts.coupling) : 0.09;
+
+    var spec = opts.spectrum || sphericalHarmonicSpectrum(state, { maxL: 4, samples: 128 });
+    var transfer = shellMultipoleTransfer(spec.coeffs, eta, sigma);
+
+    if (graph) {
+      graph.setInnerFromSH(transfer.inner);
+      if (opts.step !== false) {
+        graph.step({
+          mode: mode,
+          boundary: boundary,
+          eta: eta,
+          viscosity: viscosity,
+          coupling: coupling,
+          speed: 0.35,
+          diffusion: 0.075
+        });
+      }
+    }
+    var metrics = graph ? graph.laplacianEnergy() : {
+      steps: 0, vertexCount: 0, edgeCount: 0, faceCount: 0,
+      dirichletEnergy: 0, kineticEnergy: 0, potentialEnergy: 0, totalEnergy: 0, meanVal: 0, peakAbs: 0
+    };
+    return {
+      eta: Math.fround(eta),
+      mode: mode,
+      boundary: boundary,
+      spectrum: spec,
+      transfer: transfer,
+      metrics: metrics,
+      dominantBand: spec.dominantBand,
+      quadrayPct: Math.round((spec.quadrayAlignment || 0) * 100),
+      transmissionPct: Math.round((transfer.transmissionRatio || 0) * 100)
+    };
+  }
+
   // ---- Stage 4b-2 (§§5.6–5.7): Harmor Void Cavity Collapse (lambda), Resonant Attraction (kappa),
   //      & 4-Bit Orbit "Violin Bow" Lock-In / Top-Down Richter-Yaw Extractor ----
 
@@ -4332,6 +4380,7 @@
       sphericalHarmonicSpectrum: sphericalHarmonicSpectrum,
       shellMultipoleTransfer: shellMultipoleTransfer,
       createSphericalWireframeGraph: createSphericalWireframeGraph,
+      conductiveMeshFrame: conductiveMeshFrame,
       cavityCollapseProfile: cavityCollapseProfile,
       fourBitLockInYaw: fourBitLockInYaw,
       twinOf: twinOf,

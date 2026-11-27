@@ -33,6 +33,16 @@
   var floorSurfPos, floorSurfCol, floorWirePos, floorWireCol;
   var floorFrontPos, floorActivePos, floorEqPos, floorEqCol, floorTiltPos;
 
+  // Stage 5C: Opt-in Graph Laplacian Conductive Icosphere Wireframe & Y_l^m Osmosis Struts
+  var conductiveGroup = null;
+  var conductiveGraph = null;
+  var conductiveWireLines = null, conductiveWirePos = null, conductiveWireCol = null;
+  var conductiveStrutLines = null, conductiveStrutPos = null, conductiveStrutCol = null;
+  var conductiveHitSphere = null;
+  var conductiveRaycaster = null;
+  var cachedSHSpectrum = null;
+  var cachedSHDirty = -1;
+
   var lastRendered = -1;
   var lastSphereSig = '';
   var lastCollapseSig = '';
@@ -174,11 +184,29 @@
     strobeGroup = new THREE.Group();
     fourBitGroup = new THREE.Group();
     resonanceGroup = new THREE.Group();
+    conductiveGroup = new THREE.Group();
+    conductiveGroup.visible = false;
     scene.add(sphereGroup);
     scene.add(sliceGroup);
     scene.add(strobeGroup);
     scene.add(fourBitGroup);
     scene.add(resonanceGroup);
+    scene.add(conductiveGroup);
+
+    conductiveRaycaster = new THREE.Raycaster();
+    renderer.domElement.addEventListener('pointerdown', function (ev) {
+      if (!ev.shiftKey || !conductiveGroup || !conductiveGroup.visible || !conductiveGraph || !conductiveHitSphere) return;
+      var rect = renderer.domElement.getBoundingClientRect();
+      var mx = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+      var my = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      conductiveRaycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+      var hits = conductiveRaycaster.intersectObject(conductiveHitSphere, false);
+      if (hits.length > 0) {
+        var pt = hits[0].point;
+        conductiveGraph.injectDirection(pt.x, pt.y, pt.z, 1.45, 0.28);
+        cameraMoved = true;
+      }
+    });
 
     strobeNodeGeo = new THREE.SphereGeometry(0.024, 12, 12);
     strobeMatIdent = new THREE.MeshBasicMaterial({ color: 0x6ee7a0 });
@@ -837,6 +865,157 @@
     }
   }
 
+  // ---- Stage 5C: Opt-In Graph Laplacian Conductive Icosphere & Y_l^m (eta^l) Radial Osmosis Struts ----
+  function ensureConductiveObjects() {
+    if (conductiveGraph || !conductiveGroup || !Harmony.engine || !Harmony.engine.createSphericalWireframeGraph) return;
+    conductiveGraph = Harmony.engine.createSphericalWireframeGraph({ subdivisions: 2 });
+    conductiveGraph.injectDirection(0.577, 0.577, 0.577, 1.25, 0.32);
+
+    var E = conductiveGraph.edgeCount;
+    var wGeo = new THREE.BufferGeometry();
+    conductiveWirePos = new THREE.BufferAttribute(new Float32Array(E * 2 * 3), 3);
+    conductiveWireCol = new THREE.BufferAttribute(new Float32Array(E * 2 * 3), 3);
+    wGeo.setAttribute('position', conductiveWirePos);
+    wGeo.setAttribute('color', conductiveWireCol);
+    conductiveWireLines = new THREE.LineSegments(wGeo, new THREE.LineBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.88
+    }));
+    conductiveWireLines.renderOrder = 6;
+    conductiveGroup.add(conductiveWireLines);
+
+    var V = conductiveGraph.vertexCount;
+    var sGeo = new THREE.BufferGeometry();
+    conductiveStrutPos = new THREE.BufferAttribute(new Float32Array(V * 2 * 3), 3);
+    conductiveStrutCol = new THREE.BufferAttribute(new Float32Array(V * 2 * 3), 3);
+    sGeo.setAttribute('position', conductiveStrutPos);
+    sGeo.setAttribute('color', conductiveStrutCol);
+    conductiveStrutLines = new THREE.LineSegments(sGeo, new THREE.LineBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.36
+    }));
+    conductiveStrutLines.renderOrder = 4;
+    conductiveGroup.add(conductiveStrutLines);
+
+    conductiveHitSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 20, 14),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    conductiveGroup.add(conductiveHitSphere);
+  }
+
+  function updateConductiveMesh(playT, state, dirty) {
+    if (!conductiveGroup) return;
+    var on = !!(state.toggles && state.toggles.conductiveMesh);
+    conductiveGroup.visible = on;
+    if (!on) {
+      state._lastConductiveInfo = null;
+      return;
+    }
+    ensureConductiveObjects();
+    if (!conductiveGraph || !Harmony.engine.conductiveMeshFrame) return;
+
+    if (!cachedSHSpectrum || cachedSHDirty !== dirty) {
+      cachedSHSpectrum = Harmony.engine.sphericalHarmonicSpectrum(state, { maxL: 4, samples: 128 });
+      cachedSHDirty = dirty;
+    }
+
+    var info = Harmony.engine.conductiveMeshFrame(conductiveGraph, state, playT, {
+      spectrum: cachedSHSpectrum,
+      step: !!(state.toggles.animate && !state.staticMode)
+    });
+    state._lastConductiveInfo = info;
+
+    var R = Math.max(0.1, state.r || 1);
+    var rIn = Math.min(Math.max(0, state.rIn || 0), R * 0.98);
+    var lam = (typeof state.collapseLambda === 'number') ? Math.max(0, Math.min(1, state.collapseLambda)) : 0;
+    var zFlat = Math.max(0.004, 1 - lam);
+    var harmor = !!(state.toggles && state.toggles.harmorVoid);
+
+    if (conductiveHitSphere) conductiveHitSphere.scale.set(R * 1.03, R * 1.03, R * 1.03 * zFlat);
+
+    var pos = conductiveGraph.positions;
+    var edges = conductiveGraph.edges;
+    var u = conductiveGraph.getField();
+    var uIn = conductiveGraph.getInnerField();
+    var vel = conductiveGraph.getVelocity();
+    var E = conductiveGraph.edgeCount;
+    var V = conductiveGraph.vertexCount;
+    var outerR = R * 1.018;
+
+    var wp = conductiveWirePos.array;
+    var wc = conductiveWireCol.array;
+    for (var e = 0; e < E; e++) {
+      var a = edges[e * 2], b = edges[e * 2 + 1];
+      for (var side = 0; side < 2; side++) {
+        var vi = side === 0 ? a : b;
+        var val = u[vi];
+        var spd = Math.min(1, Math.abs(vel[vi]) * 3.8);
+        var rad = outerR * (1 + 0.14 * val);
+        var outOff = (e * 2 + side) * 3;
+        wp[outOff]     = pos[vi * 3] * rad;
+        wp[outOff + 1] = pos[vi * 3 + 1] * rad;
+        wp[outOff + 2] = pos[vi * 3 + 2] * rad * zFlat;
+
+        var pVal = Math.max(0, Math.min(1, val * 1.15));
+        var nVal = Math.max(0, Math.min(1, -val * 1.15));
+        if (harmor) {
+          wc[outOff]     = 0.15 * spd;
+          wc[outOff + 1] = 0.34 + 0.66 * Math.min(1, pVal + nVal + spd);
+          wc[outOff + 2] = 0.18 * spd;
+        } else {
+          wc[outOff]     = Math.min(1, 0.18 + 0.82 * nVal + 0.50 * spd);
+          wc[outOff + 1] = Math.min(1, 0.42 + 0.58 * pVal + 0.45 * spd);
+          wc[outOff + 2] = Math.min(1, 0.58 + 0.42 * pVal + 0.28 * nVal);
+        }
+      }
+    }
+    conductiveWirePos.needsUpdate = true;
+    conductiveWireCol.needsUpdate = true;
+
+    conductiveStrutLines.visible = rIn > 0.04;
+    if (conductiveStrutLines.visible) {
+      var sp = conductiveStrutPos.array;
+      var sc = conductiveStrutCol.array;
+      for (var i = 0; i < V; i++) {
+        var px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2] * zFlat;
+        var r0 = rIn * (1 + 0.10 * uIn[i]);
+        var r1 = outerR * (1 + 0.14 * u[i]);
+        var flux = Math.min(1, Math.abs(uIn[i] - u[i]) * 1.15);
+        var o0 = i * 6;
+        sp[o0] = px * r0; sp[o0 + 1] = py * r0; sp[o0 + 2] = pz * r0;
+        sp[o0 + 3] = px * r1; sp[o0 + 4] = py * r1; sp[o0 + 5] = pz * r1;
+        if (harmor) {
+          sc[o0] = 0.04; sc[o0 + 1] = 0.26 + 0.74 * flux; sc[o0 + 2] = 0.06;
+          sc[o0 + 3] = 0.02; sc[o0 + 4] = 0.20 + 0.62 * flux; sc[o0 + 5] = 0.04;
+        } else {
+          sc[o0] = 0.94 * flux + 0.20; sc[o0 + 1] = 0.72 * flux + 0.15; sc[o0 + 2] = 0.34;
+          sc[o0 + 3] = 0.24 + 0.35 * flux; sc[o0 + 4] = 0.85; sc[o0 + 5] = 0.84;
+        }
+      }
+      conductiveStrutPos.needsUpdate = true;
+      conductiveStrutCol.needsUpdate = true;
+    }
+  }
+
+  function pingConductive(nx, ny, nz) {
+    ensureConductiveObjects();
+    if (!conductiveGraph) return;
+    if (nx == null) {
+      var a = Math.random() * Math.PI * 2;
+      var y = (Math.random() * 2 - 1) * 0.85;
+      var rr = Math.sqrt(Math.max(0, 1 - y * y));
+      nx = Math.cos(a) * rr; ny = y; nz = Math.sin(a) * rr;
+    }
+    conductiveGraph.injectDirection(nx, ny, nz, 1.45, 0.30);
+    cameraMoved = true;
+  }
+
+  function resetConductive() {
+    if (conductiveGraph) conductiveGraph.reset();
+    cachedSHSpectrum = null;
+    cachedSHDirty = -1;
+    cameraMoved = true;
+  }
+
   function updateResonance(playT, state) {
     if (!resonanceGroup) return;
     var on = !!(state.toggles && state.toggles.resonanceMode);
@@ -1456,9 +1635,10 @@
     updateFourBit(playT, state);
     updateResonance(playT, state);
     updateFloorWt(playT, state, floorFieldData);
+    updateConductiveMesh(playT, state, dirty);
     controls.update();
 
-    var resActive = !!(state.toggles.resonanceMode || state.toggles.floorWt);
+    var resActive = !!(state.toggles.resonanceMode || state.toggles.floorWt || state.toggles.conductiveMesh);
     if (state.toggles.autoRotate || state.toggles.animate || resActive || dirtyDidChange || cameraMoved) {
       renderer.render(scene, camera);
       cameraMoved = false;
@@ -1469,6 +1649,8 @@
     init: init,
     update: update,
     setCameraView: setCameraView,
+    pingConductive: pingConductive,
+    resetConductive: resetConductive,
     resize: onResize
   };
 })();

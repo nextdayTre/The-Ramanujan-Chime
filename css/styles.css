@@ -3601,6 +3601,39 @@ body.harmor-void .floor-tank-badge {
 }
 .collapse-grid { margin-top: 4px; }
 .val-emerald { color: #6ee7a0; }
+.conductive-bar {
+  margin-top: 6px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: rgba(8, 17, 25, 0.85);
+  border: 1px solid rgba(54, 214, 200, 0.34);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 9.5px;
+}
+.conductive-bar[hidden] { display: none !important; }
+.conductive-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.cond-ping-btn {
+  color: #ffd166 !important;
+  border-color: rgba(255, 209, 102, 0.5) !important;
+}
+.conductive-info {
+  color: var(--muted);
+  font-size: 9.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.harmor-void .conductive-bar {
+  background: rgba(2, 10, 5, 0.94);
+  border-color: rgba(0, 255, 102, 0.36);
+}
 .floor-readouts[hidden] { display: none !important; }
 .floor-twin-readouts b {
   max-width: 170px;
