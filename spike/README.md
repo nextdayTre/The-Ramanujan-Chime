@@ -7,6 +7,25 @@ release artifact in this repo is the agent layer (commit `78386a9`, tag `agent-l
 Open any page directly (`file://` works — classic scripts, no server needed) or serve the repo
 root and browse `/spike/`.
 
+## `spherical-harmonics.html` — Stage 4b-1 3D $Y_\ell^m$ heat/EQ shader & conductive wireframe
+
+Standalone 3D WebGL R&D prototype driven by the pure Stage 4b-1 math in `js/engine.js`
+(`sphericalHarmonicBasis25`, `sphericalHarmonicSpectrum`, `shellMultipoleTransfer`,
+`createSphericalWireframeGraph`):
+
+- **25-Band Real Spherical Harmonics GLSL Shader ($\ell = 0..4$):** Custom Three.js `ShaderMaterial`
+  displacing both the inner cavity ($r$) and outer carrier ($R$) by singularity-free Cartesian
+  $Y_\ell^m$ modes, including exact **Quadray octupole alignment** ($Y_3^{-2} \propto xyz$ peaking on
+  the 4 inscribed tetrahedron vertices) and an interactive click/drag **25-Band Spherical EQ** (or
+  live projection from any of the 13 built-in Chime presets).
+- **Exact $\eta^\ell$ Hollow-Shell Angular Filter & Multipole Zoom-Unpack ($\sigma$):** Visualizes the
+  potential-theory transfer factor $T_\ell(\eta) = (r/R)^\ell$ (`6ℓ dB/octave`) across the inner and
+  outer shells alongside recursive Sentinel $\sigma$ zoom-unpacking ($2^{-3\sigma}$ volume scaling).
+- **Graph Laplacian Conductive Wireframe ($\mathbf{L} = \mathbf{D} - \mathbf{A}$):** 162-vertex /
+  480-edge subdivided icosphere supporting CFL-stable **Conductive Wave** and **Heat Diffusion** modes,
+  inner↔outer radial osmosis struts, strictly passive $C^1$ wavefolding, Shift+Click 3D wave pings,
+  and live Dirichlet surface-tension energy $\frac{1}{2}\mathbf{u}^\top\mathbf{L}\mathbf{u}$.
+
 ## `viscoelastic-slice.html` — Stage 4 viscoelastic cross-Chime 2D slice tank
 
 Interactive R&D prototype driven by the pure Stage 4 math in `js/engine.js` (`sliceCalculus2D`,

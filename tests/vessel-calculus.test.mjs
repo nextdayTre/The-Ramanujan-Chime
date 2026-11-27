@@ -448,3 +448,124 @@ test('Stage 4: createViscoelasticTank is CFL-stable, dissipates under viscosity 
   for (let i = 0; i < slRef.length; i++) maxDelta = Math.max(maxDelta, Math.abs(slRef[i] - slUni[i]));
   assert.ok(maxDelta > 0.01, `refractive c_in=alpha*c_out produces distinct wavefield (maxDelta=${maxDelta})`);
 });
+
+test('Stage 4b-1: All 25 real Y_l^m (l=0..4) are orthonormal on S^2 (625 inner products) & Y3,-2 peaks on Quadray vertices', () => {
+  // Exact 6-point Gauss-Legendre quadrature on [-1, 1] (exact up to polynomial degree 11 >= 8)
+  const glNodes = [
+    -0.9324695142031521, -0.6612093864662645, -0.2386191860831969,
+     0.2386191860831969,  0.6612093864662645,  0.9324695142031521
+  ];
+  const glWeights = [
+    0.1713244923791704, 0.3607615730481386, 0.4679139345726910,
+    0.4679139345726910, 0.3607615730481386, 0.1713244923791704
+  ];
+  const nPhi = 12;
+  const dPhi = (2 * Math.PI) / nPhi;
+
+  const gram = new Float64Array(25 * 25);
+  const basis = new Float32Array(25);
+  for (let ti = 0; ti < glNodes.length; ti++) {
+    const w = glNodes[ti];
+    const sinT = Math.sqrt(Math.max(0, 1 - w * w));
+    const wt = glWeights[ti] * dPhi;
+    for (let pi = 0; pi < nPhi; pi++) {
+      const phi = pi * dPhi;
+      const x = sinT * Math.cos(phi);
+      const z = sinT * Math.sin(phi);
+      Engine.sphericalHarmonicBasis25(x, w, z, basis);
+      for (let a = 0; a < 25; a++) {
+        for (let b = 0; b < 25; b++) {
+          gram[a * 25 + b] += wt * basis[a] * basis[b];
+        }
+      }
+    }
+  }
+
+  let maxDiagErr = 0, maxOffErr = 0;
+  for (let a = 0; a < 25; a++) {
+    for (let b = 0; b < 25; b++) {
+      const val = gram[a * 25 + b];
+      if (a === b) maxDiagErr = Math.max(maxDiagErr, Math.abs(val - 1));
+      else maxOffErr = Math.max(maxOffErr, Math.abs(val));
+    }
+  }
+  assert.ok(maxDiagErr < 1e-5, `all 25 Y_l^m have unit L2 norm on S^2 (maxDiagErr=${maxDiagErr})`);
+  assert.ok(maxOffErr < 1e-5, `all 600 off-diagonal Y_l^m pairs are orthogonal (maxOffErr=${maxOffErr})`);
+
+  // Quadray octupole Y3,-2 proportional to x*y*z hits identical positive maxima on all 4 regular tetrahedron vertices
+  const s = 1 / Math.sqrt(3);
+  const expectedPeak = 0.5 * Math.sqrt(105 / Math.PI) * (s * s * s);
+  const quadVerts = [[s, s, s], [s, -s, -s], [-s, s, -s], [-s, -s, s]];
+  for (const [qx, qy, qz] of quadVerts) {
+    close(Engine.sphericalHarmonicReal(3, -2, qx, qy, qz), expectedPeak, 1e-6, 'Y3,-2 Quadray vertex peak');
+  }
+  // Dual (antipodal) tetrahedron vertex hits exact negative peak
+  close(Engine.sphericalHarmonicReal(3, -2, -s, -s, -s), -expectedPeak, 1e-6, 'antipodal Quadray vertex negates Y3,-2');
+});
+
+test('Stage 4b-1: sphericalHarmonicSpectrum & shellMultipoleTransfer enforce exact eta^l (6*l dB/oct) filter + Zoom-Unpack', () => {
+  const st = {
+    r: 1, rIn: 0.5, amp: 1, f: 1, n: 3, m: 2, k: 1, K: 6, orderN: 19, a: 0.5, b: 3, phaseRad: 0,
+    formulas: { x: 'r*cos(TAU*t)', y: 'r*sin(TAU*t)*cos(TAU*2*t)', z: 'r*sin(TAU*t)*sin(TAU*2*t)' }
+  };
+  const spec = Engine.sphericalHarmonicSpectrum(st, { maxL: 4, samples: 256 });
+  assert.equal(spec.bandCount, 25);
+  assert.ok(spec.totalEnergy > 0.1);
+  let sumDeg = 0;
+  for (let l = 0; l <= 4; l++) sumDeg += spec.degreeEnergy[l];
+  close(sumDeg, spec.totalEnergy, 1e-4, 'degree energies partition total SH energy');
+
+  // Exact T_l(eta) = eta^l transfer at eta = 0.5 -> [1, 0.5, 0.25, 0.125, 0.0625] = 0, -6, -12, -18, -24 dB!
+  const flat = new Float32Array(25).fill(1.0);
+  const tr = Engine.shellMultipoleTransfer(flat, 0.5, 0);
+  for (let l = 0; l <= 4; l++) {
+    close(tr.transferByDegree[l], Math.pow(0.5, l), 1e-6, `T_${l}(0.5) = 0.5^${l}`);
+    close(tr.attenuationDbByDegree[l], -6.0205999 * l, 1e-3, `exact 6*l dB/oct rolloff for l=${l}`);
+  }
+  assert.ok(tr.transmissionRatio > 0 && tr.transmissionRatio < 0.25);
+
+  // Recursive Multipole Zoom-Unpack at sigma = +1 restores 2^(+1*l) toward unity & scales volume by 2^-3 = 1/8
+  const unp = Engine.shellMultipoleTransfer(flat, 0.5, 1);
+  close(unp.unpackScale, 0.5, 1e-6);
+  close(unp.volumeScale, 0.125, 1e-12);
+  close(unp.unpacked[24], 1.0, 1e-6, 'zooming inward +1 oct at eta=0.5 fully unpacks l=4 mode');
+});
+
+test('Stage 4b-1: createSphericalWireframeGraph satisfies Euler V-E+F=2, L*1=0 nullspace, diffusion & CFL-stable wavefold', () => {
+  const g1 = Engine.createSphericalWireframeGraph({ subdivisions: 1 });
+  assert.equal(g1.vertexCount, 42);
+  assert.equal(g1.edgeCount, 120);
+  assert.equal(g1.vertexCount - g1.edgeCount + g1.faceCount, 2, 'Euler characteristic V-E+F=2 (subdiv 1)');
+
+  const g2 = Engine.createSphericalWireframeGraph({ subdivisions: 2 });
+  assert.equal(g2.vertexCount, 162);
+  assert.equal(g2.edgeCount, 480);
+  assert.equal(g2.vertexCount - g2.edgeCount + g2.faceCount, 2, 'Euler characteristic V-E+F=2 (subdiv 2)');
+
+  // 1. Constant-mode nullspace L*1 = 0: uniform field has 0 Dirichlet tension & preserves mean under pure diffusion
+  for (let i = 0; i < g1.vertexCount; i++) g1.injectNode(i, 0.65);
+  assert.equal(g1.laplacianEnergy().dirichletEnergy, 0, 'constant mode lies in ker(L)');
+  for (let s = 0; s < 20; s++) g1.step({ mode: 'diffusion', viscosity: 0, coupling: 0, diffusion: 0.08 });
+  close(g1.laplacianEnergy().meanVal, 0.65, 1e-5, 'pure Graph Laplacian diffusion conserves mean');
+  assert.equal(g1.laplacianEnergy().dirichletEnergy, 0);
+
+  // 2. Heat diffusion on localized spike strictly decreases Dirichlet tension while conserving mean
+  g1.reset();
+  g1.injectDirection(0, 1, 0, 1.2, 0.35);
+  const m0 = g1.laplacianEnergy();
+  assert.ok(m0.dirichletEnergy > 0.5);
+  for (let s = 0; s < 40; s++) g1.step({ mode: 'diffusion', viscosity: 0, coupling: 0, diffusion: 0.08 });
+  const mDiff = g1.laplacianEnergy();
+  close(mDiff.meanVal, m0.meanVal, 1e-4, 'heat diffusion conserves total charge');
+  assert.ok(mDiff.dirichletEnergy < m0.dirichletEnergy * 0.25, 'Dirichlet tension strictly dissipates under diffusion');
+
+  // 3. Conductive wave + passive C1 wavefold is CFL-stable and dissipates under viscosity
+  g2.injectDirection(0.577, 0.577, 0.577, 1.4, 0.3);
+  const w0 = g2.laplacianEnergy().totalEnergy;
+  for (let s = 0; s < 100; s++) {
+    g2.step({ mode: 'wave', boundary: 'wavefold', eta: 0.6, viscosity: 0.035, coupling: 0, speed: 0.36 });
+  }
+  const wEnd = g2.laplacianEnergy();
+  assert.ok(Number.isFinite(wEnd.totalEnergy) && Number.isFinite(wEnd.dirichletEnergy), 'CFL-stable conductive wave');
+  assert.ok(wEnd.totalEnergy < w0, 'viscous conductive wave strictly dissipates free-decay energy');
+});

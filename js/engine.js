@@ -2374,6 +2374,486 @@
     };
   }
 
+  // ---- Stage 4b-1: Real Spherical Harmonics Y_l^m (l = 0..4, 25 Orthonormal Bands),
+  //      Hollow-Shell Multipole Transfer (T_l = eta^l) & Graph Laplacian Conductive Wireframe ----
+
+  var SH_BAND_META = [
+    { idx: 0,  l: 0, m:  0, label: 'Y0,0',  family: 'Monopole (V)' },
+    { idx: 1,  l: 1, m: -1, label: 'Y1,-1', family: 'Dipole Z' },
+    { idx: 2,  l: 1, m:  0, label: 'Y1,0',  family: 'Dipole Y (1111/0000)' },
+    { idx: 3,  l: 1, m:  1, label: 'Y1,+1', family: 'Dipole X (1000/0001)' },
+    { idx: 4,  l: 2, m: -2, label: 'Y2,-2', family: 'Quadrupole XZ' },
+    { idx: 5,  l: 2, m: -1, label: 'Y2,-1', family: 'Quadrupole YZ' },
+    { idx: 6,  l: 2, m:  0, label: 'Y2,0',  family: 'Quadrupole Zonal (Lock-V)' },
+    { idx: 7,  l: 2, m:  1, label: 'Y2,+1', family: 'Quadrupole XY' },
+    { idx: 8,  l: 2, m:  2, label: 'Y2,+2', family: 'Quadrupole X²−Z²' },
+    { idx: 9,  l: 3, m: -3, label: 'Y3,-3', family: 'Octupole 3-Fold Z' },
+    { idx: 10, l: 3, m: -2, label: 'Y3,-2', family: 'Quadray Tetrahedron (xyz)' },
+    { idx: 11, l: 3, m: -1, label: 'Y3,-1', family: 'Octupole Polar Z' },
+    { idx: 12, l: 3, m:  0, label: 'Y3,0',  family: 'Octupole Zonal Y' },
+    { idx: 13, l: 3, m:  1, label: 'Y3,+1', family: 'Octupole Polar X' },
+    { idx: 14, l: 3, m:  2, label: 'Y3,+2', family: 'Octupole Saddle' },
+    { idx: 15, l: 3, m:  3, label: 'Y3,+3', family: 'Octupole 3-Fold X' },
+    { idx: 16, l: 4, m: -4, label: 'Y4,-4', family: 'Octal Bloom (4-Fold Sin)' },
+    { idx: 17, l: 4, m: -3, label: 'Y4,-3', family: 'Hexadecapole Z3' },
+    { idx: 18, l: 4, m: -2, label: 'Y4,-2', family: 'Hexadecapole XZ' },
+    { idx: 19, l: 4, m: -1, label: 'Y4,-1', family: 'Hexadecapole YZ' },
+    { idx: 20, l: 4, m:  0, label: 'Y4,0',  family: 'Hexadecapole Zonal Y' },
+    { idx: 21, l: 4, m:  1, label: 'Y4,+1', family: 'Hexadecapole XY' },
+    { idx: 22, l: 4, m:  2, label: 'Y4,+2', family: 'Hexadecapole X²−Z²' },
+    { idx: 23, l: 4, m:  3, label: 'Y4,+3', family: 'Hexadecapole X3' },
+    { idx: 24, l: 4, m:  4, label: 'Y4,+4', family: 'Octal Bloom (4-Fold Cos)' }
+  ];
+
+  // Exact orthonormal normalization constants for real Y_l^m (integral over S^2 of Y^2 dOmega === 1)
+  var SH_C00 = 0.5 * Math.sqrt(1 / PI);
+  var SH_C1  = 0.5 * Math.sqrt(3 / PI);
+  var SH_C2A = 0.5 * Math.sqrt(15 / PI);
+  var SH_C20 = 0.25 * Math.sqrt(5 / PI);
+  var SH_C22 = 0.25 * Math.sqrt(15 / PI);
+  var SH_C33 = 0.25 * Math.sqrt(35 / (2 * PI));
+  var SH_C32N = 0.5 * Math.sqrt(105 / PI);
+  var SH_C31 = 0.25 * Math.sqrt(21 / (2 * PI));
+  var SH_C30 = 0.25 * Math.sqrt(7 / PI);
+  var SH_C32P = 0.25 * Math.sqrt(105 / PI);
+  var SH_C44N = 0.75 * Math.sqrt(35 / PI);
+  var SH_C43 = 0.75 * Math.sqrt(35 / (2 * PI));
+  var SH_C42N = 0.75 * Math.sqrt(5 / PI);
+  var SH_C41 = 0.75 * Math.sqrt(5 / (2 * PI));
+  var SH_C40 = (3 / 16) * Math.sqrt(1 / PI);
+  var SH_C42P = (3 / 8) * Math.sqrt(5 / PI);
+  var SH_C44P = (3 / 16) * Math.sqrt(35 / PI);
+
+  // Evaluate all 25 orthonormal real spherical harmonics Y_l^m (l = 0..4) at direction (x, y, z).
+  // Polar axis is +Y (1111/F north pole, 0000 south pole); equatorial plane is XZ (Top XZ).
+  // Singularity-free pure Cartesian polynomials — zero atan2/acos pole glitches.
+  function sphericalHarmonicBasis25(x, y, z, out) {
+    var dst = out || new Float32Array(25);
+    var len = Math.sqrt(x * x + y * y + z * z);
+    var u, v, w;
+    if (len > 1e-12) {
+      u = x / len;
+      v = z / len;
+      w = y / len;
+    } else {
+      u = 0; v = 0; w = 1;
+    }
+    var u2 = u * u, v2 = v * v, w2 = w * w;
+    var uv = u * v, uw = u * w, vw = v * w;
+    var u2mv2 = u2 - v2;
+
+    // l = 0
+    dst[0] = SH_C00;
+    // l = 1
+    dst[1] = SH_C1 * v;
+    dst[2] = SH_C1 * w;
+    dst[3] = SH_C1 * u;
+    // l = 2
+    dst[4] = SH_C2A * uv;
+    dst[5] = SH_C2A * vw;
+    dst[6] = SH_C20 * (3 * w2 - 1);
+    dst[7] = SH_C2A * uw;
+    dst[8] = SH_C22 * u2mv2;
+    // l = 3
+    dst[9]  = SH_C33 * v * (3 * u2 - v2);
+    dst[10] = SH_C32N * u * v * w; // Quadray octupole: maxima on exact regular tetrahedron vertices!
+    dst[11] = SH_C31 * v * (5 * w2 - 1);
+    dst[12] = SH_C30 * w * (5 * w2 - 3);
+    dst[13] = SH_C31 * u * (5 * w2 - 1);
+    dst[14] = SH_C32P * w * u2mv2;
+    dst[15] = SH_C33 * u * (u2 - 3 * v2);
+    // l = 4
+    dst[16] = SH_C44N * uv * u2mv2;
+    dst[17] = SH_C43 * vw * (3 * u2 - v2);
+    dst[18] = SH_C42N * uv * (7 * w2 - 1);
+    dst[19] = SH_C41 * vw * (7 * w2 - 3);
+    dst[20] = SH_C40 * (35 * w2 * w2 - 30 * w2 + 3);
+    dst[21] = SH_C41 * uw * (7 * w2 - 3);
+    dst[22] = SH_C42P * u2mv2 * (7 * w2 - 1);
+    dst[23] = SH_C43 * uw * (u2 - 3 * v2);
+    dst[24] = SH_C44P * (u2 * u2 - 6 * u2 * v2 + v2 * v2);
+    return dst;
+  }
+
+  function sphericalHarmonicReal(l, m, x, y, z) {
+    var li = Math.round(Number(l || 0));
+    var mi = Math.round(Number(m || 0));
+    if (li < 0 || li > 4 || Math.abs(mi) > li) return 0;
+    var basis = sphericalHarmonicBasis25(x, y, z);
+    return basis[li * li + (li + mi)];
+  }
+
+  // Project any Chime preset trajectory onto the (maxL+1)^2 orthonormal real spherical harmonics
+  function sphericalHarmonicSpectrum(state, opts) {
+    opts = opts || {};
+    var maxL = clamp(Math.round(opts.maxL != null ? opts.maxL : 4), 0, 4);
+    var bandCount = (maxL + 1) * (maxL + 1);
+    var numSamples = clamp(Math.round(opts.samples || 256), 32, 2048);
+    var R = Math.max(1e-6, Number((state && state.r != null) ? state.r : 1));
+    var res = sample(state, numSamples);
+    var pts = res.points;
+
+    var acc = new Float64Array(bandCount);
+    var basis = new Float32Array(25);
+    var validCount = 0;
+
+    for (var i = 0; i < pts.length; i++) {
+      var p = pts[i];
+      if (!p || !p.valid) continue;
+      var rad = Math.sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+      if (!Number.isFinite(rad)) continue;
+      var weight = clamp(rad / R, 0, 3.0);
+      sphericalHarmonicBasis25(p.x, p.y, p.z, basis);
+      for (var k = 0; k < bandCount; k++) {
+        acc[k] += weight * basis[k];
+      }
+      validCount++;
+    }
+
+    var normScale = validCount > 0 ? (Math.sqrt(4 * PI) / validCount) : 0;
+    var coeffs = new Float32Array(bandCount);
+    var degreeEnergy = new Float32Array(maxL + 1);
+    var totalEnergy = 0;
+    var peakVal = 0, peakAbs = -1;
+    var domIdx = 0, domAbs = -1;
+
+    for (var k2 = 0; k2 < bandCount; k2++) {
+      var c = acc[k2] * normScale;
+      coeffs[k2] = Math.fround(c);
+      var lDeg = SH_BAND_META[k2].l;
+      var e = c * c;
+      degreeEnergy[lDeg] += e;
+      totalEnergy += e;
+      var ac = Math.abs(c);
+      if (ac > peakAbs) { peakAbs = ac; peakVal = c; }
+      if (k2 > 0 && ac > domAbs) { domAbs = ac; domIdx = k2; }
+    }
+    if (domAbs <= 1e-6) domIdx = 0;
+
+    for (var d = 0; d <= maxL; d++) degreeEnergy[d] = Math.fround(degreeEnergy[d]);
+    var quadrayCoeff = bandCount > 10 ? coeffs[10] : 0;
+    var quadrayAlignment = totalEnergy > 1e-12 ? Math.abs(quadrayCoeff) / Math.sqrt(totalEnergy) : 0;
+
+    return {
+      maxL: maxL,
+      bandCount: bandCount,
+      validSamples: validCount,
+      coeffs: coeffs,
+      degreeEnergy: degreeEnergy,
+      totalEnergy: Math.fround(totalEnergy),
+      quadrayCoeff: Math.fround(quadrayCoeff),
+      quadrayAlignment: Math.fround(quadrayAlignment),
+      dominantBand: SH_BAND_META[domIdx],
+      peakCoeff: Math.fround(peakVal),
+      peakBits: bitInspect(peakVal)
+    };
+  }
+
+  // Exact hollow-shell harmonic multipole filter: T_l(eta) = eta^l = (r/R)^l (6*l dB/octave!)
+  // Plus Recursive Multipole Zoom-Unpack across Sentinel Octave sigma (volume scaling 2^(-3*sigma))
+  function shellMultipoleTransfer(coeffs, etaVal, sentinelSigma) {
+    var n = Math.min(25, (coeffs && coeffs.length) ? coeffs.length : 25);
+    var eta = clamp(Number(etaVal != null ? etaVal : 0.5), 0, 1);
+    var sigma = clamp(Math.round(Number(sentinelSigma || 0)), -6, 6);
+
+    var inner = new Float32Array(n);
+    var outer = new Float32Array(n);
+    var unpacked = new Float32Array(n);
+    var transferByDegree = new Float32Array(5);
+    var attenuationDbByDegree = new Float32Array(5);
+
+    for (var l = 0; l <= 4; l++) {
+      var tl = (l === 0) ? 1.0 : Math.pow(eta, l);
+      transferByDegree[l] = Math.fround(tl);
+      attenuationDbByDegree[l] = (tl <= 1e-12) ? -Infinity : Math.fround(20 * Math.log10(tl));
+    }
+
+    var eIn = 0, eOut = 0, eUnpack = 0;
+    var zoomBoostBase = Math.pow(2, sigma);
+    for (var k = 0; k < n; k++) {
+      var cIn = Number(coeffs && coeffs[k] != null ? coeffs[k] : 0);
+      var lDeg = SH_BAND_META[k].l;
+      var tl2 = transferByDegree[lDeg];
+      var cOut = cIn * tl2;
+      // Recursive Zoom-Unpack: zooming inward (sigma > 0) restores high-l modes previously
+      // coarse-grained behind the hollow shell wall, bounded at unity gain per band.
+      var unpackGain = (lDeg === 0) ? 1.0 : clamp(tl2 * Math.pow(zoomBoostBase, lDeg), 0, 1.0);
+      var cUn = cIn * unpackGain;
+
+      inner[k] = Math.fround(cIn);
+      outer[k] = Math.fround(cOut);
+      unpacked[k] = Math.fround(cUn);
+      eIn += cIn * cIn;
+      eOut += cOut * cOut;
+      eUnpack += cUn * cUn;
+    }
+
+    return {
+      eta: Math.fround(eta),
+      sentinelSigma: sigma,
+      unpackScale: Math.fround(Math.pow(2, -sigma)),
+      volumeScale: Math.pow(2, -3 * sigma),
+      activeChildDepth: Math.max(0, sigma),
+      transferByDegree: transferByDegree,
+      attenuationDbByDegree: attenuationDbByDegree,
+      inner: inner,
+      outer: outer,
+      unpacked: unpacked,
+      energyInner: Math.fround(eIn),
+      energyOuter: Math.fround(eOut),
+      energyUnpacked: Math.fround(eUnpack),
+      transmissionRatio: Math.fround(eIn > 1e-12 ? (eOut / eIn) : 0)
+    };
+  }
+
+  // Deterministic subdivided unit icosphere Graph Laplacian conductive wireframe solver (L = D - A)
+  // Supports CFL-stable conductive wave (d2u/dt2 = -c^2 L u - gamma du/dt) & heat/osmosis diffusion
+  // (du/dt = -kappa L u), radial inner<->outer conductance, and passive C1 surface wavefolding.
+  function createSphericalWireframeGraph(opts) {
+    opts = opts || {};
+    var subdiv = clamp(Math.round(opts.subdivisions != null ? opts.subdivisions : 2), 1, 3);
+
+    // Base golden-ratio icosahedron (12 vertices, 20 faces)
+    var phi = (1 + Math.sqrt(5)) * 0.5;
+    var rawV = [
+      [-1,  phi, 0], [ 1,  phi, 0], [-1, -phi, 0], [ 1, -phi, 0],
+      [ 0, -1,  phi], [ 0,  1,  phi], [ 0, -1, -phi], [ 0,  1, -phi],
+      [ phi, 0, -1], [ phi, 0,  1], [-phi, 0, -1], [-phi, 0,  1]
+    ];
+    var verts = [];
+    for (var vi = 0; vi < rawV.length; vi++) {
+      var v0 = rawV[vi];
+      var vl = Math.sqrt(v0[0] * v0[0] + v0[1] * v0[1] + v0[2] * v0[2]);
+      verts.push([v0[0] / vl, v0[1] / vl, v0[2] / vl]);
+    }
+    var faces = [
+      [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+      [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+      [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+      [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]
+    ];
+
+    for (var s = 0; s < subdiv; s++) {
+      var midCache = Object.create(null);
+      var nextFaces = [];
+      function midpoint(a, b) {
+        var key = a < b ? (a + '_' + b) : (b + '_' + a);
+        if (midCache[key] !== undefined) return midCache[key];
+        var va = verts[a], vb = verts[b];
+        var mx = (va[0] + vb[0]) * 0.5;
+        var my = (va[1] + vb[1]) * 0.5;
+        var mz = (va[2] + vb[2]) * 0.5;
+        var ml = Math.sqrt(mx * mx + my * my + mz * mz);
+        var idx = verts.length;
+        verts.push([mx / ml, my / ml, mz / ml]);
+        midCache[key] = idx;
+        return idx;
+      }
+      for (var fi = 0; fi < faces.length; fi++) {
+        var f = faces[fi];
+        var ab = midpoint(f[0], f[1]);
+        var bc = midpoint(f[1], f[2]);
+        var ca = midpoint(f[2], f[0]);
+        nextFaces.push([f[0], ab, ca], [f[1], bc, ab], [f[2], ca, bc], [ab, bc, ca]);
+      }
+      faces = nextFaces;
+    }
+
+    var V = verts.length;
+    var positions = new Float32Array(V * 3);
+    for (var p = 0; p < V; p++) {
+      positions[p * 3]     = verts[p][0];
+      positions[p * 3 + 1] = verts[p][1];
+      positions[p * 3 + 2] = verts[p][2];
+    }
+
+    // Extract unique undirected edges & adjacency lists
+    var edgeSeen = Object.create(null);
+    var edgeList = [];
+    var adj = new Array(V);
+    for (var a0 = 0; a0 < V; a0++) adj[a0] = [];
+    for (var fj = 0; fj < faces.length; fj++) {
+      var fc = faces[fj];
+      var pairs = [[fc[0], fc[1]], [fc[1], fc[2]], [fc[2], fc[0]]];
+      for (var pe = 0; pe < 3; pe++) {
+        var eA = pairs[pe][0], eB = pairs[pe][1];
+        var ek = eA < eB ? (eA + '_' + eB) : (eB + '_' + eA);
+        if (!edgeSeen[ek]) {
+          edgeSeen[ek] = 1;
+          edgeList.push(eA < eB ? eA : eB, eA < eB ? eB : eA);
+          adj[eA].push(eB);
+          adj[eB].push(eA);
+        }
+      }
+    }
+    var edges = new Uint16Array(edgeList);
+    var E = edgeList.length / 2;
+
+    // Precompute the 25 Y_l^m basis values per vertex for zero-cost inner-cavity SH projection
+    var vertexSH = new Float32Array(V * 25);
+    var tmpB = new Float32Array(25);
+    for (var vk = 0; vk < V; vk++) {
+      sphericalHarmonicBasis25(positions[vk * 3], positions[vk * 3 + 1], positions[vk * 3 + 2], tmpB);
+      vertexSH.set(tmpB, vk * 25);
+    }
+
+    var u = new Float32Array(V);
+    var uPrev = new Float32Array(V);
+    var uNext = new Float32Array(V);
+    var vel = new Float32Array(V);
+    var uIn = new Float32Array(V);
+    var stepCount = 0;
+
+    function reset() {
+      u.fill(0);
+      uPrev.fill(0);
+      uNext.fill(0);
+      vel.fill(0);
+      uIn.fill(0);
+      stepCount = 0;
+    }
+
+    function injectNode(idx, amp) {
+      var i = Math.round(Number(idx || 0));
+      if (i < 0 || i >= V) return;
+      var a = clamp(Number(amp != null ? amp : 1.0), -2.5, 2.5);
+      u[i] = Math.fround(clamp(u[i] + a, -3, 3));
+      uPrev[i] = Math.fround(clamp(uPrev[i] + a, -3, 3));
+    }
+
+    function injectDirection(nx, ny, nz, amp, spread) {
+      var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      if (len <= 1e-9) return;
+      var dx = nx / len, dy = ny / len, dz = nz / len;
+      var a = clamp(Number(amp != null ? amp : 1.0), -2.5, 2.5);
+      var sigma2 = Math.pow(clamp(Number(spread != null ? spread : 0.32), 0.08, 1.5), 2);
+      for (var i = 0; i < V; i++) {
+        var dot = dx * positions[i * 3] + dy * positions[i * 3 + 1] + dz * positions[i * 3 + 2];
+        var dist2 = Math.max(0, 2 - 2 * dot); // chord distance squared on unit sphere
+        if (dist2 < sigma2 * 9) {
+          var g = a * Math.exp(-dist2 / (2 * sigma2));
+          u[i] = Math.fround(clamp(u[i] + g, -3, 3));
+          uPrev[i] = Math.fround(clamp(uPrev[i] + g, -3, 3));
+        }
+      }
+    }
+
+    function setInnerFromSH(coeffs) {
+      var nC = Math.min(25, (coeffs && coeffs.length) ? coeffs.length : 0);
+      for (var i = 0; i < V; i++) {
+        var off = i * 25;
+        var sum = 0;
+        for (var k = 0; k < nC; k++) sum += coeffs[k] * vertexSH[off + k];
+        uIn[i] = Math.fround(clamp(sum, -2.5, 2.5));
+      }
+    }
+
+    function step(cfg) {
+      cfg = cfg || {};
+      var mode = cfg.mode === 'diffusion' ? 'diffusion' : 'wave';
+      var boundary = cfg.boundary === 'wavefold' ? 'wavefold' : 'osmosis';
+      var eta = clamp(Number(cfg.eta != null ? cfg.eta : 0.5), 0, 0.98);
+      var visc = clamp(Number(cfg.viscosity != null ? cfg.viscosity : 0.03), 0, 0.4);
+      var coupling = clamp(Number(cfg.coupling != null ? cfg.coupling : 0), 0, 0.18);
+      var gRad = coupling * clamp(eta * eta, 0.02, 1.0);
+
+      // Guaranteed CFL-stable wave speed (max eigenvalue of degree-6 icosphere Laplacian <= 12)
+      var cSpeed = clamp(Number(cfg.speed != null ? cfg.speed : 0.36), 0.05, 0.42);
+      var c2 = cSpeed * cSpeed;
+      var kappa = clamp(Number(cfg.diffusion != null ? cfg.diffusion : 0.08), 0.005, 0.12);
+
+      for (var i = 0; i < V; i++) {
+        var uC = u[i];
+        var nbrs = adj[i];
+        var negLu = 0; // -(L u)_i = sum_{j~i} (u_j - u_i)
+        for (var m = 0; m < nbrs.length; m++) {
+          negLu += u[nbrs[m]] - uC;
+        }
+        var radialDrive = gRad > 0 ? (gRad * (uIn[i] - uC)) : 0;
+        var nextVal;
+
+        if (mode === 'diffusion') {
+          nextVal = uC + kappa * negLu + radialDrive - (visc * 0.15) * uC;
+        } else {
+          // Osmosis adds gentle radiation damping; Wavefold reflects energy inside the shell
+          var damp = clamp(visc * (boundary === 'osmosis' ? (1.15 + 0.45 * eta) : 0.65), 0, 0.45);
+          nextVal = (2 * uC - (1 - damp) * uPrev[i] + c2 * negLu + radialDrive) / (1 + damp);
+        }
+
+        // Strictly passive C1-smooth sine wavefolding (|f(x)| <= |x| everywhere)
+        if (boundary === 'wavefold' && Math.abs(nextVal) > 0.85) {
+          var foldT = 0.85;
+          var foldW = 0.40;
+          var sgn = nextVal >= 0 ? 1 : -1;
+          var exc = Math.abs(nextVal) - foldT;
+          nextVal = sgn * (foldT + foldW * Math.sin(exc / foldW));
+        } else {
+          nextVal = clamp(nextVal, -2.5, 2.5);
+        }
+
+        uNext[i] = Math.fround(nextVal);
+        vel[i] = Math.fround(nextVal - uC);
+      }
+
+      var tmp = uPrev;
+      uPrev = u;
+      u = uNext;
+      uNext = tmp;
+      stepCount++;
+      return { step: stepCount, vertexCount: V, edgeCount: E };
+    }
+
+    function laplacianEnergy() {
+      var dirichlet = 0;
+      for (var e = 0; e < E; e++) {
+        var diff = u[edges[e * 2]] - u[edges[e * 2 + 1]];
+        dirichlet += diff * diff;
+      }
+      dirichlet *= 0.5; // Exact (1/2) u^T L u
+
+      var kin = 0, pot = 0, sum = 0, peak = 0;
+      for (var i = 0; i < V; i++) {
+        var ui = u[i], vi = vel[i];
+        pot += ui * ui;
+        kin += vi * vi;
+        sum += ui;
+        var au = Math.abs(ui);
+        if (au > peak) peak = au;
+      }
+      return {
+        steps: stepCount,
+        vertexCount: V,
+        edgeCount: E,
+        faceCount: faces.length,
+        dirichletEnergy: Math.fround(dirichlet),
+        kineticEnergy: Math.fround(0.5 * kin),
+        potentialEnergy: Math.fround(0.5 * pot),
+        totalEnergy: Math.fround(0.5 * (pot + kin)),
+        meanVal: Math.fround(sum / V),
+        peakAbs: Math.fround(peak)
+      };
+    }
+
+    return {
+      subdivisions: subdiv,
+      vertexCount: V,
+      edgeCount: E,
+      faceCount: faces.length,
+      positions: positions,
+      edges: edges,
+      adjacency: adj,
+      getField: function () { return u; },
+      getInnerField: function () { return uIn; },
+      getVelocity: function () { return vel; },
+      reset: reset,
+      injectNode: injectNode,
+      injectDirection: injectDirection,
+      setInnerFromSH: setInnerFromSH,
+      step: step,
+      laplacianEnergy: laplacianEnergy
+    };
+  }
+
   // Discrete Order N Cyclic Group Strobe:
   // Quantizes the continuous curve into N discrete states P_0 .. P_{N-1},
   // and traces the cyclic subgroup generated by stride g = round(n):
@@ -3326,6 +3806,12 @@
       cavalieriVolume: cavalieriVolume,
       crossChimeSlice: crossChimeSlice,
       createViscoelasticTank: createViscoelasticTank,
+      SH_BAND_META: SH_BAND_META,
+      sphericalHarmonicBasis25: sphericalHarmonicBasis25,
+      sphericalHarmonicReal: sphericalHarmonicReal,
+      sphericalHarmonicSpectrum: sphericalHarmonicSpectrum,
+      shellMultipoleTransfer: shellMultipoleTransfer,
+      createSphericalWireframeGraph: createSphericalWireframeGraph,
       twinOf: twinOf,
       playhead: playhead, readout: readout,
       fourBitOrbit: fourBitOrbit,
